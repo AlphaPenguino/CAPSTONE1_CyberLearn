@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import User from "../models/User.js";
+import User from "../models/Users.js";
 
 const protectRoute = async (req, res, next) => {
     try {
@@ -24,3 +24,19 @@ const protectRoute = async (req, res, next) => {
         res.status(500).json({ message: "Internal server error" });
     }
 }
+
+const authorizeRole = (roles) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ message: "Authentication required" });
+        }
+
+        if (!roles.includes(req.user.privilege)) {
+            return res.status(403).json({ message: "Access denied, insufficient privileges" });
+        }
+
+        next();
+    }
+}
+
+export { protectRoute, authorizeRole };

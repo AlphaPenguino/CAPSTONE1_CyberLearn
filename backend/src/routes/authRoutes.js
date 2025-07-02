@@ -4,8 +4,8 @@ import User from "../models/Users.js";
 import jwt from "jsonwebtoken";
 const router = express.Router();
 
-const generateToken = (userId) => {
-    return jwt.sign({userId}, process.env.JWT_SECRET, {expiresIn: "15d"});
+const generateToken = (userId, privilege) => {
+    return jwt.sign({userId, privilege}, process.env.JWT_SECRET, {expiresIn: "15d"});
 }
 
 router.post("/register", async (req, res) => {
@@ -48,7 +48,7 @@ router.post("/register", async (req, res) => {
 
         await user.save();
 
-        const token = generateToken(user._id);
+        const token = generateToken(user._id, user.privilege);
 
         res.status(201).json({
             token,
@@ -65,7 +65,6 @@ router.post("/register", async (req, res) => {
           res.status(500).json({ message: "Internal server error"});  
     }
 });
-
 
 router.post("/login", async (req, res) => {
     try {
@@ -86,7 +85,7 @@ router.post("/login", async (req, res) => {
         }
         
 
-        const token = generateToken(user._id);
+        const token = generateToken(user._id, user.privilege);
         res.status(200).json({
             token,
             user: {
