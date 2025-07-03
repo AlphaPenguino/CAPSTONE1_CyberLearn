@@ -31,8 +31,22 @@ const moduleSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    lastAccessed: {
+        type: Date,
+        default: Date.now
     }
 }, { timestamps: true });
+
+moduleSchema.pre("save", function(next) {
+    // Ensure totalLessons is always set to the length of the lessons array
+    if (this.lessons) {
+        this.totalLessons = this.lessons.length;
+    } else {
+        this.totalLessons = 0;
+    }
+    next();
+});
 
 const Module = mongoose.model("Module", moduleSchema);
 
