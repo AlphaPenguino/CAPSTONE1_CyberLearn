@@ -8,8 +8,10 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Welcome to CyberLearn</Text>
 
-      <Link href="/explore" style={styles.subtitle}>Signup</Link>
-      <Link href="/auth" style={styles.subtitle}>Login</Link>
+      <Link href="/(auth)/signup" style={styles.subtitle}>Signup</Link>
+      <Link href="/(auth)" style={styles.subtitle}>Login</Link>
+
+      <Link href="/imagine" style={styles.subtitle}>Screen not Exist Test</Link>
     </View>
   );
 }

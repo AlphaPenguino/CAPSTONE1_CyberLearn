@@ -1,13 +1,26 @@
 import { Stack } from 'expo-router';
 import React from 'react';
-
+import { SafeAreaProvider } from 'react-native-safe-area-context';  
+import { SafeScreen } from '@/components/SafeScreen';
+import { StatusBar } from 'expo-status-bar';
 
 export default function TabLayout() {
   return  (
-    <Stack screenOptions={{headerShown: true}} >
+
+    <SafeAreaProvider>
+
+      <SafeScreen>
+
+        <Stack screenOptions={{headerShown: false}} >
+          <Stack.Screen name="index"/>
+          <Stack.Screen name="(auth)"/>
+        </Stack>
+
+      </SafeScreen>
       
-      <Stack.Screen name="index" options={{ title: "Home", headerShown: true }} />
-      
-    </Stack> 
+      <StatusBar style="dark" />
+
+    </SafeAreaProvider>
+    
   );
 }

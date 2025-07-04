@@ -1,12 +1,10 @@
 import { Text, View, StyleSheet } from 'react-native'
+import React from 'react'
 
-
-
-export default function Login() {
+export default function signup() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Login to title</Text>
-
+      <Text style={styles.title}>signup yo chat</Text>
     </View>
   )
 }

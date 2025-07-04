@@ -1,17 +1,17 @@
 // FOREST
-const COLORS = {
-  primary: "#4CAF50",
-  textPrimary: "#2e5a2e",
-  textSecondary: "#688f68",
-  textDark: "#1b361b",
-  placeholderText: "#767676",
-  background: "#e8f5e9",
-  cardBackground: "#f1f8f2",
-  inputBackground: "#f4faf5",
-  border: "#c8e6c9",
-  white: "#ffffff",
-  black: "#000000",
-};
+// const COLORS = {
+//   primary: "#4CAF50",
+//   textPrimary: "#2e5a2e",
+//   textSecondary: "#688f68",
+//   textDark: "#1b361b",
+//   placeholderText: "#767676",
+//   background: "#e8f5e9",
+//   cardBackground: "#f1f8f2",
+//   inputBackground: "#f4faf5",
+//   border: "#c8e6c9",
+//   white: "#ffffff",
+//   black: "#000000",
+// };
 
 // RETRO
 /*
@@ -31,7 +31,7 @@ const COLORS = {
 */
 
 // OCEAN
-/*
+
 const COLORS = {
   primary: "#1976D2", 
   textPrimary: "#1a4971",
@@ -45,24 +45,27 @@ const COLORS = {
   white: "#ffffff",
   black: "#000000",
 };
-*/
+
+// deep ocean
+
+
 
 // BLOSSOM
 /*
 const COLORS = {
-  primary: "#EC407A", 
-  textPrimary: "#7d2150", 
-  textSecondary: "#b06a8f", 
-  textDark: "#5a1836", 
-  placeholderText: "#767676",
-  background: "#fce4ec", 
-  cardBackground: "#fff5f8", 
-  inputBackground: "#fef8fa", 
-  border: "#f8bbd0",
+  primary: "#0D47A1",         // Dark blue base
+  textPrimary: "#E3F2FD",     // Very light blue text
+  textSecondary: "#90CAF9",   // Light blue text
+  textDark: "#BBDEFB",        // Medium light blue
+  placeholderText: "#64B5F6",  // Bright blue for placeholders
+  background: "#1565C0",      // Dark blue background
+  cardBackground: "#1976D2",   // Slightly lighter for cards
+  inputBackground: "#2196F3",  // Input fields
+  border: "#0D47A1",          // Dark border
   white: "#ffffff",
   black: "#000000",
 };
-*/
+
 
 // DARK FOREST
 /*
