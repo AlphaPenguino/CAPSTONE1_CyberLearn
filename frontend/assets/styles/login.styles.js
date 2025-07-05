@@ -3,6 +3,8 @@ import { StyleSheet, Dimensions } from "react-native";
 import COLORS from "../../constants/custom-colors";
 
 const { width } = Dimensions.get("window");
+const maxWidth = 500; // Maximum width for larger screens
+
 
 const styles = StyleSheet.create({
   container: {
@@ -10,6 +12,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     padding: 20,
     justifyContent: "center",
+    alignItems: "center", // Center contents horizontally
   },
   scrollViewStyle: {
     flex: 1,
@@ -19,10 +22,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
   },
-  illustrationImage: {
-    width: width * 0.75,
-    height: width * 0.75,
-  },
+illustrationImage: {
+    width: width * 0.75,  // 75% of screen width
+    height: width * 0.75, // Makes it square
+    maxWidth: 300,        // Add this to limit desktop size
+    maxHeight: 300,       // Add this to limit desktop size
+    alignSelf: 'center',  // Ensure center alignment
+},
   card: {
     backgroundColor: COLORS.cardBackground,
     borderRadius: 16,
@@ -35,6 +41,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.border,
     marginTop: -24,
+    width: "100%", // Take full width of container
+    maxWidth: maxWidth, // But limit to maxWidth
+    alignSelf: "center",
   },
   header: {
     alignItems: "center",
@@ -45,6 +54,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.textPrimary,
     marginBottom: 8,
+    textAlign: "center",
+    width: "100%",  
   },
   subtitle: {
     fontSize: 16,
@@ -114,6 +125,20 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: "600",
   },
+
+  //added forgot password styles
+  forgotPassword: {
+  alignSelf: 'flex-end',
+  marginTop: 8,
+  marginRight: 20,
+  },
+  forgotPasswordText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+
 });
 
 export default styles;

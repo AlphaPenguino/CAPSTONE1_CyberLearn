@@ -14,39 +14,53 @@
 // };
 
 // RETRO
-/*
-const COLORS = {
-  primary: "#e17055",
-  textPrimary: "#784e2d",
-  textSecondary: "#a58e7c",
-  textDark: "#50372a",
-  placeholderText: "#767676",
-  background: "#ede1d1",
-  cardBackground: "#faf5eb",
-  inputBackground: "#f7f2ea",
-  border: "#e2d6c1",
-  white: "#ffffff",
-  black: "#000000",
-};
-*/
+
+// const COLORS = {
+//   primary: "#e17055",
+//   textPrimary: "#784e2d",
+//   textSecondary: "#a58e7c",
+//   textDark: "#50372a",
+//   placeholderText: "#767676",
+//   background: "#ede1d1",
+//   cardBackground: "#faf5eb",
+//   inputBackground: "#f7f2ea",
+//   border: "#e2d6c1",
+//   white: "#ffffff",
+//   black: "#000000",
+// };
+
 
 // OCEAN
 
+// const COLORS = {
+//   primary: "#1976D2", 
+//   textPrimary: "#1a4971",
+//   textSecondary: "#6d93b8", 
+//   textDark: "#0d2b43", 
+//   placeholderText: "#767676",
+//   background: "#e3f2fd", 
+//   cardBackground: "#f5f9ff",
+//   inputBackground: "#f0f8ff", 
+//   border: "#bbdefb",
+//   white: "#ffffff",
+//   black: "#000000",
+// };
+
+// dark mode
+
 const COLORS = {
-  primary: "#1976D2", 
-  textPrimary: "#1a4971",
-  textSecondary: "#6d93b8", 
-  textDark: "#0d2b43", 
-  placeholderText: "#767676",
-  background: "#e3f2fd", 
-  cardBackground: "#f5f9ff",
-  inputBackground: "#f0f8ff", 
-  border: "#bbdefb",
+  primary: "#60A5FA",         // Bright blue for primary actions
+  textPrimary: "#F0F9FF",     // Almost white blue for primary text
+  textSecondary: "#93C5FD",   // Lighter blue for secondary text
+  textDark: "#BFDBFE",        // Light blue for dark mode text
+  placeholderText: "#3B82F6",  // Medium bright blue for placeholders
+  background: "#021526",      // Very dark blue background (as requested)
+  cardBackground: "#082744",   // Slightly lighter dark blue for cards
+  inputBackground: "#0C2D4D",  // Bit lighter for input contrast
+  border: "#1E3A8A",          // Deep blue for borders
   white: "#ffffff",
   black: "#000000",
 };
-
-// deep ocean
 
 
 
@@ -65,7 +79,7 @@ const COLORS = {
   white: "#ffffff",
   black: "#000000",
 };
-
+*/
 
 // DARK FOREST
 /*
@@ -83,5 +97,6 @@ const COLORS = {
   black: "#000000",
 };
 */
+
 
 export default COLORS;

@@ -6,12 +6,12 @@ import { StyleSheet, View, Text } from 'react-native';
 export default function HomeScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome to CyberLearn</Text>
-
+      <Text style={styles.title}>Test Screens</Text>
+      <Text style={styles.subtitle}>Screen Routes:</Text>
       <Link href="/(auth)/signup" style={styles.subtitle}>Signup</Link>
       <Link href="/(auth)" style={styles.subtitle}>Login</Link>
 
-      <Link href="/imagine" style={styles.subtitle}>Screen not Exist Test</Link>
+      <Link href="/imagine" style={styles.subtitle}>Catch.Missing.Screen</Link>
     </View>
   );
 }

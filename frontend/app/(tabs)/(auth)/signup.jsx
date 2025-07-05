@@ -1,59 +1,162 @@
-import { Text, View, StyleSheet } from 'react-native'
-import React from 'react'
+import {
 
-export default function signup() {
+  Text, 
+  View,
+  KeyboardAvoidingView,
+  Platform,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator
+
+ } from 'react-native'
+
+import { Link } from 'expo-router';
+import styles from "../../../assets/styles/signup.styles.js";
+import COLORS from '../../../constants/custom-colors.js';
+import { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function Signup() {
+
+    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+
+  const handleSignup = () => {}
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>signup yo chat</Text>
-    </View>
+    <KeyboardAvoidingView
+      style={{flex: 1}}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}>
+
+        <View style={styles.container}>
+          <View style={styles.card}>
+            
+            <View style={styles.header}>
+              <Text style={styles.title}>CyberLearn</Text>
+              <Text style={styles.subtitle}>Empowerment Technologies E-learning App</Text>
+            </View>
+
+            <View style={styles.formContainer}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons
+                    name="mail-outline"
+                    size={20}
+                    color={COLORS.primary}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your email"
+                    placeholderTextColor={COLORS.placeholderText}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Username</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color={COLORS.primary}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your username"
+                    placeholderTextColor={COLORS.placeholderText}
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+              
+              {/* Password Input */}
+              <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Password</Text>
+                  <View style={styles.inputContainer}>
+                      <Ionicons
+                          name="lock-closed-outline"
+                          size={20}
+                          color={COLORS.primary}
+                          style={styles.inputIcon}
+                      />
+                      <TextInput
+                          style={styles.input}
+                          placeholder="Create a password"
+                          placeholderTextColor={COLORS.placeholderText}
+                          value={password}
+                          onChangeText={setPassword}
+                          secureTextEntry={!showPassword}
+                          autoCapitalize="none"
+                      />
+                      <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                          <Ionicons
+                              name={showPassword ? "eye-outline" : "eye-off-outline"}
+                              size={20}
+                              color={COLORS.primary}
+                              style={styles.inputIcon}
+                          />
+                      </TouchableOpacity>
+                  </View>
+              </View>
+
+              {/* Confirm Password Input */}
+              <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Confirm Password</Text>
+                  <View style={styles.inputContainer}>
+                      <Ionicons
+                          name="lock-closed-outline"
+                          size={20}
+                          color={COLORS.primary}
+                          style={styles.inputIcon}
+                      />
+                      <TextInput
+                          style={styles.input}
+                          placeholder="Confirm your password"
+                          placeholderTextColor={COLORS.placeholderText}
+                          value={confirmPassword}
+                          onChangeText={setConfirmPassword}
+                          secureTextEntry={!showPassword}
+                          autoCapitalize="none"
+                      />
+                  </View>
+              </View>
+
+              <TouchableOpacity style={styles.button} onPress={handleSignup}
+              disabled={isLoading}>
+                {isLoading ? (
+                <ActivityIndicator color="#fff" />
+                ) : ( 
+                <Text style={styles.buttonText}>Signup</Text>
+                )}
+              </TouchableOpacity>
+
+                                      <View style={styles.footer}>
+                  <Text style={styles.footerText}>Already have an account?</Text>
+                  <Link href="/(auth)" asChild>
+                      <TouchableOpacity>
+                          <Text style={styles.link}>Login</Text>
+                      </TouchableOpacity>
+                  </Link>
+              </View>
+              
+            </View>
+
+          </View>
+        </View>
+
+    </KeyboardAvoidingView>
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  headerContainer: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 16,
-  },
-  cardContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  image: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  contentContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  text: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#333',
-  }
-});
