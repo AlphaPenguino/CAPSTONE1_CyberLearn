@@ -2,12 +2,16 @@
 import { StyleSheet, Dimensions } from "react-native";
 import COLORS from "../../constants/custom-colors";
 
+const { width } = Dimensions.get("window");
+const maxWidth = 500; // Maximum width for larger screens
+
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     backgroundColor: COLORS.background,
     padding: 20,
     justifyContent: "center",
+    alignItems: "center", // Center contents horizontally
   },
   card: {
     backgroundColor: COLORS.cardBackground,
@@ -20,6 +24,10 @@ const styles = StyleSheet.create({
     elevation: 4,
     borderWidth: 2,
     borderColor: COLORS.border,
+    marginTop: -24,
+    width: "100%", // Take full width of container
+    maxWidth: maxWidth, // But limit to maxWidth
+    alignSelf: "center",
   },
   header: {
     alignItems: "center",

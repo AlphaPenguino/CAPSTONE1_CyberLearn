@@ -6,26 +6,39 @@ import {
   Platform,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 
  } from 'react-native'
 
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import styles from "../../../assets/styles/signup.styles.js";
 import COLORS from '../../../constants/custom-colors.js';
-import { useState } from 'react';
+import { use, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '../../../store/authStore.js';
 
 export default function Signup() {
 
-    const [email, setEmail] = useState('');
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleSignup = () => {}
+  const { user, isLoading, register } = useAuthStore();
+
+  const router = useRouter();
+
+  const handleSignup = async () => {
+
+    
+    const result = await register(username, email, password);
+
+    if (!result.success) Alert.alert("Signup Failed", result.error || "An error occurred during signup");
+    
+    
+  };
   return (
     <KeyboardAvoidingView
       style={{flex: 1}}
@@ -35,7 +48,7 @@ export default function Signup() {
           <View style={styles.card}>
             
             <View style={styles.header}>
-              <Text style={styles.title}>CyberLearn</Text>
+              <Text style={styles.title}>CyberLearn yo?</Text>
               <Text style={styles.subtitle}>Empowerment Technologies E-learning App</Text>
             </View>
 
@@ -133,7 +146,7 @@ export default function Signup() {
                   </View>
               </View>
 
-              <TouchableOpacity style={styles.button} onPress={handleSignup}
+              <TouchableOpacity style={styles.button} onPress={() => {handleSignup();}}
               disabled={isLoading}>
                 {isLoading ? (
                 <ActivityIndicator color="#fff" />

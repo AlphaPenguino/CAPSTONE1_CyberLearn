@@ -11,11 +11,12 @@ import {
 
 } from 'react-native'
 
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import styles from "../../../assets/styles/login.styles.js";
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../../constants/custom-colors.js';
+
 
 
 export default function Login() {
@@ -24,9 +25,15 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const router = useRouter();
+
   const handleLogin = () => {
 
-  };
+    fetch('http://localhost:3000/api/auth/login', {
+
+    });
+
+  }
 
   return (
     <KeyboardAvoidingView

@@ -5,7 +5,6 @@ import COLORS from "../../constants/custom-colors";
 const { width } = Dimensions.get("window");
 const maxWidth = 500; // Maximum width for larger screens
 
-
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
