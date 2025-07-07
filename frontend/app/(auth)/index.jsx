@@ -12,10 +12,10 @@ import {
 } from 'react-native'
 
 import { Link, useRouter } from 'expo-router';
-import styles from "../../../assets/styles/login.styles.js";
+import styles from "../../assets/styles/login.styles.js";
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import COLORS from '../../../constants/custom-colors.js';
+import COLORS from '../../constants/custom-colors.js';
 
 
 
@@ -43,7 +43,7 @@ export default function Login() {
       <View style={styles.topIllustration}>
         
         <Image
-          source={require("../../../assets/images/cyberlearn-logo-transparent.png")}
+          source={require("../../assets/images/cyberlearn-logo-transparent.png")}
           style={styles.illustrationImage}
           resizeMode= 'contain'
         />

@@ -1,12 +1,27 @@
-
 import { Stack } from 'expo-router';
-import 'react-native-reanimated';
+import React from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';  
+import { SafeScreen } from '@/components/SafeScreen';
+import { StatusBar } from 'expo-status-bar';
 
+import 'react-toastify/dist/ReactToastify.css';
 
 export default function RootLayout() {
-  return <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+  return (
+        <SafeAreaProvider>
+    
+          <SafeScreen>
+    
+            <Stack screenOptions={{headerShown: false}} >
+              <Stack.Screen name="index"/>
+              <Stack.Screen name="(auth)"/>
+            </Stack>
+    
+          </SafeScreen>
+          
+          <StatusBar style="dark" />
+          
+        </SafeAreaProvider>
         
-        <Stack.Screen name="+not-found" />
-      </Stack>;
+  );
 }

@@ -11,14 +11,17 @@ import {
 
  } from 'react-native'
 
+
+
 import { Link, useRouter } from 'expo-router';
-import styles from "../../../assets/styles/signup.styles.js";
-import COLORS from '../../../constants/custom-colors.js';
-import { use, useState } from 'react';
+import styles from "../../assets/styles/signup.styles.js";
+import COLORS from '../../constants/custom-colors.js';
+import { use, useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../../store/authStore.js';
+import { useAuthStore } from '../../store/authStore.js';
 
 export default function Signup() {
+
 
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -26,20 +29,29 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const { user, isLoading, register } = useAuthStore();
-
+  const { user, isLoading, register, sayHello, token } = useAuthStore();
+  
   const router = useRouter();
+
 
   const handleSignup = async () => {
 
-    
-    const result = await register(username, email, password);
+    sayHello();
+    const result = await register(username, email, password, confirmPassword);
 
-    if (!result.success) Alert.alert("Signup Failed", result.error || "An error occurred during signup");
-    
-    
+    if (!result.success) {
+            if (Platform.OS === 'web') {
+                alert(result.error);
+            } else {
+                Alert.alert('Registration Error', result.error);
+            }
+        }
+
   };
+
+
   return (
+    
     <KeyboardAvoidingView
       style={{flex: 1}}
       behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -48,7 +60,7 @@ export default function Signup() {
           <View style={styles.card}>
             
             <View style={styles.header}>
-              <Text style={styles.title}>CyberLearn yo?</Text>
+              <Text style={styles.title}>CyberLearn yo</Text>
               <Text style={styles.subtitle}>Empowerment Technologies E-learning App</Text>
             </View>
 
@@ -146,7 +158,7 @@ export default function Signup() {
                   </View>
               </View>
 
-              <TouchableOpacity style={styles.button} onPress={() => {handleSignup();}}
+              <TouchableOpacity style={styles.button} onPress={handleSignup}
               disabled={isLoading}>
                 {isLoading ? (
                 <ActivityIndicator color="#fff" />
@@ -155,21 +167,22 @@ export default function Signup() {
                 )}
               </TouchableOpacity>
 
-                                      <View style={styles.footer}>
+              <View style={styles.footer}>
                   <Text style={styles.footerText}>Already have an account?</Text>
-                  <Link href="/(auth)" asChild>
-                      <TouchableOpacity>
+                  
+                      <TouchableOpacity onPress={() => router.back()}>
                           <Text style={styles.link}>Login</Text>
                       </TouchableOpacity>
-                  </Link>
+                  
               </View>
               
             </View>
 
           </View>
         </View>
-
+               
     </KeyboardAvoidingView>
+    
   )
 }
 

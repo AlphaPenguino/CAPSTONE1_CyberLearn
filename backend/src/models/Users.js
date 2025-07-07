@@ -24,8 +24,8 @@ const userSchema = new mongoose.Schema({
     section: {
         type: String,
         required: true,
-        enum: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'no section'],
-        default: 'no section'
+        enum: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'no_section'],
+        default: 'no_section'
     },
     privilege: {
     type: String,

@@ -36,7 +36,7 @@ router.post("/register", async (req, res) => {
         
         const profileImage = `https://api.dicebear.com/9.x/bottts/svg?seed=${username}`;
         const privilege = `student`;
-        const section = `no section`;
+        const section = `no_section`;
 
 
         const user = new User({
