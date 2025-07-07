@@ -1,16 +1,33 @@
 
 import { Link } from 'expo-router';
-import { StyleSheet, View, Text } from 'react-native';
-
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { useAuthStore } from '../store/authStore.js';
+import { useEffect } from 'react';
 
 export default function HomeScreen() {
+
+  const { user, token, checkAuth, logout } = useAuthStore();
+
+  console.log("User:", user);
+  console.log("Token:", token);
+
+  useEffect(() => { 
+    checkAuth();
+  }, []);
+
+  const handleLogout = async () => {
+    logout();
+  }
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Test Screens</Text>
+      <Text style={styles.title}>Test Screens {user?.username}</Text>
+      <Text style={styles.subtitle}>Token: {token}</Text>
       <Text style={styles.subtitle}>Screen Routes:</Text>
       <Link href="/(auth)/signup" style={styles.subtitle}>Signup</Link>
       <Link href="/(auth)" style={styles.subtitle}>Login</Link>
-
+      <TouchableOpacity onPress={handleLogout}>
+        <Text style={styles.subtitle}>LOGOUT</Text>
+      </TouchableOpacity>
       <Link href="/imagine" style={styles.subtitle}>Catch.Missing.Screen</Link>
     </View>
   );
