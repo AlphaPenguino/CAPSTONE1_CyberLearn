@@ -18,7 +18,7 @@ export const useAuthStore = create((set) => ({
         };
     } else {
         try {
-            const response = await fetch("http://192.168.1.9:3000/api/auth/register", {
+            const response = await fetch('https://capstone-backend-deploy.onrender.com/api/auth/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

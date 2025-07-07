@@ -60,7 +60,7 @@ export default function Signup() {
           <View style={styles.card}>
             
             <View style={styles.header}>
-              <Text style={styles.title}>CyberLearn yo</Text>
+              <Text style={styles.title}>CyberLearn washudog</Text>
               <Text style={styles.subtitle}>Empowerment Technologies E-learning App</Text>
             </View>
 
