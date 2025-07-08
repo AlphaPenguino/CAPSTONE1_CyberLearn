@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Alert
 
 } from 'react-native'
 
@@ -16,6 +17,8 @@ import styles from "../../assets/styles/login.styles.js";
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../constants/custom-colors.js';
+import { useEffect } from 'react';
+import { useAuthStore } from '../../store/authStore.js';
 
 
 
@@ -23,16 +26,22 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
 
+  const { user, isLoading, login, token, sayHello } = useAuthStore();
   const router = useRouter();
 
-  const handleLogin = () => {
-
-    fetch('http://localhost:3000/api/auth/login', {
-
-    });
-
+  const handleLogin = async () => {
+    sayHello();
+    const result = await login(email, password);
+    
+    if (!result.success) {
+      if (Platform.OS === 'web') {
+        alert(result.error);
+      } else {
+        Alert.alert('Login Error', result.error);
+      }
+    }
+    
   }
 
   return (
@@ -54,7 +63,7 @@ export default function Login() {
         <View style={styles.formContainer}>
           {/*Email is here*/}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Email taina</Text>
             <View style={styles.inputContainer}>
 
             

@@ -46,6 +46,10 @@ export default function Signup() {
                 Alert.alert('Registration Error', result.error);
             }
         }
+    if (result.success) {
+      Alert.alert('Registration Successful', 'You can now login with your credentials.');
+      router.push('/index');
+    }
 
   };
 
