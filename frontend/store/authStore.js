@@ -56,7 +56,7 @@ export const useAuthStore = create((set) => ({
         try {
             const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/login`, {
                 method: 'POST',
-                header: {
+                headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ email, password}),
@@ -70,6 +70,7 @@ export const useAuthStore = create((set) => ({
 
             await AsyncStorage.setItem('user', JSON.stringify(data.user));
             await AsyncStorage.setItem('token', data.token);
+
             set({ user: data.user, token: data.token, isLoading: false });
             return { success: true };
         } catch (error) {

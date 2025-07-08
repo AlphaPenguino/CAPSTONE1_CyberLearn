@@ -41,8 +41,12 @@ export default function Login() {
         Alert.alert('Login Error', result.error);
       }
     }
+    if (result.success) {
+      Alert.alert('Login Successful', 'Welcome back!');
+      router.replace('/(tabs)');
+    }
     
-  }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -63,7 +67,7 @@ export default function Login() {
         <View style={styles.formContainer}>
           {/*Email is here*/}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email taina</Text>
+            <Text style={styles.label}>Email</Text>
             <View style={styles.inputContainer}>
 
             

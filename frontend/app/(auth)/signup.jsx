@@ -35,7 +35,7 @@ export default function Signup() {
 
 
   const handleSignup = async () => {
-
+    
     sayHello();
     const result = await register(username, email, password, confirmPassword);
 
@@ -47,8 +47,8 @@ export default function Signup() {
             }
         }
     if (result.success) {
-      Alert.alert('Registration Successful', 'You can now login with your credentials.');
-      router.push('/index');
+      Alert.alert('Registration Successful');
+      router.push('../(tabs)');
     }
 
   };
@@ -64,7 +64,7 @@ export default function Signup() {
           <View style={styles.card}>
             
             <View style={styles.header}>
-              <Text style={styles.title}>CyberLearn washudog</Text>
+              <Text style={styles.title}>CyberLearn</Text>
               <Text style={styles.subtitle}>Empowerment Technologies E-learning App</Text>
             </View>
 
