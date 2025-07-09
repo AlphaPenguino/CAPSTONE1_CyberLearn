@@ -42,8 +42,8 @@
 //   cardBackground: "#f5f9ff",
 //   inputBackground: "#f0f8ff", 
 //   border: "#bbdefb",
-//   white: "#ffffff",
-//   black: "#000000",
+//   white: "#000000",
+//   black: "#ffffff",
 // };
 
 // dark mode
@@ -76,10 +76,10 @@ const COLORS = {
   cardBackground: "#1976D2",   // Slightly lighter for cards
   inputBackground: "#2196F3",  // Input fields
   border: "#0D47A1",          // Dark border
-  white: "#ffffff",
-  black: "#000000",
+  white: "#000000",
+  black: "#ffffff",
 };
-*/
+
 
 // DARK FOREST
 /*

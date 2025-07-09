@@ -1,7 +1,8 @@
 import React from 'react';
 import { Modal, Portal, Text, Surface, List } from 'react-native-paper';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import COLORS from '@/constants/custom-colors';
 import { useAuthStore } from '../../store/authStore';
 
@@ -15,6 +16,16 @@ const CustomDrawer = ({ visible, onDismiss }) => {
     router.replace('/(auth)');
   };
 
+  const DrawerItem = ({ title, icon, onPress }) => (
+    <TouchableOpacity 
+      style={styles.drawerItem} 
+      onPress={onPress}
+    >
+      <Ionicons name={icon} size={24} color={COLORS.primary} />
+      <Text style={styles.drawerItemText}>{title}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <Portal>
       <Modal
@@ -25,30 +36,27 @@ const CustomDrawer = ({ visible, onDismiss }) => {
         <Surface style={styles.surface}>
           <Text style={styles.title}>Menu</Text>
           
-          <List.Item
+          <DrawerItem
             title="Profile"
-            titleStyle={{ color: COLORS.textPrimary }}
-            left={props => <List.Icon {...props} icon="account" color={COLORS.primary} />}
+            icon="person-outline"
             onPress={() => {
               onDismiss();
               router.push('/(tabs)/profile');
             }}
           />
           
-          <List.Item
+          <DrawerItem
             title="Settings"
-            titleStyle={{ color: COLORS.textPrimary }}
-            left={props => <List.Icon {...props} icon="cog" color={COLORS.primary} />}
+            icon="settings-outline"
             onPress={() => {
               onDismiss();
               router.push('/(tabs)/settings');
             }}
           />
 
-          <List.Item
+          <DrawerItem
             title="Logout"
-            titleStyle={{ color: COLORS.textPrimary}}
-            left={props => <List.Icon {...props} icon="logout" color={COLORS.primary} />}
+            icon="log-out-outline"
             onPress={handleLogout}
           />
         </Surface>
@@ -79,6 +87,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 20,
     color: COLORS.textPrimary,
+  },
+  drawerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  drawerItemText: {
+    marginLeft: 16,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
   }
 });
 
