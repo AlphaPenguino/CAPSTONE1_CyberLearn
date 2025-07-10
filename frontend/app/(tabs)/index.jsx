@@ -17,7 +17,7 @@ export default function Home() {
 
     
     <View>
-      <Text>home tab tonikaku yarushika naindayo
+      <Text>home tab
         hello {user?.username || 'Guest'}!
       </Text>
       

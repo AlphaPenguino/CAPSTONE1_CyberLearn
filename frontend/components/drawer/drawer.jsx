@@ -8,7 +8,7 @@ import { useAuthStore } from '../../store/authStore';
 
 const CustomDrawer = ({ visible, onDismiss }) => {
   const router = useRouter();
-  const { logout } = useAuthStore();
+  const { user, logout } = useAuthStore(); // Add user from useAuthStore
 
   const handleLogout = async () => {
     await logout();
@@ -34,7 +34,16 @@ const CustomDrawer = ({ visible, onDismiss }) => {
         contentContainerStyle={styles.drawer}
       >
         <Surface style={styles.surface}>
-          <Text style={styles.title}>Menu</Text>
+          <View style={styles.header}>
+            <Ionicons 
+              name="person-circle-outline" 
+              size={40} 
+              color={COLORS.primary} 
+            />
+            <Text style={styles.title}>
+              {user?.username || 'Guest'}
+            </Text>
+          </View>
           
           <DrawerItem
             title="Profile"
@@ -82,10 +91,16 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: COLORS.border,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 16,
+  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginLeft: 12,
     color: COLORS.textPrimary,
   },
   drawerItem: {

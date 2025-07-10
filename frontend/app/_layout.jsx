@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/authStore';
 import { PaperProvider } from 'react-native-paper';
 import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native';
 
 export default function RootLayout() {
   const [mounted, setMounted] = useState(false);
@@ -33,14 +34,18 @@ export default function RootLayout() {
   }, [user, token, segments, mounted]);
 
   return (
-    
+   
+       
     
     <PaperProvider>
     <SafeAreaProvider>
+       
       <SafeScreen>
-        <Slot />
+        
+         <Slot />
       </SafeScreen>
       <StatusBar style="light" />
+      
     </SafeAreaProvider>
     </PaperProvider>
 

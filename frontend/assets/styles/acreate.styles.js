@@ -9,7 +9,7 @@ const styles = StyleSheet.create({
   },
 
     group: {
-    marginTop: 12,
+    marginTop: 20,
     marginBottom: 20,
     backgroundColor: COLORS.background,
     borderRadius: 8,
@@ -130,6 +130,35 @@ const styles = StyleSheet.create({
   formContainer: {
     padding: 16,
     marginTop: 16,
+  },
+    form: {
+    marginBottom: 16,
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+    imagePicker: {
+    width: "100%",
+    height: 200,
+    backgroundColor: COLORS.inputBackground,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: "hidden",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+  },
+  placeholderContainer: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  placeholderText: {
+    color: COLORS.textSecondary,
+    marginTop: 8,
   },
 });
 

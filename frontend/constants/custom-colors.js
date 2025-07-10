@@ -42,8 +42,8 @@
 //   cardBackground: "#f5f9ff",
 //   inputBackground: "#f0f8ff", 
 //   border: "#bbdefb",
-//   white: "#000000",
-//   black: "#ffffff",
+//   white: "#ffffff",
+//   black: "#000000",
 // };
 
 // dark mode

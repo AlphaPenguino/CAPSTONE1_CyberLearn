@@ -29,39 +29,49 @@ export default function TabLayout() {
         onDismiss={() => setDrawerVisible(false)} 
       />
       
+      
       <Tabs screenOptions={{
         headerShown: true,
         headerTitle: '',
-          headerStyle: {
-    height: 56, // Standard Material Design header height
-    backgroundColor: COLORS.cardBackground,
-    elevation: 0,
-    shadowOpacity: 0,
-    borderBottomWidth: 0,
-  },
+        headerStyle: {
+          height: 56,
+          backgroundColor: COLORS.cardBackground,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 0,
+        },
         headerLeft: () => (
-              <TouchableOpacity
-      onPress={() => setDrawerVisible(true)}
-      style={{ 
-        marginLeft: 9,
-        paddingBottom: 20,
-        justifyContent: 'center',
-        height: 80,
-      }}
-    >
-      <Ionicons name="menu" size={24} color={COLORS.primary} />
-    </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setDrawerVisible(true)}
+            style={{ 
+              marginLeft: 16,
+              padding: 8,
+              justifyContent: 'center',
+              height: 48,
+            }}
+          >
+            <Ionicons name="menu" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
         ),
         tabBarActiveTintColor: COLORS.textPrimary,
         tabBarInactiveTintColor: COLORS.primary,
         tabBarStyle: {
           backgroundColor: COLORS.cardBackground,
-          borderTopWidth: 0, // Remove top border
-          elevation: 0, // Remove shadow on Android
+          borderTopWidth: 0,
+          elevation: 0,
           shadowOpacity: 0,
-          borderTopColor: COLORS.border,
-          height: 60,
-          paddingBottom: 8,
+          height: Platform.OS === 'android' ? 65 : 80,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === 'android' ? 12 : 30,
+          position: Platform.OS === 'android' ? 'relative' : 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          safeAreaInset: { bottom: 'always' },
+        },
+        tabBarLabelStyle: {
+          paddingBottom: Platform.OS === 'android' ? 4 : 0,
+          fontSize: 12,
         },
         headerTitleStyle: { 
           color: COLORS.black, 
