@@ -45,7 +45,7 @@ export default function Login() {
       Alert.alert('Login Successful', 'Welcome back!');
       router.replace('/(tabs)');
     }
-    
+     
   };
 
   return (
@@ -140,6 +140,9 @@ export default function Login() {
                 <Text style={styles.link}>Sign Up</Text>
               </TouchableOpacity>
             </Link>
+
+
+            
           </View>
             
         </View>

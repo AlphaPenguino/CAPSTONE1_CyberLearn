@@ -6,7 +6,8 @@ const moduleSchema = new mongoose.Schema({
         required: true
     },
     description: {
-        type: String
+        type: String,
+        required: true
     },
     category: {
         type: String,

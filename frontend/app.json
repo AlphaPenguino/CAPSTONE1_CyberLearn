@@ -37,6 +37,16 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "fonts": [
+      {
+        "asset": "./assets/fonts/PixeloidSans.ttf",
+        "family": "PixeloidSans"
+      },
+      {
+        "asset": "./assets/fonts/Pixeloid-Bold.ttf",
+        "family": "PixeloidBold"
+      }
+    ]
   }
 }

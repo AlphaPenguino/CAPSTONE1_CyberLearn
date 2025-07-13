@@ -1,5 +1,5 @@
 // styles/create.styles.js
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 import COLORS from "../../constants/custom-colors";
 
 const styles = StyleSheet.create({
@@ -12,18 +12,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  scrollView: {
+    flex: 1,
+    width: "100%",
+    backgroundColor: COLORS.background,
+  },
   card: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
-    padding: 20,
-    marginVertical: 16,
-    shadowColor: COLORS.black,
+    backgroundColor: COLORS.white,
+    borderRadius: 8,
+    padding: 16,
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 600 : "100%",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    shadowRadius: 4,
+    elevation: 2,
   },
   header: {
     alignItems: "center",
@@ -42,6 +46,12 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: 16,
+  },
+  formContainer: {
+    padding: 16,
+    paddingBottom: 40,
+    alignItems: "center",
+    width: "100%",
   },
   formGroup: {
     marginBottom: 20,

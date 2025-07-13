@@ -1,14 +1,20 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 import COLORS from "../../constants/custom-colors";
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
+    flex: 1,
     backgroundColor: COLORS.background,
-    padding: 16,
   },
-
-    group: {
+  scrollView: {
+    flex: 1,
+    width: '100%',
+    ...(Platform.OS === 'web' && {
+      overflowY: 'auto',  // This makes scrollbars visible on web
+      height: '85vh',     // Set explicit height for web
+    }),
+  },
+  group: {
     marginTop: 20,
     marginBottom: 20,
     backgroundColor: COLORS.background,
@@ -16,13 +22,17 @@ const styles = StyleSheet.create({
     
   },
   button: {
-    backgroundColor: COLORS.cardBackground,
-    borderColor: COLORS.border,
-    
-  },
-  scrollViewStyle: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    height: 50,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 16,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   segmentedGroup: {
     marginBottom: 20,
@@ -119,8 +129,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  buttonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   buttonIcon: {
-    marginRight: 8,
+    marginRight: 8,  // Add space between icon and text
+  },
+  buttonLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonDisabled: {
+    backgroundColor: COLORS.disabled || '#a0a0a0',
+    opacity: 0.8,
   },
   errorText: {
     color: COLORS.error,
@@ -160,6 +189,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 8,
   },
+  
 });
 
 export default styles;
