@@ -1,6 +1,6 @@
-import React from 'react';
-import { Modal, Portal, Text, Surface, List } from 'react-native-paper';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { Modal, Portal, Text, Surface } from 'react-native-paper';
+import { View, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '@/constants/custom-colors';
@@ -8,8 +8,9 @@ import { useAuthStore } from '../../store/authStore';
 
 const CustomDrawer = ({ visible, onDismiss }) => {
   const router = useRouter();
-  const { user, logout } = useAuthStore(); // Add user from useAuthStore
-
+  const { user, logout } = useAuthStore();
+  const [imageError, setImageError] = useState(false);
+  
   const handleLogout = async () => {
     await logout();
     onDismiss();
@@ -26,6 +27,20 @@ const CustomDrawer = ({ visible, onDismiss }) => {
     </TouchableOpacity>
   );
 
+  // Add this helper function
+  const getCompatibleImageUrl = (url) => {
+    if (!url) return null;
+    
+    // Check if it's a Dicebear SVG URL
+    if (url.includes('dicebear') && url.includes('/svg')) {
+      // For Android, convert to PNG
+      if (Platform.OS === 'android') {
+        return url.replace('/svg', '/png');
+      }
+    }
+    return url;
+  };
+  
   return (
     <Portal>
       <Modal
@@ -34,16 +49,27 @@ const CustomDrawer = ({ visible, onDismiss }) => {
         contentContainerStyle={styles.drawer}
       >
         <Surface style={styles.surface}>
-          <View style={styles.header}>
+        <View style={styles.header}>
+          {user?.profileImage ? (
+            <Image 
+              source={{ uri: getCompatibleImageUrl(user.profileImage) }} 
+              style={styles.profileImage}
+              onError={() => {
+                console.log("Profile image failed to load");
+                setImageError(true);
+              }}
+            />
+          ) : (
             <Ionicons 
               name="person-circle-outline" 
               size={40} 
               color={COLORS.primary} 
             />
-            <Text style={styles.title}>
-              {user?.username || 'Guest'}
-            </Text>
-          </View>
+          )}
+          <Text style={styles.title}>
+            {user?.username || 'Guest'}
+          </Text>
+        </View>
           
           <DrawerItem
             title="Profile"
@@ -115,7 +141,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.textPrimary,
     fontWeight: '500',
-  }
+  },
+  profileImage: {
+  width: 80,
+  height: 80,
+  borderRadius: 80,
+  backgroundColor: COLORS.background,
+  borderWidth: 2,
+  borderColor: COLORS.primary,
+},
 });
 
 export default CustomDrawer;

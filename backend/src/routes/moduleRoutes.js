@@ -5,10 +5,16 @@ import { protectRoute, authorizeRole } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
+// Configure Cloudinary (if not already done elsewhere)
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 //create
 
-//get all games
+
 router.post("/", protectRoute, authorizeRole(['admin']), async (req, res) => {
     try {
         const { title, description, category, image } = req.body;
@@ -104,16 +110,16 @@ router.get("/", protectRoute, authorizeRole(['admin', 'student']), async (req, r
         
         // Select only fields needed for map display to improve performance
         // Only populate lessons when explicitly requested
-        const shouldPopulateLessons = req.query.includeLessons === 'true';
+        const shouldPopulateQuizzes = req.query.includeQuizzes === 'true';
         
         let query = Module.find(filter)
-            .select('title description category image order isActive totalLessons lastAccessed')
+            .select('title description category image order isActive totalQuizzes lastAccessed')
             .sort(sortOptions)
             .skip(skip)
             .limit(limit);
             
-        if (shouldPopulateLessons) {
-            query = query.populate("lessons", "title description image");
+        if (shouldPopulateQuizzes) {
+            query = query.populate("quizzes", "title description image difficulty");
         }
         
         const modules = await query;
@@ -147,6 +153,7 @@ router.get("/", protectRoute, authorizeRole(['admin', 'student']), async (req, r
         });
     }
 });
+// Update all instances where "lessons" is populated
 router.get("/recent", protectRoute, authorizeRole(['admin', 'student']), async (req, res) => {
         try {
         const limit = parseInt(req.query.limit) || 5; // Default to 5 recent modules
@@ -154,7 +161,7 @@ router.get("/recent", protectRoute, authorizeRole(['admin', 'student']), async (
         const recentModules = await Module.find()
             .sort({ lastAccessed: -1 }) // Sort by most recently accessed
             .limit(limit)
-            .populate("lessons", "title description image");
+            .populate("quizzes", "title description image difficulty");
 
         res.json({
             success: true,
@@ -166,10 +173,11 @@ router.get("/recent", protectRoute, authorizeRole(['admin', 'student']), async (
         res.status(500).json({ message: "Internal server error" });
     }
 });
+// Update the get single module endpoint
 router.get("/:id", protectRoute, authorizeRole(['admin', 'student']), async (req, res) => {
     try {
         const module = await Module.findById(req.params.id)
-            .populate("lessons", "title description image");
+            .populate("quizzes", "title description image difficulty");
 
         if (!module) {
             return res.status(404).json({ message: "Module not found" });
@@ -185,32 +193,141 @@ router.get("/:id", protectRoute, authorizeRole(['admin', 'student']), async (req
     }
 });
 router.delete("/:id", protectRoute, authorizeRole(['admin']), async (req, res) => {
-    try{
+    try {
+        // 1. Find the module to get its image URL
         const module = await Module.findById(req.params.id);
-        if(!module) {
-            return res.status(404).json({ message: "Module not found" });
+        
+        if (!module) {
+          return res.status(404).json({ message: "Module not found" });
         }
-
-        // Optionally, you can delete the image from cloudinary if needed
-        if(module.image && module.image.includes("cloudinary")) {
-            try {
-
-                const publicId = module.image.split("/").pop().split(".")[0];
-                await cloudinary.uploader.destroy(publicId);
-
-            } catch (error) {
-                console.error("Error deleting image from Cloudinary:", error);
-            }
-            
+        
+        // 2. Extract the Cloudinary public_id from the URL
+        if (module.image) {
+          const publicId = extractPublicIdFromUrl(module.image);
+          
+          if (publicId) {
+            // 3. Delete the image from Cloudinary
+            await cloudinary.uploader.destroy(publicId);
+            console.log(`Image deleted from Cloudinary: ${publicId}`);
+          }
         }
-
-        await module.deleteOne();
-        res.status(200).json({ message: "Module deleted successfully" });
-    } catch (error) {
+        
+        // 4. Delete the module from database
+        await Module.findByIdAndDelete(req.params.id);
+        
+        res.json({ 
+          success: true, 
+          message: "Module and associated image deleted successfully" 
+        });
+      } catch (error) {
         console.error("Error deleting module:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
+        res.status(500).json({ message: "Failed to delete module" });
+      }
 });
+// Update module endpoint
+router.put("/:id", protectRoute, authorizeRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, category, image } = req.body;
+    
+    // Find the module
+    const module = await Module.findById(id);
+    
+    if (!module) {
+      return res.status(404).json({ message: "Module not found" });
+    }
+    
+    // Update basic fields if provided
+    if (title) module.title = title;
+    if (description) module.description = description;
+    if (category) module.category = category;
+    
+    // Handle image update if provided
+    if (image && image !== module.image) {
+      // If it's a new image (not just the same URL)
+      if (image.startsWith('data:image')) {
+        // Delete old image from Cloudinary
+        if (module.image) {
+          const publicId = extractPublicIdFromUrl(module.image);
+          if (publicId) {
+            try {
+              await cloudinary.uploader.destroy(publicId);
+              console.log(`Old image deleted from Cloudinary: ${publicId}`);
+            } catch (cloudinaryError) {
+              console.error("Error deleting old image:", cloudinaryError);
+              // Continue with the update even if image deletion fails
+            }
+          }
+        }
+        
+        // Upload new image
+        try {
+          console.log("Uploading new image to Cloudinary...");
+          
+          // Ensure image has proper format
+          let imageDataUrl = image;
+          if (!image.startsWith('data:image')) {
+            imageDataUrl = `data:image/jpeg;base64,${image}`;
+          }
+          
+          const uploadResponse = await cloudinary.uploader.upload(imageDataUrl, {
+            timeout: 120000, // 2 minutes timeout
+            resource_type: 'image',
+          });
+          
+          console.log("New image upload successful");
+          module.image = uploadResponse.secure_url;
+        } catch (cloudinaryError) {
+          console.error("Error uploading new image:", cloudinaryError);
+          return res.status(500).json({ 
+            message: "Failed to upload new image",
+            error: cloudinaryError.message
+          });
+        }
+      } else {
+        // It's a URL, just update the field
+        module.image = image;
+      }
+    }
+    
+    // Save updated module
+    await module.save();
+    
+    res.json({
+      success: true,
+      message: "Module updated successfully",
+      module
+    });
+  } catch (error) {
+    console.error("Error updating module:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to update module",
+      error: error.message
+    });
+  }
+});
+
+// Helper function to extract public_id from Cloudinary URL
+function extractPublicIdFromUrl(url) {
+  try {
+    // Cloudinary URLs usually look like: 
+    // https://res.cloudinary.com/your-cloud-name/image/upload/v1234567890/folder/image_id.jpg
+    
+    // Extract everything after the upload/ part up to the last dot
+    const regex = /\/upload\/(?:v\d+\/)?(.+?)\.(?:[^.]+)$/;
+    const matches = url.match(regex);
+    
+    if (matches && matches[1]) {
+      return matches[1];
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error extracting public ID:", error);
+    return null;
+  }
+}
 
 const updateLastAccessed = async (moduleId) => {
     try {

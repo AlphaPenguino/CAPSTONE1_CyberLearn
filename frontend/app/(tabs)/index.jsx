@@ -5,7 +5,9 @@ import {
   Image, 
   ScrollView, 
   ActivityIndicator,
-  RefreshControl  // Add this import
+  RefreshControl, 
+  Alert,
+  Platform
 } from 'react-native';
 import React ,{ useEffect, useState, useRef, useCallback } from 'react';
 import { useAuthStore } from '../../store/authStore';
@@ -15,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Dimensions, Animated } from 'react-native';
 import COLORS from '@/constants/custom-colors';
 import { useFocusEffect } from '@react-navigation/native';
+
 
 export default function Home() {
   const { user, token, checkAuth, logout } = useAuthStore();
@@ -29,8 +32,10 @@ export default function Home() {
   const [sortOrder, setSortOrder] = useState('order');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(null);
   const router = useRouter();
   const playerPosition = useRef(new Animated.ValueXY({ x: 50, y: 100 })).current;
+  const [profileImageError, setProfileImageError] = useState(false);
   
   // Fetch modules data
   useFocusEffect(
@@ -46,10 +51,15 @@ export default function Home() {
 
   // Move player animation
   const movePlayerToModule = (module, index) => {
+    // Close any open menu when selecting a module
+    if (menuVisible) {
+      setMenuVisible(null);
+    }
+    
     const screenWidth = Dimensions.get('window').width;
     const modulePosition = {
-      x: (index % 3) * (screenWidth / 3) + 50,
-      y: Math.floor(index / 3) * 150 + 100
+      x: (index % 3) * (screenWidth / 3) + 60, // Adjusted for larger modules
+      y: Math.floor(index / 3) * 180 + 120    // Adjusted for larger modules
     };
     
     Animated.spring(playerPosition, {
@@ -134,6 +144,81 @@ export default function Home() {
     });
   }, [selectedCategory, sortOrder]);
 
+  // Add this function to handle module deletion
+  const handleDeleteModule = (moduleId) => {
+    // Show confirmation dialog
+    if (Platform.OS === 'web') {
+      if (confirm('Are you sure you want to delete this module?')) {
+        deleteModule(moduleId);
+      }
+    } else {
+      Alert.alert(
+        'Delete Module',
+        'Are you sure you want to delete this module?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', onPress: () => deleteModule(moduleId), style: 'destructive' }
+        ]
+      );
+    }
+  };
+
+  // Function to actually delete the module
+  const deleteModule = async (moduleId) => {
+    try {
+      const response = await fetch(`${API_URL}/modules/${moduleId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        // Remove module from state
+        setModules(modules.filter(m => m._id !== moduleId));
+        // If deleted module was selected, clear selection
+        if (selectedModule?._id === moduleId) {
+          setSelectedModule(null);
+        }
+      } else {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to delete module');
+      }
+    } catch (error) {
+      console.error('Error deleting module:', error);
+      alert('Failed to delete module: ' + error.message);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.profileImage) {
+      //console.log("Attempting to load profile image:", user.profileImage);
+      
+      // Test if the URL is accessible
+      fetch(user.profileImage)
+        .then(response => {
+          //console.log("Profile image response:", response.status);
+        })
+        .catch(error => {
+          //console.log("Profile image fetch error:", error);
+        });
+    }
+  }, [user?.profileImage]);
+
+  // Add this helper function to your Home component
+  const getCompatibleImageUrl = (url) => {
+    if (!url) return null;
+    
+    // Check if it's a Dicebear SVG URL
+    if (url.includes('dicebear') && url.includes('/svg')) {
+      // For Android or iOS, convert to PNG
+      if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        return url.replace('/svg', '/png');
+      }
+    }
+    return url;
+  };
+
   return (
     <View style={styles.container}>
       {/* RPG Map Header */}
@@ -186,10 +271,21 @@ export default function Home() {
           
           {/* Player Character */}
           <Animated.View style={[styles.player, playerPosition.getLayout()]}>
-            <Image 
-              source={require('../../assets/images/character1.png')} 
-              style={styles.playerImage}
-            />
+            {(user?.profileImage && !profileImageError) ? (
+              <Image 
+                source={{ uri: getCompatibleImageUrl(user.profileImage) }} 
+                style={[styles.playerImage, styles.playerImageWithBorder]}
+                onError={() => {
+                  console.log("Profile image failed to load, using default");
+                  setProfileImageError(true);
+                }}
+              />
+            ) : (
+              <Image 
+                source={require('../../assets/images/character1.png')} 
+                style={styles.playerImage}
+              />
+            )}
           </Animated.View>
           
           {/* Module Locations */}
@@ -200,8 +296,8 @@ export default function Home() {
                 styles.moduleNode,
                 selectedModule?._id === module._id && styles.selectedNode,
                 {
-                  left: (index % 3) * (Dimensions.get('window').width / 3),
-                  top: Math.floor(index / 3) * 150,
+                  left: (index % 3) * (Dimensions.get('window').width / 3) - 10, // Adjust for larger size
+                  top: Math.floor(index / 3) * 180, // Increased from 150 for more vertical space
                 }
               ]}
               onPress={() => movePlayerToModule(module, index)}
@@ -212,6 +308,58 @@ export default function Home() {
               />
               <Text style={styles.moduleName}>{module.title}</Text>
               <Text style={styles.moduleLevel}>Level {index + 1}</Text>
+              
+              {/* Admin Options Button */}
+              {isAdmin && (
+                <View style={styles.adminOptionsContainer}>
+                  <TouchableOpacity
+                    style={styles.optionsButton}
+                    onPress={(e) => {
+                      e.stopPropagation(); // Prevent triggering the module selection
+                      setMenuVisible(menuVisible === module._id ? null : module._id);
+                    }}
+                  >
+                    <Ionicons name="ellipsis-vertical" size={18} color="#ffffff" />
+                  </TouchableOpacity>
+                  
+                  {/* Options Menu Popup with improved structure */}
+                  {menuVisible === module._id && (
+                    <>
+                      <TouchableOpacity 
+                        style={styles.optionsOverlay}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setMenuVisible(null);
+                        }}
+                        activeOpacity={0}
+                      />
+                      <View style={styles.optionsMenu}>
+                        <TouchableOpacity 
+                          style={styles.optionItem}
+                          onPress={() => {
+                            setMenuVisible(null);
+                            router.push(`/module/edit/${module._id}`);
+                          }}
+                        >
+                          <Ionicons name="create-outline" size={16} color="#ffffff" />
+                          <Text style={styles.optionText}>Edit</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={[styles.optionItem, styles.deleteOption]}
+                          onPress={() => {
+                            setMenuVisible(null);
+                            handleDeleteModule(module._id);
+                          }}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#ff4d4f" />
+                          <Text style={[styles.optionText, {color: '#ff4d4f'}]}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </View>
+              )}
             </TouchableOpacity>
           ))}
           
@@ -328,7 +476,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 40,
     height: 40,
-    zIndex: 10,
+    zIndex: 5, // Reduced from 10 to 5
   },
   playerImage: {
     width: 40,
@@ -351,13 +499,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 10,
-    elevation: 5,
+    elevation: 1,
+    zIndex: 4, // Add this line
   },
   selectedNode: {
-    borderColor: '#4caf50',
+    borderColor: '#cfb645ff',
     borderWidth: 3,
-    backgroundColor: 'rgba(76, 175, 80, 0.3)',
-    shadowColor: '#4caf50',
+    backgroundColor: 'rgba(199, 255, 94, 0.3)',
+    shadowColor: '#b9ee56ff',
     transform: [{ scale: 1.1 }],
   },
   moduleImage: {
@@ -377,7 +526,7 @@ const styles = StyleSheet.create({
   moduleLevel: {
     position: 'absolute',
     top: -20,
-    backgroundColor: '#ff9800',
+    backgroundColor: '#247f9bff',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -427,5 +576,63 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 16,
-  }
+  },
+  adminOptionsContainer: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    zIndex: 30, // Increased from 20 to 30
+  },
+  optionsButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ffffff44',
+  },
+  optionsMenu: {
+    position: 'absolute',
+    top: 28,
+    right: 0,
+    backgroundColor: 'rgba(10, 25, 41, 0.95)',
+    borderRadius: 8,
+    width: 100,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#1976d2',
+    zIndex: 50, // This is already good
+    elevation: 6, // Add elevation for Android
+    // Add shadow for better visibility
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  optionsOverlay: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    padding: 10,
+    backgroundColor: 'transparent',
+    zIndex: 45, // Add this line
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  optionText: {
+    color: '#ffffff',
+    marginLeft: 8,
+    fontSize: 12,
+  },
+  deleteOption: {
+    borderTopWidth: 1,
+    borderTopColor: '#ffffff22',
+  },
+  
 });

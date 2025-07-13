@@ -17,14 +17,14 @@ const moduleSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    totalLessons: {
+        quizzes: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Quiz" // Changed from "Module"
+    }],
+    totalQuizzes: {
         type: Number,
         default: 0
     },
-    lessons: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Game"
-    }],
     order: {
         type: Number,
         default: 0
@@ -40,11 +40,11 @@ const moduleSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 moduleSchema.pre("save", function(next) {
-    // Ensure totalLessons is always set to the length of the lessons array
-    if (this.lessons) {
-        this.totalLessons = this.lessons.length;
+    // Ensure totalQuizzes is always set to the length of the quizzes array
+    if (this.quizzes) {
+        this.totalQuizzes = this.quizzes.length;
     } else {
-        this.totalLessons = 0;
+        this.totalQuizzes = 0;
     }
     next();
 });

@@ -418,7 +418,7 @@ export default function Game() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.startScreen}>
-          <Text style={styles.gameTitle}>Cyber Security Adventure</Text>
+          <Text style={styles.gameTitle}>CyberLearn Quickplay</Text>
           <Image 
             source={require('../../assets/images/character1.png')}
             style={styles.characterImage}
@@ -431,7 +431,7 @@ export default function Game() {
             style={styles.startButton}
             onPress={() => setGameState('playing')}
           >
-            <Text style={styles.startButtonText}>Begin Adventure</Text>
+            <Text style={styles.startButtonText}>Start</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
