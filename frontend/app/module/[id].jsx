@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -6,25 +6,68 @@ import {
   TouchableOpacity, 
   Image, 
   ActivityIndicator,
-  StyleSheet 
+  StyleSheet,
+  Animated,
+  Dimensions,
+  Platform
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/constants/api';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import COLORS from '@/constants/custom-colors';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import styles from '../../assets/styles/quiz.styles.js';
+// Get screen dimensions
+const { width, height } = Dimensions.get('window');
 
 export default function ModuleDetail() {
   const { id } = useLocalSearchParams();
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const [module, setModule] = useState(null);
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const router = useRouter();
   
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+  
   useEffect(() => {
     fetchModuleDetails();
+    
+    // Start entrance animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      })
+    ]).start();
+    
+    // Start bounce animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   }, [id]);
   
   const fetchModuleDetails = async () => {
@@ -64,14 +107,50 @@ export default function ModuleDetail() {
   };
   
   const navigateToQuiz = (quizId) => {
+    // Provide haptic feedback if on mobile
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
     router.push(`/quiz/${quizId}`);
   };
   
+  // Calculate user progress
+  const userProgress = {
+    completed: Math.floor(Math.random() * quizzes.length), // Replace with actual user progress
+    total: quizzes.length,
+    percentage: quizzes.length > 0 ? Math.floor((Math.random() * quizzes.length) / quizzes.length * 100) : 0
+  };
+  
+  // Generate a random XP amount for this module
+  const moduleXP = 100 * (quizzes.length || 1);
+  
+  // Get difficulty color
+  const getDifficultyColor = (difficulty) => {
+    switch(difficulty) {
+      case 'easy': return '#4CAF50'; // green
+      case 'medium': return '#FF9800'; // orange
+      case 'hard': return '#F44336'; // red
+      default: return COLORS.primary;
+    }
+  };
+  
+  // Loading animation
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading module content...</Text>
+        <Animated.View 
+          style={{
+            transform: [{
+              rotate: bounceAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0deg', '360deg']
+              })
+            }]
+          }}
+        >
+          <MaterialCommunityIcons name="cog" size={60} color={COLORS.primary} />
+        </Animated.View>
+        <Text style={styles.loadingText}>Loading your quest...</Text>
       </View>
     );
   }
@@ -79,252 +158,205 @@ export default function ModuleDetail() {
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle" size={40} color={COLORS.error} />
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchModuleDetails}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+        <MaterialCommunityIcons name="alert-octagon" size={60} color={COLORS.error} />
+        <Text style={styles.errorText}>Quest failed: {error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton} 
+          onPress={fetchModuleDetails}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.retryButtonText}>Try Again</Text>
         </TouchableOpacity>
       </View>
     );
   }
   
   return (
-    <ScrollView style={styles.container}>
-      {/* Module Header */}
-      <View style={styles.header}>
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+    >
+      {/* Module Header - Quest Banner */}
+      <Animated.View 
+        style={[
+          styles.questBanner,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}
+      >
+        <LinearGradient
+          colors={['rgba(0,0,0,0.7)', 'transparent']}
+          style={styles.bannerGradient}
+        />
         <Image 
           source={{ uri: module?.image }} 
-          style={styles.moduleImage} 
+          style={styles.questImage}
+          resizeMode="cover"
         />
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>{module?.title}</Text>
+        <View style={styles.questTitleContainer}>
+          <View style={styles.questTitleWrapper}>
+            <MaterialCommunityIcons name="map-marker" size={24} color="#FFD700" />
+            <Text style={styles.questTitle}>{module?.title}</Text>
+          </View>
+          <View style={styles.questProgressContainer}>
+            <Text style={styles.questProgressText}>{userProgress.percentage}% Complete</Text>
+            <View style={styles.progressBarBackground}>
+              <View style={[styles.progressBar, {width: `${userProgress.percentage}%`}]} />
+            </View>
+          </View>
+        </View>
+      </Animated.View>
+      
+      {/* Adventure Details */}
+      <Animated.View 
+        style={[
+          styles.adventureDetails,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: fadeAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0]
+            })}]
+          }
+        ]}
+      >
+        <View style={styles.adventureDescription}>
+          <MaterialCommunityIcons name="information-variant" size={24} color={COLORS.primary} style={styles.descIcon} />
           <Text style={styles.description}>{module?.description}</Text>
         </View>
-      </View>
+        
+        <View style={styles.rewardsCard}>
+          <Text style={styles.rewardsTitle}>Quest Rewards</Text>
+          <View style={styles.rewardsContent}>
+            <View style={styles.reward}>
+              <MaterialCommunityIcons name="cookie" size={32} color="#FFD700" />
+              <Text style={styles.rewardValue}>{moduleXP}</Text>
+              <Text style={styles.rewardLabel}>Cookies</Text>
+            </View>
+            <View style={styles.reward}>
+              <MaterialCommunityIcons name="cake" size={32} color="#1E88E5" />
+              <Text style={styles.rewardValue}>{quizzes.length}</Text>
+              <Text style={styles.rewardLabel}>Cakes</Text>
+            </View>
+            <View style={styles.reward}>
+              <MaterialCommunityIcons name="trophy" size={32} color="#FF9800" />
+              <Text style={styles.rewardValue}>{Math.round(moduleXP/100)}</Text>
+              <Text style={styles.rewardLabel}>Achievements</Text>
+            </View>
+          </View>
+        </View>
+      </Animated.View>
       
-      {/* Quizzes Section */}
-      <View style={styles.quizzesSection}>
-        <Text style={styles.sectionTitle}>Available Quizzes</Text>
+      {/* Quizzes Section - Challenges */}
+      <View style={styles.challengesSection}>
+        <View style={styles.sectionTitleContainer}>
+          <MaterialCommunityIcons name="code-braces-box" size={24} color={COLORS.primary} />
+          <Text style={styles.sectionTitle}>Challenges</Text>
+          <Text style={styles.challengeCounter}>{quizzes.length}</Text>
+        </View>
         
         {quizzes.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="document-text-outline" size={40} color={COLORS.textSecondary} />
-            <Text style={styles.emptyStateText}>No quizzes available yet</Text>
+            <MaterialCommunityIcons name="treasure-chest" size={60} color={COLORS.textSecondary} />
+            <Text style={styles.emptyStateText}>No challenges available on this quest yet!</Text>
           </View>
         ) : (
-          quizzes.map((quiz) => (
-            <TouchableOpacity 
-              key={quiz._id} 
-              style={styles.quizCard}
-              onPress={() => navigateToQuiz(quiz._id)}
+          quizzes.map((quiz, index) => (
+            <Animated.View
+              key={quiz._id}
+              style={{
+                opacity: fadeAnim,
+                transform: [{ 
+                  translateY: fadeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [50 * (index + 1), 0]
+                  })
+                }]
+              }}
             >
-              <View style={styles.quizHeader}>
-                <Ionicons 
-                  name="help-circle" 
-                  size={24} 
-                  color={COLORS.primary} 
-                  style={styles.quizIcon}
-                />
-                <View style={styles.quizInfo}>
-                  <Text style={styles.quizTitle}>{quiz.title}</Text>
-                  <Text style={styles.quizDescription} numberOfLines={2}>
-                    {quiz.description}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.quizMeta}>
-                <View style={styles.metaItem}>
-                  <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
-                  <Text style={styles.metaText}>
-                    {Math.floor(quiz.timeLimit / 60)}m {quiz.timeLimit % 60}s
-                  </Text>
+              <TouchableOpacity 
+                style={styles.challengeCard}
+                onPress={() => navigateToQuiz(quiz._id)}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={[getDifficultyColor(quiz.difficulty), getDifficultyColor(quiz.difficulty) + '60']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.challengeBadge}
+                >
+                  <Text style={styles.challengeNumber}>#{index + 1}</Text>
+                </LinearGradient>
+                
+                <View style={styles.challengeHeader}>
+                  <View style={styles.challengeTitleContainer}>
+                    <MaterialCommunityIcons 
+                      name="shield-star" 
+                      size={28} 
+                      color={COLORS.primary} 
+                      style={styles.challengeIcon} 
+                    />
+                    <View style={styles.challengeInfo}>
+                      <Text style={styles.challengeTitle}>{quiz.title}</Text>
+                      <Text style={styles.challengeDescription} numberOfLines={2}>
+                        {quiz.description}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
                 
-                <View style={styles.metaItem}>
-                  <Ionicons name="list-outline" size={16} color={COLORS.textSecondary} />
-                  <Text style={styles.metaText}>
-                    {quiz.totalQuestions} questions
-                  </Text>
+                <View style={styles.challengeMeta}>
+                  <View style={styles.metaItem}>
+                    <MaterialCommunityIcons name="clock-time-four" size={18} color="#FF9800" />
+                    <Text style={styles.metaText}>
+                      {Math.floor(quiz.timeLimit / 60)}m {quiz.timeLimit % 60}s
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.metaItem}>
+                    <MaterialCommunityIcons name="gesture-tap-button" size={18} color="#4CAF50" />
+                    <Text style={styles.metaText}>
+                      {quiz.questions?.length || 0} tasks
+                    </Text>
+                  </View>
+                  
+                  <View style={[styles.difficultyBadge, {backgroundColor: getDifficultyColor(quiz.difficulty) + '30'}]}>
+                    <MaterialCommunityIcons 
+                      name={quiz.difficulty === 'easy' ? 'baby-face' : quiz.difficulty === 'medium' ? 'school' : 'shield-bug'} 
+                      size={14} 
+                      color={getDifficultyColor(quiz.difficulty)} 
+                    />
+                    <Text style={[styles.difficultyText, {color: getDifficultyColor(quiz.difficulty)}]}>
+                      {quiz.difficulty.charAt(0).toUpperCase() + quiz.difficulty.slice(1)}
+                    </Text>
+                  </View>
                 </View>
                 
-                <View style={styles.difficultyBadge}>
-                  <Text style={styles.difficultyText}>
-                    {quiz.difficulty.charAt(0).toUpperCase() + quiz.difficulty.slice(1)}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.startQuizButton}>
-                <Text style={styles.startQuizText}>Start Quiz</Text>
-                <Ionicons name="arrow-forward" size={16} color="#ffffff" />
-              </View>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={[COLORS.primary, COLORS.primaryDark || '#1565C0']}
+                  style={styles.startChallengeButton}
+                >
+                  <Text style={styles.startChallengeText}>Start</Text>
+                  <MaterialCommunityIcons name="sword" size={20} color="#ffffff" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
           ))
         )}
       </View>
+      
+      {/* Back to Map button */}
+      <TouchableOpacity 
+        style={styles.backButton}
+        onPress={() => router.back()}
+        activeOpacity={0.8}
+      >
+        <MaterialCommunityIcons name="map" size={20} color="#ffffff" />
+        <Text style={styles.backButtonText}>Return to Quest Map</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-  },
-  loadingText: {
-    marginTop: 16,
-    color: COLORS.textPrimary,
-    fontSize: 16,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    padding: 20,
-  },
-  errorText: {
-    color: COLORS.error,
-    marginTop: 12,
-    marginBottom: 24,
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  header: {
-    padding: 16,
-    backgroundColor: COLORS.cardBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  moduleImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  headerContent: {
-    paddingHorizontal: 8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    lineHeight: 22,
-  },
-  quizzesSection: {
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 40,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
-  },
-  emptyStateText: {
-    marginTop: 16,
-    color: COLORS.textSecondary,
-    fontSize: 16,
-  },
-  quizCard: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  quizHeader: {
-    flexDirection: 'row',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  quizIcon: {
-    marginRight: 12,
-  },
-  quizInfo: {
-    flex: 1,
-  },
-  quizTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-  },
-  quizDescription: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-  },
-  quizMeta: {
-    flexDirection: 'row',
-    padding: 12,
-    backgroundColor: COLORS.cardBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  metaText: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    marginLeft: 4,
-  },
-  difficultyBadge: {
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 'auto',
-  },
-  difficultyText: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  startQuizButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  startQuizText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    marginRight: 8,
-  },
-});

@@ -40,8 +40,8 @@ export default function EditModule() {
   const fetchModuleData = async () => {
     try {
       setLoading(true);
-      console.log(`Fetching module with ID: ${id}`);
-      console.log(`Using token: ${token?.substring(0, 10)}...`);
+      //console.log(`Fetching module with ID: ${id}`);
+      //console.log(`Using token: ${token?.substring(0, 10)}...`);
       
       const response = await fetch(`${API_URL}/modules/${id}`, {
         headers: {
@@ -51,9 +51,9 @@ export default function EditModule() {
       });
 
       // Log response status
-      console.log(`Response status: ${response.status}`);
+      //console.log(`Response status: ${response.status}`);
       const data = await response.json();
-      console.log(`Response data:`, data);
+      //console.log(`Response data:`, data);
 
       if (!response.ok) {
         throw new Error(data.message || 'Failed to fetch module data');

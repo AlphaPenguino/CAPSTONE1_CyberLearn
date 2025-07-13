@@ -50,14 +50,15 @@
 // dark mode
 
 const COLORS = {
-  primary: "#60A5FA",         // Bright blue for primary actions
+  primary: "#60A5FA",
+  primaryDark: "#1565C0",         // Bright blue for primary actions
   textPrimary: "#F0F9FF",     // Almost white blue for primary text
   textSecondary: "#93C5FD",   // Lighter blue for secondary text
   textDark: "#BFDBFE",        // Light blue for dark mode text
   placeholderText: "#3B82F6",  // Medium bright blue for placeholders
   background: "#021526",      // Very dark blue background (as requested)
   cardBackground: "#082744",   // Slightly lighter dark blue for cards
-  inputBackground: "#0C2D4D",  // Bit lighter for input contrast
+  inputBackground: "#0C2D4D", // Bit lighter for input contrast
   border: "#1E3A8A",          // Deep blue for borders
   white: "#ffffff",
   black: "#000000",

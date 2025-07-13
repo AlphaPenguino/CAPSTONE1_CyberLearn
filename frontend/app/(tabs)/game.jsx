@@ -324,7 +324,7 @@ export default function Game() {
           if (currentQuestion < questions.length - 1) {
             setCurrentQuestion(currentQuestion + 1);
           } else {
-            // Just go directly to win state when all questions are answered
+            
             setDialogue(currentEnemy.defeat);
             setShowDialogue(true);
             setEnemyState('defeated');
