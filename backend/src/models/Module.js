@@ -27,11 +27,14 @@ const moduleSchema = new mongoose.Schema({
     },
     order: {
         type: Number,
-        default: 0
+        required: true,
+        unique: true // Ensures no duplicate order numbers
     },
-    isActive: {
+    isLocked: {
         type: Boolean,
-        default: true
+        default: function() {
+        return this.order > 1; // First module is unlocked by default
+        }
     },
     lastAccessed: {
         type: Date,

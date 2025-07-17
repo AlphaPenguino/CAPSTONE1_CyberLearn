@@ -9,7 +9,8 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
-  Platform
+  Platform,
+  Alert
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
@@ -87,16 +88,16 @@ export default function ModuleDetail() {
       setModule(moduleData);
       
       // Fetch quizzes for this module
-      const quizzesRes = await fetch(`${API_URL}/quiz?module=${id}`, {
+      const quizzesRes = await fetch(`${API_URL}/progress/module/${id}/quizzes`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
       if (!quizzesRes.ok) {
-        throw new Error('Failed to load quizzes');
+        throw new Error('Failed to load quizzes or module is locked');
       }
       
       const quizzesData = await quizzesRes.json();
-      setQuizzes(quizzesData.quizzes || []);
+      setQuizzes(quizzesData);
       
     } catch (err) {
       console.error('Error:', err);
@@ -133,7 +134,77 @@ export default function ModuleDetail() {
       default: return COLORS.primary;
     }
   };
-  
+  const handleEditQuiz = (quiz) => {
+  // Navigate to edit quiz page with quiz data
+  router.push({
+    pathname: '/quiz/edit',
+    params: { 
+      quizId: quiz._id,
+      moduleId: id,
+      returnTo: `/module/${id}`
+    }
+  });
+};
+
+const handleDeleteQuiz = async (quizId, quizTitle) => {
+  // Show confirmation alert
+  Alert.alert(
+    "Delete Quiz",
+    `Are you sure you want to delete "${quizTitle}"? This action cannot be undone.`,
+    [
+      {
+        text: "Cancel",
+        style: "cancel"
+      },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => confirmDeleteQuiz(quizId)
+      }
+    ]
+  );
+};
+
+const confirmDeleteQuiz = async (quizId) => {
+  try {
+    setLoading(true);
+    
+    const response = await fetch(`${API_URL}/quiz/${quizId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to delete quiz');
+    }
+    
+    const result = await response.json();
+    
+    // Show success message
+    Alert.alert("Success", "Quiz deleted successfully!");
+    
+    // Refresh the quizzes list
+    await fetchModuleDetails();
+    
+    // Provide haptic feedback
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    
+  } catch (error) {
+    console.error('Error deleting quiz:', error);
+    Alert.alert("Error", error.message || "Failed to delete quiz");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
   // Loading animation
   if (loading) {
     return (
@@ -264,85 +335,166 @@ export default function ModuleDetail() {
           </View>
         ) : (
           quizzes.map((quiz, index) => (
-            <Animated.View
+            <TouchableOpacity 
               key={quiz._id}
-              style={{
-                opacity: fadeAnim,
-                transform: [{ 
-                  translateY: fadeAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [50 * (index + 1), 0]
-                  })
-                }]
-              }}
+              style={[
+                styles.challengeCard,
+                !quiz.isUnlocked && user?.privilege !== 'admin' && styles.lockedChallenge
+              ]}
+              onPress={() => (quiz.isUnlocked || user?.privilege === 'admin') ? navigateToQuiz(quiz._id) : null}
+              disabled={!quiz.isUnlocked && user?.privilege !== 'admin'}
+              activeOpacity={0.8}
             >
-              <TouchableOpacity 
-                style={styles.challengeCard}
-                onPress={() => navigateToQuiz(quiz._id)}
-                activeOpacity={0.8}
+              {/* Admin Action Buttons */}
+              {user?.privilege === 'admin' && (
+                <View style={styles.adminActions}>
+                  <TouchableOpacity 
+                    style={styles.editButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleEditQuiz(quiz);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialCommunityIcons name="pencil" size={16} color="#ffffff" />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.deleteButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeleteQuiz(quiz._id, quiz.title);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialCommunityIcons name="delete" size={16} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Show admin badge for admin users */}
+              {user?.privilege === 'admin' && (
+                <View style={styles.adminBadge}>
+                  <MaterialCommunityIcons name="shield-crown" size={20} color="#FFD700" />
+                  <Text style={styles.adminText}>ADMIN</Text>
+                </View>
+              )}
+              
+              {/* Only show lock for non-admin users */}
+              {!quiz.isUnlocked && user?.privilege !== 'admin' && (
+                <View style={styles.quizLockOverlay}>
+                  <MaterialCommunityIcons name="lock" size={24} color="#ffffff" />
+                  <Text style={styles.lockText}>Complete previous quiz to unlock</Text>
+                </View>
+              )}
+              
+              {/* Quiz Image Section */}
+              {quiz.image && (
+                <View style={styles.quizImageContainer}>
+                  <Image 
+                    source={{ uri: quiz.image }} 
+                    style={styles.quizImage}
+                    resizeMode="cover"
+                  />
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.3)']}
+                    style={styles.quizImageGradient}
+                  />
+                </View>
+              )}
+              
+              {/* Update the badge positioning based on image presence */}
+              <LinearGradient
+                colors={[getDifficultyColor(quiz.difficulty), getDifficultyColor(quiz.difficulty) + '60']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[
+                  styles.challengeBadge,
+                  quiz.image ? styles.challengeBadgeWithImageRight : styles.challengeBadgeNoImageRight
+                ]}
               >
-                <LinearGradient
-                  colors={[getDifficultyColor(quiz.difficulty), getDifficultyColor(quiz.difficulty) + '60']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.challengeBadge}
-                >
-                  <Text style={styles.challengeNumber}>#{index + 1}</Text>
-                </LinearGradient>
-                
-                <View style={styles.challengeHeader}>
-                  <View style={styles.challengeTitleContainer}>
-                    <MaterialCommunityIcons 
-                      name="shield-star" 
-                      size={28} 
-                      color={COLORS.primary} 
-                      style={styles.challengeIcon} 
-                    />
-                    <View style={styles.challengeInfo}>
-                      <Text style={styles.challengeTitle}>{quiz.title}</Text>
-                      <Text style={styles.challengeDescription} numberOfLines={2}>
-                        {quiz.description}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                
-                <View style={styles.challengeMeta}>
-                  <View style={styles.metaItem}>
-                    <MaterialCommunityIcons name="clock-time-four" size={18} color="#FF9800" />
-                    <Text style={styles.metaText}>
-                      {Math.floor(quiz.timeLimit / 60)}m {quiz.timeLimit % 60}s
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.metaItem}>
-                    <MaterialCommunityIcons name="gesture-tap-button" size={18} color="#4CAF50" />
-                    <Text style={styles.metaText}>
-                      {quiz.questions?.length || 0} tasks
-                    </Text>
-                  </View>
-                  
-                  <View style={[styles.difficultyBadge, {backgroundColor: getDifficultyColor(quiz.difficulty) + '30'}]}>
-                    <MaterialCommunityIcons 
-                      name={quiz.difficulty === 'easy' ? 'baby-face' : quiz.difficulty === 'medium' ? 'school' : 'shield-bug'} 
-                      size={14} 
-                      color={getDifficultyColor(quiz.difficulty)} 
-                    />
-                    <Text style={[styles.difficultyText, {color: getDifficultyColor(quiz.difficulty)}]}>
-                      {quiz.difficulty.charAt(0).toUpperCase() + quiz.difficulty.slice(1)}
+                <Text style={styles.challengeNumber}>#{index + 1}</Text>
+              </LinearGradient>
+              
+              <View style={styles.challengeHeader}>
+                <View style={styles.challengeTitleContainer}>
+                  <MaterialCommunityIcons 
+                    name="shield-star" 
+                    size={28} 
+                    color={COLORS.primary} 
+                    style={styles.challengeIcon} 
+                  />
+                  <View style={styles.challengeInfo}>
+                    <Text style={styles.challengeTitle}>{quiz.title}</Text>
+                    <Text style={styles.challengeDescription} numberOfLines={2}>
+                      {quiz.description}
                     </Text>
                   </View>
                 </View>
+              </View>
+              
+              <View style={styles.challengeMeta}>
+                <View style={styles.metaItem}>
+                  <MaterialCommunityIcons name="clock-time-four" size={18} color="#FF9800" />
+                  <Text style={styles.metaText}>
+                    {Math.floor(quiz.timeLimit / 60)}m {quiz.timeLimit % 60}s
+                  </Text>
+                </View>
                 
-                <LinearGradient
-                  colors={[COLORS.primary, COLORS.primaryDark || '#1565C0']}
-                  style={styles.startChallengeButton}
-                >
-                  <Text style={styles.startChallengeText}>Start</Text>
-                  <MaterialCommunityIcons name="sword" size={20} color="#ffffff" />
-                </LinearGradient>
-              </TouchableOpacity>
-            </Animated.View>
+                <View style={styles.metaItem}>
+                  <MaterialCommunityIcons name="gesture-tap-button" size={18} color="#4CAF50" />
+                  <Text style={styles.metaText}>
+                    {quiz.questions?.length || 0} tasks
+                  </Text>
+                </View>
+                
+                <View style={[styles.difficultyBadge, {backgroundColor: getDifficultyColor(quiz.difficulty) + '30'}]}>
+                  <MaterialCommunityIcons 
+                    name={quiz.difficulty === 'easy' ? 'baby-face' : quiz.difficulty === 'medium' ? 'school' : 'shield-bug'} 
+                    size={14} 
+                    color={getDifficultyColor(quiz.difficulty)} 
+                  />
+                  <Text style={[styles.difficultyText, {color: getDifficultyColor(quiz.difficulty)}]}>
+                    {quiz.difficulty.charAt(0).toUpperCase() + quiz.difficulty.slice(1)}
+                  </Text>
+                </View>
+              </View>
+              
+<LinearGradient
+  colors={
+    quiz.isPassed 
+      ? ['#4CAF50', '#388E3C']  // Green for passed
+      : quiz.isCompleted && !quiz.isPassed
+        ? ['#FF9800', '#F57C00']  // Orange for failed
+        : quiz.isUnlocked 
+          ? [COLORS.primary, COLORS.primaryDark || '#1565C0']
+          : ['#757575', '#424242']
+  }
+  style={styles.startChallengeButton}
+>
+  {quiz.isPassed ? (
+    <>
+      <Text style={styles.startChallengeText}>Passed</Text>
+      <MaterialCommunityIcons name="trophy" size={20} color="#ffffff" />
+    </>
+  ) : quiz.isCompleted && !quiz.isPassed ? (
+    <>
+      <Text style={styles.startChallengeText}>Failed</Text>
+      <MaterialCommunityIcons name="refresh" size={20} color="#ffffff" />
+    </>
+  ) : quiz.isUnlocked ? (
+    <>
+      <Text style={styles.startChallengeText}>Start</Text>
+      <MaterialCommunityIcons name="sword" size={20} color="#ffffff" />
+    </>
+  ) : (
+    <>
+      <Text style={styles.startChallengeText}>Locked</Text>
+      <MaterialCommunityIcons name="lock" size={20} color="#ffffff" />
+    </>
+  )}
+</LinearGradient>
+            </TouchableOpacity>
           ))
         )}
       </View>

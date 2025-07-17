@@ -400,4 +400,41 @@ modalOverlay: {
   },
 });
 
-export default styles;
+// Add these styles to your form styles
+const editingStyles = StyleSheet.create({
+  disabledInput: {
+    backgroundColor: '#f5f5f5',
+    opacity: 0.7,
+  },
+  
+  helperText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  
+  questionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  
+  questionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  
+  deleteQuestionButton: {
+    backgroundColor: '#ff4444',
+    borderRadius: 6,
+    padding: 8,
+  },
+});
+
+export default { ...styles, ...editingStyles };

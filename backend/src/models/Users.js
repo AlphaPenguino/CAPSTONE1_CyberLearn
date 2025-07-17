@@ -32,7 +32,40 @@ const userSchema = new mongoose.Schema({
     enum: ['student', 'admin'],
     required: true,
     default: 'student'
-    }
+    },
+
+
+    gamification: {
+
+        totalXP: {
+        type: Number,
+        default: 0
+        },
+        level: {
+        type: Number,
+        default: 1
+        },
+        badges: [{
+        name: String,
+        icon: String,
+        unlockedAt: Date
+        }],
+        achievements: [{
+        name: String,
+        description: String,
+        unlockedAt: Date
+        }],
+        currentStreak: {
+        type: Number,
+        default: 0
+        },
+        longestStreak: {
+        type: Number,
+        default: 0
+        }
+        
+  }
+    
 }, {timestamps: true});
 
 userSchema.pre("save", async function(next) {

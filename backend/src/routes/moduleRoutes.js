@@ -23,6 +23,10 @@ router.post("/", protectRoute, authorizeRole(['admin']), async (req, res) => {
             return res.status(400).json({ message: "Please provide all fields" });
         }
 
+        // ✅ Auto-assign the next order number
+        const lastModule = await Module.findOne().sort({ order: -1 }).select('order');
+        const nextOrder = lastModule ? lastModule.order + 1 : 1;
+
         try {
             //upload image to cloudinary with options
             console.log("Starting Cloudinary upload...");
@@ -35,7 +39,6 @@ router.post("/", protectRoute, authorizeRole(['admin']), async (req, res) => {
             } 
             
             const uploadResponse = await cloudinary.uploader.upload(imageDataUrl, {
-                
                 timeout: 120000, // Increase timeout to 2 minutes
                 resource_type: 'image',
             });
@@ -47,11 +50,17 @@ router.post("/", protectRoute, authorizeRole(['admin']), async (req, res) => {
                 title,
                 description,
                 category,
-                image: imageUrl
+                image: imageUrl,
+                order: nextOrder // ✅ Add the auto-generated order
             });
 
             await newModule.save();
-            res.status(201).json({ message: "Module created successfully", module: newModule });
+            
+            console.log(`Module created with order: ${nextOrder}`);
+            res.status(201).json({ 
+                message: "Module created successfully", 
+                module: newModule 
+            });
             
         } catch (cloudinaryError) {
             console.error("Cloudinary upload error details:", cloudinaryError);
@@ -75,7 +84,7 @@ router.post("/", protectRoute, authorizeRole(['admin']), async (req, res) => {
         }
     } catch (error) {
         console.error("Error creating module:", error);
-        res.status(500).json({ message: error.message || "Internal server error this" });
+        res.status(500).json({ message: error.message || "Internal server error" });
     }
 });
 // Enhanced GET endpoint with better filtering, sorting and projection

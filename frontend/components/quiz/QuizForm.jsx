@@ -76,6 +76,7 @@ const QuizForm = ({ token }) => {
     try {
       // For web platform
       if (Platform.OS === 'web') {
+        // Create an input element
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
@@ -83,12 +84,16 @@ const QuizForm = ({ token }) => {
           const file = e.target.files[0];
           if (!file) return;
           
+          // Check file size - reject if too large
           if (file.size > 5000000) { // 5MB
-            showAlert("Error", "Image too large. Please select a smaller image or compress it first.");
+            alert("Image too large. Please select a smaller image or compress it first.");
             return;
           }
           
-          const img = new window.Image();
+          // Compress image using canvas before converting to base64
+          const img = Platform.OS === 'web' 
+          ? new window.Image() 
+          : null;
           img.onload = () => {
             const canvas = document.createElement('canvas');
             const MAX_WIDTH = 800;
@@ -99,25 +104,33 @@ const QuizForm = ({ token }) => {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             
+            // Get compressed data URL
             const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
             
+            // Set image for preview
             setQuizImage(compressedDataUrl);
+            
+            // Extract base64 without prefix
             const base64data = compressedDataUrl.split(',')[1];
             setQuizImageBase64(base64data);
+            
+            console.log("Web quiz image compressed and converted, length:", base64data.length);
           };
           
           img.src = URL.createObjectURL(file);
         };
         input.click();
       } else {
-        // Mobile implementation
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        
-        if (status !== 'granted') {
-          showAlert('Permission Denied', 'Permission to access camera roll is required!');
-          return;
+        if (Platform.OS !== 'web') {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+          console.log("Media Library Permission Status: ", status);
+          if (status !== 'granted') {
+            Alert.alert('Permission to access camera roll is required!');
+            return;
+          }
         }
-        
+
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: "images",
           allowsEditing: true,
@@ -125,10 +138,13 @@ const QuizForm = ({ token }) => {
           quality: 0.5,
           base64: true,
         });
-        
+
         if (!result.canceled) {
+          // Compress image before using it
           const asset = result.assets[0];
+          
           try {
+            // Use ImageManipulator for additional compression
             const compressedImage = await ImageManipulator.manipulateAsync(
               asset.uri,
               [{ resize: { width: 800 } }],
@@ -136,21 +152,32 @@ const QuizForm = ({ token }) => {
             );
             
             setQuizImage(compressedImage.uri);
+            
+            // Get base64 of compressed image
             const base64 = await FileSystem.readAsStringAsync(
               compressedImage.uri, 
               { encoding: FileSystem.EncodingType.Base64 }
             );
+            
             setQuizImageBase64(base64);
-          } catch (error) {
-            console.error("Error compressing image:", error);
+            console.log("Quiz image compressed and converted to base64, length:", base64.length);
+          } catch (compressionError) {
+            console.error("Error compressing quiz image:", compressionError);
+            // Fallback to original image
             setQuizImage(asset.uri);
             setQuizImageBase64(asset.base64);
           }
+        } else {
+          console.log("Quiz image picking was canceled");
         }
       }
     } catch (error) {
-      console.error("Error picking image:", error);
-      showAlert("Error", "Failed to pick image.");
+      console.error("Error picking quiz image: ", error);
+      if (Platform.OS === 'web') {
+        alert("Failed to pick image.");
+      } else {
+        Alert.alert("Error", "Failed to pick image.");
+      }
     }
   };
   
@@ -193,10 +220,25 @@ const QuizForm = ({ token }) => {
         questions: questions
       };
       
-      // Add image if available
+      // Add image if available - Match LevelForm's approach
       if (quizImageBase64) {
-        quizData.image = `data:image/jpeg;base64,${quizImageBase64}`;
+        // Add safety check for image
+        if (!quizImage) {
+          throw new Error("Image not found. Please select an image again.");
+        }
+        
+        const uriParts = quizImage.split('.');
+        const fileType = uriParts[uriParts.length - 1];
+        const imageType = fileType ? `image/${fileType.toLowerCase()}` : "image/jpeg";
+
+        const imageDataUrl = quizImageBase64.startsWith('data:image') 
+        ? quizImageBase64 
+        : `data:image/jpeg;base64,${quizImageBase64}`;
+        
+        quizData.image = imageDataUrl;
       }
+      
+      console.log("Preparing to upload quiz to:", `${API_URL}/quiz`);
       
       // Submit to API
       const response = await fetch(`${API_URL}/quiz`, {
@@ -208,7 +250,7 @@ const QuizForm = ({ token }) => {
         body: JSON.stringify(quizData),
       });
       
-      // Parse response
+      // Safer JSON parsing with error handling
       let data;
       try {
         data = await response.json();
@@ -224,14 +266,14 @@ const QuizForm = ({ token }) => {
       // Success
       showAlert("Success", "Quiz created successfully!");
       
-      // Reset form
+      // Reset form - including image states
       setSelectedModule(null);
       setQuizTitle('');
       setQuizDescription('');
       setQuizDifficulty('medium');
       setQuizTimeLimit('300');
       setQuizImage(null);
-      setQuizImageBase64('');
+      setQuizImageBase64(''); // Make sure this resets properly
       setPassingScore('70');
       setQuestions([]);
       
@@ -240,7 +282,12 @@ const QuizForm = ({ token }) => {
       
     } catch (error) {
       console.error("Error creating quiz:", error);
-      showAlert("Error", error.message || "Failed to create quiz");
+      
+      const errorMessage = error && typeof error.message === 'string' 
+        ? error.message 
+        : "Failed to create quiz. Please try again.";
+        
+      showAlert("Error", errorMessage);
     } finally {
       setQuizLoading(false);
     }

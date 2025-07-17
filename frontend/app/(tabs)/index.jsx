@@ -74,48 +74,38 @@ export default function Home() {
   // Enhanced fetchModules with pagination, sorting and filtering
   const fetchModules = async (pageNum = 1, sortOrder = 'order') => {
     try {
-      setLoading(refreshing ? false : true); // Don't show full loading screen during pull-to-refresh
+      setLoading(refreshing ? false : true);
       
-      // Build query parameters
-      const queryParams = new URLSearchParams({
-        page: pageNum,
-        limit: 10,
-        sort: sortOrder,
-        // Add optional category filter if selected
-        ...(selectedCategory && { category: selectedCategory })
-      }).toString();
-      
-      const response = await fetch(`${API_URL}/modules?${queryParams}`, {
+      // ✅ Use the progress endpoint instead of the regular modules endpoint
+      const response = await fetch(`${API_URL}/progress/modules`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
       
-      // Handle unauthorized or expired token
       if (response.status === 401) {
         logout();
         router.replace('/login');
         return;
       }
       
-      const data = await response.json();
+      const modulesData = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch modules');
+        throw new Error(modulesData.message || 'Failed to fetch modules');
       }
       
-      // Update state with pagination metadata
-      setModules(data.modules || []);
-      setCurrentPage(data.currentPage);
-      setTotalPages(data.totalPages);
-      setHasMore(data.hasMore);
+      // ✅ The progress endpoint returns modules with unlock status
+      setModules(modulesData || []);
       
-      // Position player at first module if none selected
-      if (modules.length > 0 && !selectedModule) {
-        movePlayerToModule(modules[0], 0);
+      // Position player at first unlocked module
+      const firstUnlockedModule = modulesData.find(m => m.isUnlocked);
+      if (firstUnlockedModule && !selectedModule) {
+        const moduleIndex = modulesData.findIndex(m => m._id === firstUnlockedModule._id);
+        movePlayerToModule(firstUnlockedModule, moduleIndex);
       }
       
-      return true; // Successfully fetched
+      return true;
     } catch (err) {
       console.error('Error fetching modules:', err);
       setError(err.message);
@@ -295,19 +285,49 @@ export default function Home() {
               style={[
                 styles.moduleNode,
                 selectedModule?._id === module._id && styles.selectedNode,
+                !module.isUnlocked && styles.lockedNode, // Add locked styling
                 {
-                  left: (index % 3) * (Dimensions.get('window').width / 3) - 10, // Adjust for larger size
-                  top: Math.floor(index / 3) * 180, // Increased from 150 for more vertical space
+                  left: (index % 3) * (Dimensions.get('window').width / 3) - 10,
+                  top: Math.floor(index / 3) * 180,
                 }
               ]}
-              onPress={() => movePlayerToModule(module, index)}
+              onPress={() => module.isUnlocked ? movePlayerToModule(module, index) : null}
+              disabled={!module.isUnlocked}
             >
+              {/* Add lock overlay for locked modules */}
+              {!module.isUnlocked && (
+                <View style={styles.lockOverlay}>
+                  <Ionicons name="lock-closed" size={30} color="#ffffff" />
+                </View>
+              )}
+              
               <Image 
                 source={{ uri: module.image }} 
-                style={styles.moduleImage} 
+                style={[
+                  styles.moduleImage,
+                  !module.isUnlocked && styles.lockedImage
+                ]} 
               />
-              <Text style={styles.moduleName}>{module.title}</Text>
+              <Text style={[
+                styles.moduleName,
+                !module.isUnlocked && styles.lockedText
+              ]}>
+                {module.title}
+              </Text>
               <Text style={styles.moduleLevel}>Level {index + 1}</Text>
+              
+              {/* Progress indicator */}
+              {module.isCompleted && (
+                <View style={styles.completedBadge}>
+                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                </View>
+              )}
+              
+              {module.isCurrent && !module.isCompleted && (
+                <View style={styles.currentBadge}>
+                  <Ionicons name="play-circle" size={20} color="#FF9800" />
+                </View>
+              )}
               
               {/* Admin Options Button */}
               {isAdmin && (
@@ -378,11 +398,7 @@ export default function Home() {
           )}
           
           {/* Pagination Controls */}
-          {hasMore && (
-            <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreModules}>
-              <Text style={styles.loadMoreText}>Load More Modules</Text>
-            </TouchableOpacity>
-          )}
+          
         </ScrollView>
       )}
     </View>
@@ -509,6 +525,9 @@ const styles = StyleSheet.create({
     shadowColor: '#b9ee56ff',
     transform: [{ scale: 1.1 }],
   },
+  lockedNode: {
+    opacity: 0.5,
+  },
   moduleImage: {
     width: 60,
     height: 60,
@@ -634,5 +653,59 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#ffffff22',
   },
-  
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    borderRadius: 10,
+  },
+  lockedImage: {
+    opacity: 0.3,
+  },
+  lockedText: {
+    opacity: 0.5,
+  },
+  completedBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 2,
+  },
+  currentBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 2,
+  },
+  lockedChallenge: {
+    opacity: 0.6,
+  },
+  quizLockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    borderRadius: 15,
+  },
+  lockText: {
+    color: '#ffffff',
+    marginTop: 8,
+    textAlign: 'center',
+    fontSize: 14,
+  },
 });

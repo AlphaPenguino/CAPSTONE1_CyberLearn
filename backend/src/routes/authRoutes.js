@@ -1,5 +1,8 @@
 import express from "express";
 import User from "../models/Users.js";
+import Progress from "../models/Progress.js";
+import Module from "../models/Module.js";
+import Quiz from "../models/Quiz.js";
 
 import jwt from "jsonwebtoken";
 const router = express.Router();
@@ -50,6 +53,9 @@ router.post("/register", async (req, res) => {
 
         await user.save();
 
+        // Auto-initialize progress for new user
+        await initializeUserProgress(user._id);
+
         const token = generateToken(user._id, user.privilege);
 
         res.status(201).json({
@@ -69,40 +75,95 @@ router.post("/register", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
-    try {
-        const {email, password} = req.body;
-        if(!email || !password) {
-            return res.status(400).json({message: "All fields are required"});
-        }
-
-        //check if user exists
-        const user = await User.findOne({ email });
-        if(!user) { 
-            return res.status(400).json({message: "Invalid email or password"});
-        }
-        //check if password correct
-        const isPasswordCorrect = await user.comparePassword(password);
-        if(!isPasswordCorrect) {
-            return res.status(400).json({message: "Invalid email or password"});
-        }
-        
-
-        const token = generateToken(user._id, user.privilege);
-        res.status(200).json({
-            token,
-            user: {
-                _id: user._id,
-                username: user.username,
-                email: user.email,
-                profileImage: user.profileImage,
-                privilege: user.privilege
-            }
-        });
-
-    } catch (error) {
-        console.log("Error in login route", error);
-        res.status(500).json({ message: "Internal server error"});
+  try {
+    const { email, password } = req.body;
+    
+    if(!email || !password) {
+        return res.status(400).json({message: "All fields are required"});
     }
+
+    //check if user exists
+    const user = await User.findOne({ email });
+    
+    if (!user || !(await user.comparePassword(password))) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+    
+    // ✅ Include privilege in JWT payload
+    const token = jwt.sign(
+      { 
+        userId: user._id,
+        privilege: user.privilege // Include privilege in token
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+    
+    res.json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        profileImage: user.profileImage,
+        email: user.email,
+        privilege: user.privilege,
+        // ... other user fields
+      }
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
 });
+
+// Helper function to initialize user progress
+async function initializeUserProgress(userId) {
+  try {
+    const existingProgress = await Progress.findOne({ user: userId });
+    if (existingProgress) {
+      return existingProgress;
+    }
+    
+    // Find first module
+    const firstModule = await Module.findOne({ order: 1 });
+    if (!firstModule) {
+      console.log("No modules found - progress not initialized");
+      return null;
+    }
+    
+    // Find first quiz in first module - Fix the query
+    const firstQuiz = await Quiz.findOne({ 
+      module: firstModule._id, 
+      order: 1 
+    }).sort({ order: 1 });
+    
+    console.log("First module:", firstModule._id);
+    console.log("First quiz found:", firstQuiz ? firstQuiz._id : "No quiz found");
+    
+    const progress = new Progress({
+      user: userId,
+      globalProgress: {
+        currentModule: firstModule._id,
+        unlockedModules: [firstModule._id],
+        completedModules: []
+      },
+      moduleProgress: [{
+        module: firstModule._id,
+        status: 'unlocked',
+        currentQuiz: firstQuiz?._id,
+        unlockedQuizzes: firstQuiz ? [firstQuiz._id] : [], // ✅ Make sure this gets the quiz
+        completedQuizzes: []
+      }]
+    });
+    
+    await progress.save();
+    console.log(`Progress initialized for user ${userId}`);
+    return progress;
+  } catch (error) {
+    console.error("Error initializing user progress:", error);
+    return null;
+  }
+}
 
 export default router;

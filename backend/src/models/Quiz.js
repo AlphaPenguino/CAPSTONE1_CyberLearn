@@ -65,11 +65,14 @@ const quizSchema = new mongoose.Schema({
     }],
     explanation: String
   }],
-  isActive: {
-    type: Boolean,
-    default: true
-  }
+    order: {
+    type: Number,
+    required: true
+  },
+  
 }, { timestamps: true });
+
+quizSchema.index({ module: 1, order: 1 }, { unique: true });
 
 // Virtual field for total number of questions
 quizSchema.virtual('totalQuestions').get(function() {
