@@ -19,7 +19,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import COLORS from '@/constants/custom-colors';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import styles from '../../assets/styles/quiz.styles.js';
+import styles from '../../assets/styles/quizlist.styles.js';
 // Get screen dimensions
 const { width, height } = Dimensions.get('window');
 
@@ -460,40 +460,26 @@ const confirmDeleteQuiz = async (quizId) => {
                 </View>
               </View>
               
-<LinearGradient
-  colors={
-    quiz.isPassed 
-      ? ['#4CAF50', '#388E3C']  // Green for passed
-      : quiz.isCompleted && !quiz.isPassed
-        ? ['#FF9800', '#F57C00']  // Orange for failed
-        : quiz.isUnlocked 
-          ? [COLORS.primary, COLORS.primaryDark || '#1565C0']
-          : ['#757575', '#424242']
-  }
-  style={styles.startChallengeButton}
->
-  {quiz.isPassed ? (
-    <>
-      <Text style={styles.startChallengeText}>Passed</Text>
-      <MaterialCommunityIcons name="trophy" size={20} color="#ffffff" />
-    </>
-  ) : quiz.isCompleted && !quiz.isPassed ? (
-    <>
-      <Text style={styles.startChallengeText}>Failed</Text>
-      <MaterialCommunityIcons name="refresh" size={20} color="#ffffff" />
-    </>
-  ) : quiz.isUnlocked ? (
-    <>
-      <Text style={styles.startChallengeText}>Start</Text>
-      <MaterialCommunityIcons name="sword" size={20} color="#ffffff" />
-    </>
-  ) : (
-    <>
-      <Text style={styles.startChallengeText}>Locked</Text>
-      <MaterialCommunityIcons name="lock" size={20} color="#ffffff" />
-    </>
-  )}
-</LinearGradient>
+              <LinearGradient
+                  colors={
+                  quiz.isUnlocked || user?.privilege === 'admin'
+                ? [COLORS.primary, COLORS.primaryDark || '#1565C0'] // Blue for unlocked
+                : ['#757575', '#424242'] // Gray for locked
+                }
+                  style={styles.startChallengeButton}
+                >
+                  {quiz.isUnlocked || user?.privilege === 'admin' ? (
+                <>
+                  <Text style={styles.startChallengeText}>Start</Text>
+                  <MaterialCommunityIcons name="sword" size={20} color="#ffffff" />
+                </>
+                ) : (
+                <>
+                  <Text style={styles.startChallengeText}>Locked</Text>
+                  <MaterialCommunityIcons name="lock" size={20} color="#ffffff" />
+                </>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
           ))
         )}

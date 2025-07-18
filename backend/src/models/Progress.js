@@ -1,5 +1,19 @@
 import mongoose from "mongoose";
 
+const completionSchema = new mongoose.Schema({
+  quiz: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Quiz',
+    required: true
+  },
+  score: Number,
+  bestScore: Number,
+  attempts: { type: Number, default: 1 },
+  passed: { type: Boolean, default: false },
+  everPassed: { type: Boolean, default: false },
+  completedAt: Date
+});
+
 const progressSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -47,15 +61,7 @@ const progressSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: "Quiz"
     }],
-    completedQuizzes: [{
-      quiz: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Quiz"
-      },
-      completedAt: Date,
-      bestScore: Number,
-      attempts: Number
-    }],
+    completedQuizzes: [completionSchema],
     startedAt: Date,
     completedAt: Date,
     totalXP: {
@@ -159,25 +165,17 @@ progressSchema.methods.unlockNextQuizInModule = async function(moduleId) {
 
 // Method to complete a quiz and check for unlocks
 progressSchema.methods.completeQuiz = async function(quizId, attemptData) {
-  const Quiz = mongoose.model('Quiz');
-  const Module = mongoose.model('Module');
-  
   try {
-    console.log('🎯 Starting completeQuiz for:', quizId);
-    console.log('📊 Score received:', attemptData.score);
-    
-    // Find the quiz and module
-    const quiz = await Quiz.findById(quizId).populate('module');
+    // Get quiz details
+    const quiz = await Quiz.findById(quizId);
     if (!quiz) {
       throw new Error('Quiz not found');
     }
     
-    const moduleId = quiz.module._id;
-    const passingScore = quiz.passingScore || 70; // Default passing score
+    const moduleId = quiz.module;
+    const passingScore = quiz.passingScore || 70;
     const userScore = attemptData.score || 0;
     const hasPassed = userScore >= passingScore;
-    
-    console.log(`🎯 Quiz: ${quiz.title}, Passing Score: ${passingScore}, User Score: ${userScore}, Passed: ${hasPassed}`);
     
     // Find module progress
     let moduleProgress = this.moduleProgress.find(
@@ -198,7 +196,7 @@ progressSchema.methods.completeQuiz = async function(quizId, attemptData) {
       this.moduleProgress.push(moduleProgress);
     }
     
-    // ✅ Record the quiz completion (regardless of pass/fail)
+    // Find or create the quiz completion
     const existingCompletionIndex = moduleProgress.completedQuizzes.findIndex(
       cq => cq.quiz.toString() === quizId.toString()
     );
@@ -211,22 +209,31 @@ progressSchema.methods.completeQuiz = async function(quizId, attemptData) {
         bestScore: userScore,
         attempts: 1,
         passed: hasPassed,
+        everPassed: hasPassed, // Track if ever passed
         completedAt: new Date()
       });
-      console.log('✅ First attempt recorded');
     } else {
       // Update existing completion
       const existingCompletion = moduleProgress.completedQuizzes[existingCompletionIndex];
       existingCompletion.attempts += 1;
+      existingCompletion.score = userScore;
+      
+      // Update best score if this attempt is better
       if (userScore > existingCompletion.bestScore) {
         existingCompletion.bestScore = userScore;
       }
-      // Update passed status if they passed this time
-      if (hasPassed) {
-        existingCompletion.passed = true;
+      
+      // Update passed status
+      existingCompletion.passed = hasPassed;
+      
+      // Once passed, always mark as everPassed
+      if (hasPassed || existingCompletion.everPassed) {
+        existingCompletion.everPassed = true;
       }
-      console.log(`🔄 Updated attempt #${existingCompletion.attempts}, Best Score: ${existingCompletion.bestScore}`);
     }
+    
+    // Recalculate completion percentage
+    await this.recalculateCompletionPercentage(moduleId);
     
     // ✅ ONLY unlock next content if user PASSED
     if (hasPassed) {
@@ -319,14 +326,17 @@ progressSchema.methods.completeQuiz = async function(quizId, attemptData) {
     
     // Update completion percentage
     const allQuizzesInModule = await Quiz.find({ module: moduleId });
-    const passedQuizzesCount = moduleProgress.completedQuizzes.filter(cq => cq.passed).length;
-    moduleProgress.completionPercentage = Math.round((passedQuizzesCount / allQuizzesInModule.length) * 100);
+    const passedQuizzesCount = moduleProgress.completedQuizzes.filter(cq => cq.everPassed || cq.bestScore >= 70).length;
+    moduleProgress.completionPercentage = Math.round((
+      moduleProgress.completedQuizzes.filter(cq => cq.everPassed || cq.bestScore >= 70).length / 
+      allQuizzesInModule.length
+    ) * 100);
     
     console.log(`📈 Module completion: ${moduleProgress.completionPercentage}%`);
     console.log('✅ Quiz completion processed successfully');
     
   } catch (error) {
-    console.error('❌ Error in completeQuiz:', error);
+    console.error('Error completing quiz:', error);
     throw error;
   }
 };
@@ -418,6 +428,58 @@ progressSchema.methods.isQuizUnlockedSync = function(quizId, quizOrder = null) {
   }
   
   return false;
+};
+
+// Add this method to your Progress model
+progressSchema.methods.recalculateCompletionPercentage = async function(moduleId) {
+  try {
+    const Quiz = mongoose.model('Quiz');
+    
+    // Find the module progress
+    const moduleProgress = this.moduleProgress.find(
+      mp => mp.module.toString() === moduleId.toString()
+    );
+    
+    if (!moduleProgress) return;
+    
+    // Get all existing quizzes for this module
+    const moduleQuizzes = await Quiz.find({ module: moduleId });
+    
+    // Filter out completed quizzes that reference non-existent quizzes
+    const validQuizIds = moduleQuizzes.map(q => q._id.toString());
+    
+    moduleProgress.completedQuizzes = moduleProgress.completedQuizzes.filter(
+      cq => validQuizIds.includes(cq.quiz.toString())
+    );
+    
+    // Count quizzes that were ever passed
+    const passedQuizCount = moduleProgress.completedQuizzes.filter(
+      cq => cq.everPassed
+    ).length;
+    
+    // Calculate percentage
+    moduleProgress.completionPercentage = moduleQuizzes.length > 0
+      ? Math.round((passedQuizCount / moduleQuizzes.length) * 100)
+      : 0;
+      
+    // Also update unlocked quizzes to only include existing ones
+    moduleProgress.unlockedQuizzes = moduleProgress.unlockedQuizzes.filter(
+      quizId => validQuizIds.includes(quizId.toString())
+    );
+    
+    // Make sure currentQuiz exists
+    if (moduleProgress.currentQuiz && !validQuizIds.includes(moduleProgress.currentQuiz.toString())) {
+      // Set to last quiz in the module as fallback
+      moduleProgress.currentQuiz = moduleQuizzes.length > 0
+        ? moduleQuizzes[moduleQuizzes.length - 1]._id
+        : null;
+    }
+    
+    return moduleProgress.completionPercentage;
+  } catch (error) {
+    console.error('Error recalculating completion percentage:', error);
+    return null;
+  }
 };
 
 const Progress = mongoose.model("Progress", progressSchema);

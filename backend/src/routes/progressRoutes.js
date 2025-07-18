@@ -325,4 +325,52 @@ router.get("/debug/:userId", protectRoute, async (req, res) => {
   }
 });
 
+// Get user's completed quizzes with questions for the game
+router.get("/completed-quizzes", protectRoute, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    console.log('🎮 Fetching completed quizzes for user:', userId);
+    
+    // Find user progress
+    const progress = await Progress.findOne({ user: userId });
+    if (!progress) {
+      console.log('❌ User progress not found');
+      return res.status(404).json({ message: "User progress not found" });
+    }
+    
+    // Get all completed/passed quizzes across all modules
+    const completedQuizIds = [];
+    
+    // Iterate through all module progress
+    progress.moduleProgress.forEach(module => {
+      module.completedQuizzes.forEach(quiz => {
+        // Include quiz if it's ever been passed or best score >= 70
+        if ((quiz.everPassed || quiz.passed || quiz.bestScore >= 70) && quiz.quiz) {
+          completedQuizIds.push(quiz.quiz);
+        }
+      });
+    });
+    
+    console.log(`📊 Found ${completedQuizIds.length} completed quizzes`);
+    
+    if (completedQuizIds.length === 0) {
+      return res.json([]);
+    }
+    
+    // Fetch the actual quiz data with questions
+    const completedQuizzes = await Quiz.find({
+      _id: { $in: completedQuizIds }
+    }).populate('questions');
+    
+    console.log(`✅ Successfully fetched ${completedQuizzes.length} quizzes with questions`);
+    
+    // Return the quizzes with their questions
+    res.json(completedQuizzes);
+  } catch (error) {
+    console.error("❌ Error fetching completed quizzes:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 export default router;

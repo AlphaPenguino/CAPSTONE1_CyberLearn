@@ -622,7 +622,7 @@ const QuizForm = ({ token }) => {
           return (
             <View>
               <Text style={styles.helperText}>
-                Use [blank] in your question text to indicate blank spaces
+                Use ____ (4 underscores) in your question text to indicate blank spaces
               </Text>
               {blanks.map((blank, index) => (
                 <View key={index} style={styles.optionContainer}>
