@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+ // Ensure this path is correct
 
 const completionSchema = new mongoose.Schema({
   quiz: {
@@ -166,6 +167,7 @@ progressSchema.methods.unlockNextQuizInModule = async function(moduleId) {
 // Method to complete a quiz and check for unlocks
 progressSchema.methods.completeQuiz = async function(quizId, attemptData) {
   try {
+    const Quiz = mongoose.model('Quiz');
     // Get quiz details
     const quiz = await Quiz.findById(quizId);
     if (!quiz) {
