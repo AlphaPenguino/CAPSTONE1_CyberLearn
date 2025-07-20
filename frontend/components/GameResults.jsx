@@ -1,57 +1,56 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-} from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from "react-native"
 
 export default function GameResults({ gameData, onPlayAgain }) {
   const getTeamColors = (index) => {
-    const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'];
-    return colors[index % colors.length];
-  };
+    const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b"]
+    return colors[index % colors.length]
+  }
 
   const sortedTeams = gameData?.teams
     ? [...gameData.teams].sort((a, b) => b.questionsCompleted - a.questionsCompleted)
-    : [];
+    : []
 
-  const winner = sortedTeams[0];
+  const winner = sortedTeams[0]
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Game Complete!</Text>
-        {winner && (
-          <Text style={styles.winnerText}>🏆 {winner.name} Wins!</Text>
-        )}
+        {winner && <Text style={styles.winnerText}>🏆 {winner.name} Wins!</Text>}
+        <Text style={styles.creatorInfo}>Game created by: {gameData?.creator?.name}</Text>
       </View>
 
       <View style={styles.resultsSection}>
         <Text style={styles.sectionTitle}>Final Results</Text>
-        
+
         {sortedTeams.map((team, index) => (
-          <View key={team.name} style={[
-            styles.teamResult,
-            { borderLeftColor: getTeamColors(gameData.teams.findIndex(t => t.name === team.name)) },
-            index === 0 && styles.winnerTeam
-          ]}>
+          <View
+            key={team.name}
+            style={[
+              styles.teamResult,
+              { borderLeftColor: getTeamColors(gameData.teams.findIndex((t) => t.name === team.name)) },
+              index === 0 && styles.winnerTeam,
+            ]}
+          >
             <View style={styles.teamHeader}>
-              <Text style={[
-                styles.teamName,
-                { color: getTeamColors(gameData.teams.findIndex(t => t.name === team.name)) }
-              ]}>
+              <Text
+                style={[
+                  styles.teamName,
+                  { color: getTeamColors(gameData.teams.findIndex((t) => t.name === team.name)) },
+                ]}
+              >
                 #{index + 1} {team.name}
-                {index === 0 && ' 👑'}
+                {index === 0 && " 👑"}
               </Text>
               <Text style={styles.teamScore}>
                 {team.questionsCompleted}/{gameData.totalQuestions} completed
               </Text>
             </View>
-            
+
             <View style={styles.teamStats}>
-              <Text style={styles.statText}>Help used: {team.helpUsed}/{team.maxHelp}</Text>
+              <Text style={styles.statText}>
+                Help used: {team.helpUsed}/{team.maxHelp}
+              </Text>
               <Text style={styles.statText}>Members: {team.members.length}</Text>
             </View>
 
@@ -60,9 +59,7 @@ export default function GameResults({ gameData, onPlayAgain }) {
               {team.members.map((member) => (
                 <View key={member.id} style={styles.memberResult}>
                   <Text style={styles.memberName}>{member.name}</Text>
-                  <Text style={styles.memberContribution}>
-                    {member.questionsAnswered} questions answered
-                  </Text>
+                  <Text style={styles.memberContribution}>{member.questionsAnswered} questions answered</Text>
                 </View>
               ))}
             </View>
@@ -93,51 +90,54 @@ export default function GameResults({ gameData, onPlayAgain }) {
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Great teamwork! Each member contributed to the victory.
-        </Text>
+        <Text style={styles.footerText}>Great teamwork! Each member contributed to the victory.</Text>
       </View>
     </ScrollView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: "#f8fafc",
   },
   header: {
-    backgroundColor: '#2563eb',
+    backgroundColor: "#2563eb",
     padding: 30,
-    alignItems: 'center',
+    alignItems: "center",
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: "bold",
+    color: "white",
     marginBottom: 10,
   },
   winnerText: {
     fontSize: 20,
-    color: '#fbbf24',
-    fontWeight: 'bold',
+    color: "#fbbf24",
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  creatorInfo: {
+    fontSize: 14,
+    color: "#bfdbfe",
   },
   resultsSection: {
     padding: 20,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 20,
-    color: '#1f2937',
+    color: "#1f2937",
   },
   teamResult: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 12,
     padding: 20,
     marginBottom: 15,
     borderLeftWidth: 6,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 2,
@@ -148,105 +148,105 @@ const styles = StyleSheet.create({
   },
   winnerTeam: {
     borderWidth: 2,
-    borderColor: '#fbbf24',
-    backgroundColor: '#fffbeb',
+    borderColor: "#fbbf24",
+    backgroundColor: "#fffbeb",
   },
   teamHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 15,
   },
   teamName: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   teamScore: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#059669',
+    fontWeight: "bold",
+    color: "#059669",
   },
   teamStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 15,
   },
   statText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: "#6b7280",
   },
   membersList: {
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: "#e5e7eb",
     paddingTop: 15,
   },
   membersTitle: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#374151',
+    fontWeight: "bold",
+    color: "#374151",
     marginBottom: 10,
   },
   memberResult: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 5,
   },
   memberName: {
     fontSize: 14,
-    color: '#374151',
+    color: "#374151",
   },
   memberContribution: {
     fontSize: 12,
-    color: '#6b7280',
+    color: "#6b7280",
   },
   gameStats: {
     padding: 20,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     margin: 20,
     borderRadius: 12,
   },
   statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: "#f3f4f6",
   },
   statLabel: {
     fontSize: 16,
-    color: '#374151',
+    color: "#374151",
   },
   statValue: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontWeight: "bold",
+    color: "#1f2937",
   },
   actionButtons: {
     padding: 20,
-    alignItems: 'center',
+    alignItems: "center",
   },
   playAgainButton: {
-    backgroundColor: '#10b981',
+    backgroundColor: "#10b981",
     paddingHorizontal: 40,
     paddingVertical: 15,
     borderRadius: 25,
     minWidth: 200,
   },
   buttonText: {
-    color: 'white',
+    color: "white",
     fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
   },
   footer: {
     padding: 20,
-    alignItems: 'center',
+    alignItems: "center",
   },
   footerText: {
     fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    fontStyle: 'italic',
+    color: "#6b7280",
+    textAlign: "center",
+    fontStyle: "italic",
   },
-});
+})

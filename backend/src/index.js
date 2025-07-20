@@ -279,13 +279,12 @@ io.on("connection", (socket) => {
     const game = new RelayGame(gameId, socket.id, playerName)
     games.set(gameId, game)
 
-    // Store creator info
-    players.set(socket.id, { gameId, playerName, isCreator: true })
-
+    // Don't store creator in players map yet - they need to join a team first
     socket.emit("game-created", {
       gameId,
       game: game.getGameState(),
       isCreator: true,
+      playerName, // Send back the player name so they can join a team
     })
   })
 
