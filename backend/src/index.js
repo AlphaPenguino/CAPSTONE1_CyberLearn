@@ -44,40 +44,75 @@ const players = new Map()
 const sampleQuestions = [
   {
     id: 1,
-    question: "What is 15 + 27?",
-    options: ["42", "41", "43", "40"],
+    question: "What does ICT stand for?",
+    options: ["Information and Communication Technology", "International Communication Tool", "Internet and Computer Technology", "Information for Computer Training"],
     correct: 0,
     difficulty: "easy",
   },
   {
     id: 2,
-    question: "What is the capital of Japan?",
-    options: ["Seoul", "Tokyo", "Beijing", "Bangkok"],
-    correct: 1,
+    question: "Which of the following is an example of cloud-based collaboration tool?",
+    options: ["Google Docs", "Microsoft Word (offline)", "Notepad", "Paint"],
+    correct: 0,
     difficulty: "medium",
   },
   {
     id: 3,
-    question: "What is 8 × 7?",
-    options: ["54", "56", "58", "52"],
-    correct: 1,
-    difficulty: "easy",
-  },
-  {
-    id: 4,
-    question: "Which planet is closest to the Sun?",
-    options: ["Venus", "Earth", "Mercury", "Mars"],
+    question: "What is the best way to protect your online identity?",
+    options: ["Share your passwords with close friends", "Use the same password everywhere", "Enable two-factor authentication", "Write passwords on a sticky note"],
     correct: 2,
     difficulty: "medium",
   },
   {
+    id: 4,
+    question: "Which of the following is a characteristic of Web 2.0?",
+    options: ["Static pages", "Read-only websites", "User-generated content", "Text-based interface"],
+    correct: 2,
+    difficulty: "easy",
+  },
+  {
     id: 5,
-    question: "What is 144 ÷ 12?",
-    options: ["11", "12", "13", "14"],
+    question: "Which type of cyber threat involves tricking people into giving away sensitive information?",
+    options: ["Phishing", "Hacking", "Spamming", "Ransomware"],
+    correct: 0,
+    difficulty: "medium",
+  },
+  {
+    id: 6,
+    question: "Which file format is commonly used for images on the web?",
+    options: [".docx", ".jpg", ".mp3", ".exe"],
     correct: 1,
     difficulty: "easy",
   },
-]
+  {
+    id: 7,
+    question: "Which principle of digital citizenship involves respecting the rights of others online?",
+    options: ["Digital Law", "Digital Commerce", "Digital Etiquette", "Digital Health"],
+    correct: 2,
+    difficulty: "medium",
+  },
+  {
+    id: 8,
+    question: "Which among the following is NOT a benefit of using ICT in education?",
+    options: ["Access to online resources", "Improved collaboration", "Instant communication", "Decreased screen time"],
+    correct: 3,
+    difficulty: "medium",
+  },
+  {
+    id: 9,
+    question: "What is the primary purpose of version control tools like Git?",
+    options: ["Store documents", "Backup files", "Track code changes", "Monitor computer viruses"],
+    correct: 2,
+    difficulty: "medium",
+  },
+  {
+    id: 10,
+    question: "What is digital footprint?",
+    options: ["The trail of data you leave behind online", "A physical copy of your online activities", "A software for cleaning hard drives", "A type of malware"],
+    correct: 0,
+    difficulty: "easy",
+  },
+];
 
 class RelayGame {
   constructor(gameId, creatorId, creatorName) {

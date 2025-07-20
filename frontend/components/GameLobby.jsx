@@ -126,7 +126,7 @@ export default function GameLobby({ socket, gameData, playerData, isCreator, cre
 
           <TextInput
             style={styles.input}
-            placeholder="Your Name"
+            placeholder="Enter Nickname"
             value={playerName}
             onChangeText={setPlayerName}
             maxLength={20}
