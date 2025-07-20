@@ -734,9 +734,7 @@ export default function Game() {
                 <View style={styles.modeDifficultyContainer}>
                   <Text style={[styles.modeDifficulty, styles.multiplayerText]}>COOP</Text>
                   <View style={styles.difficultyStars}>
-                    <Ionicons name="star" size={12} color="#1E88E5" />
-                    <Ionicons name="star" size={12} color="#1E88E5" />
-                    <Ionicons name="star" size={12} color="#1E88E5" />
+                    
                   </View>
                 </View>
                 
