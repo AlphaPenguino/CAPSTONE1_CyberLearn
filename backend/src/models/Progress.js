@@ -166,6 +166,7 @@ progressSchema.methods.unlockNextQuizInModule = async function(moduleId) {
 // Method to complete a quiz and check for unlocks
 progressSchema.methods.completeQuiz = async function(quizId, attemptData) {
   try {
+    const Module = mongoose.model('Module'); // Ensure Module is defined
     const Quiz = mongoose.model('Quiz');
     // Get quiz details
     const quiz = await Quiz.findById(quizId);
