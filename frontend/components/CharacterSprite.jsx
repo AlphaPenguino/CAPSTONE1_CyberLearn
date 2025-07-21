@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Image, StyleSheet } from 'react-native';
-import { wanderer_sprites, wanderer_frames } from '../components/spriteSets.js';
+
 const SPRITE_WIDTH = 128;
 const SPRITE_HEIGHT = 128;
 const FRAMES = {

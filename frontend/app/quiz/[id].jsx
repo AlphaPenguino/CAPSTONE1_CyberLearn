@@ -22,7 +22,7 @@ import styles from '../../assets/styles/quiz.styles.js';
 
 import CharacterSprite from '../../components/CharacterSprite.jsx'; // Adjust the path as necessary
 const { width, height } = Dimensions.get('window');
-
+import * as sprite from '../../components/spriteSets.js';
 export default function QuizPage() {
   const { id } = useLocalSearchParams(); // This is the quizId
   const { token, user } = useAuthStore();
@@ -855,11 +855,26 @@ if (quizCompleted) {
         </View>
       </View>
 
-      <View style={{ alignItems: 'center', marginVertical: 16 }}>
-        <CharacterSprite action="idle" speed={128} scale={2} />
-      </View>
-
-
+    <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16 }}>
+  <View >
+    <CharacterSprite
+      action="idle"
+      speed={128}
+      scale={2}
+      spriteSet={sprite.wanderer_sprites}
+      frames={sprite.wanderer_frames}
+    />
+  </View>
+  <View style={{ transform: [{ scaleX: -1 }], marginRight: 32 }}>
+    <CharacterSprite
+      action="idle"
+      speed={128}
+      scale={2}
+      spriteSet={sprite.black_werewolf_sprites}
+      frames={sprite.black_werewolf_frames}
+    />
+  </View>
+</View>
       {/* Question Content */}
 <Animated.View style={[styles.questionContainer, {
   opacity: fadeAnim,
@@ -889,7 +904,7 @@ if (quizCompleted) {
     {renderQuestionType(currentQuestion, currentQuestionIndex)}
   </ScrollView>
 
-{/* here sprite*/}
+
   
 
 </Animated.View>

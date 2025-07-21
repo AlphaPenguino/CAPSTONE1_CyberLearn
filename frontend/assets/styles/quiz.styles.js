@@ -847,6 +847,24 @@ const dragDropStyles = {
     color: '#666',
     textAlign: 'center',
   },
+
+  //gamification
+    attackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#d32f2f',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginHorizontal: 8,
+  },
+  attackButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 18,
+    marginRight: 8,
+  },
 };
 
 // Export the combined styles
