@@ -9,9 +9,7 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
-  StyleSheet,
-  TextInput,    
-  Pressable    
+  TextInput   
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
@@ -20,14 +18,16 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import COLORS from '@/constants/custom-colors';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import styles from '../../assets/styles/quiz.styles.js'; // Adjust the path as necessary
+import styles from '../../assets/styles/quiz.styles.js';
+
+import CharacterSprite from '../../components/CharacterSprite.jsx'; // Adjust the path as necessary
 const { width, height } = Dimensions.get('window');
 
 export default function QuizPage() {
   const { id } = useLocalSearchParams(); // This is the quizId
   const { token, user } = useAuthStore();
   const router = useRouter();
-  
+
   // Quiz state
   const [quiz, setQuiz] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -855,6 +855,11 @@ if (quizCompleted) {
         </View>
       </View>
 
+      <View style={{ alignItems: 'center', marginVertical: 16 }}>
+        <CharacterSprite action="idle" speed={128} scale={2} />
+      </View>
+
+
       {/* Question Content */}
 <Animated.View style={[styles.questionContainer, {
   opacity: fadeAnim,
@@ -862,6 +867,7 @@ if (quizCompleted) {
 }]}>
   <ScrollView style={styles.questionScrollContainer} showsVerticalScrollIndicator={false}>
     <View style={styles.questionHeader}>
+      
       <View style={styles.questionTypeIndicator}>
         <MaterialCommunityIcons 
           name={getQuestionTypeIcon(currentQuestion.questionType)} 
@@ -882,6 +888,10 @@ if (quizCompleted) {
     {/* Render appropriate question type */}
     {renderQuestionType(currentQuestion, currentQuestionIndex)}
   </ScrollView>
+
+{/* here sprite*/}
+  
+
 </Animated.View>
 
       {/* Navigation Buttons */}
