@@ -243,9 +243,19 @@ const confirmDeleteQuiz = async (quizId) => {
   }
   
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[
+        styles.contentContainer,
+        Platform.OS === 'web' && { alignItems: 'center' }
+      ]}
+    >
+    <View
+      style={[
+        Platform.OS === 'web'
+          ? { width: 600, maxWidth: '100%', backgroundColor: COLORS.cardBackground, borderRadius: 18, padding: 16, marginTop: 16, marginBottom: 16, boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }
+          : {}
+      ]}
     >
       {/* Module Header - Quest Banner */}
       <Animated.View 
@@ -484,7 +494,7 @@ const confirmDeleteQuiz = async (quizId) => {
           ))
         )}
       </View>
-      
+      </View>
       {/* Back to Map button */}
       <TouchableOpacity 
         style={styles.backButton}

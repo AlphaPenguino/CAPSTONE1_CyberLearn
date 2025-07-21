@@ -384,7 +384,9 @@ export default function Home() {
           ))}
           
           {/* Module Info Panel */}
+          
           {selectedModule && (
+            
             <View style={styles.infoPanel}>
               <Text style={styles.infoTitle}>{selectedModule.title}</Text>
               <Text style={styles.infoDescription}>{selectedModule.description}</Text>
@@ -395,6 +397,7 @@ export default function Home() {
                 <Text style={styles.startButtonText}>Begin Quest</Text>
               </TouchableOpacity>
             </View>
+
           )}
           
           {/* Pagination Controls */}
