@@ -729,14 +729,12 @@ export default function Game() {
                 </LinearGradient>
                 <Text style={styles.modeTitle}>MULTIPLAYER</Text>
                 <Text style={styles.modeDescription}>
-                  Team up with friends to tackle cooperative challenges in real-time!
+                  Team up with friends to tackle cooperative challenges against other team!
                 </Text>
                 <View style={styles.modeDifficultyContainer}>
                   <Text style={[styles.modeDifficulty, styles.multiplayerText]}>COOP</Text>
                   <View style={styles.difficultyStars}>
-                    <Ionicons name="star" size={12} color="#1E88E5" />
-                    <Ionicons name="star" size={12} color="#1E88E5" />
-                    <Ionicons name="star" size={12} color="#1E88E5" />
+                    
                   </View>
                 </View>
                 
