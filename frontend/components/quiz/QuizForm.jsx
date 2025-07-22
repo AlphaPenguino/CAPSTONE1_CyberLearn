@@ -817,10 +817,14 @@ const QuizForm = ({ token }) => {
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={{paddingBottom: 80}}>
+    style={styles.scrollView}
+    contentContainerStyle={{paddingBottom: 80, alignItems: Platform.OS === 'web' ? 'center' : undefined}}
+  >
         
-        <View style={styles.formContainer}>
+        <View style={[
+      styles.formContainer,
+      Platform.OS === 'web' && { width: 500, borderRadius: 18 }
+    ]}>
           <View style={styles.card}>
             <View style={styles.header}>
               <Text style={styles.title}>Create Quiz</Text>

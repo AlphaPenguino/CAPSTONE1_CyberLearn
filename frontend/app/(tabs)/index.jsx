@@ -51,25 +51,32 @@ export default function Home() {
 
   // Move player animation
   const movePlayerToModule = (module, index) => {
-    // Close any open menu when selecting a module
-    if (menuVisible) {
-      setMenuVisible(null);
-    }
-    
-    const screenWidth = Dimensions.get('window').width;
-    const modulePosition = {
-      x: (index % 3) * (screenWidth / 3) + 60, // Adjusted for larger modules
-      y: Math.floor(index / 3) * 180 + 120    // Adjusted for larger modules
-    };
-    
-    Animated.spring(playerPosition, {
-      toValue: modulePosition,
-      friction: 6,
-      useNativeDriver: false,
-    }).start();
-    
-    setSelectedModule(module);
-  };
+  // Close any open menu when selecting a module
+  if (menuVisible) {
+    setMenuVisible(null);
+  }
+  
+  const screenWidth = Dimensions.get('window').width;
+  const modulePosition = Platform.OS === 'web' 
+    ? {
+        // For web: calculate position based on centered grid
+        x: (index % 3) * 200 + (screenWidth / 2 - 300) + 40, // Add 40 to center on the module
+        y: Math.floor(index / 3) * 180 + 40 // Add 40 to center on the module
+      }
+    : {
+        // For mobile: use the existing calculation
+        x: (index % 3) * (screenWidth / 3) + 60,
+        y: Math.floor(index / 3) * 180 + 120
+      };
+  
+  Animated.spring(playerPosition, {
+    toValue: modulePosition,
+    friction: 6,
+    useNativeDriver: false,
+  }).start();
+  
+  setSelectedModule(module);
+};
   
   // Enhanced fetchModules with pagination, sorting and filtering
   const fetchModules = async (pageNum = 1, sortOrder = 'order') => {
@@ -254,10 +261,13 @@ export default function Home() {
         >
           {/* Map Background */}
           <Image 
-            source={require('../../assets/images/background1.jpg')} 
-            style={styles.mapBackground}
-            resizeMode="cover"
-          />
+  source={require('../../assets/images/background1.jpg')} 
+  style={[
+    styles.mapBackground,
+    { minHeight: Dimensions.get('window').height, height: '100%', bottom: 0 }
+  ]}
+  resizeMode="cover"
+/>
           
           {/* Player Character */}
           <Animated.View style={[styles.player, playerPosition.getLayout()]}>
@@ -285,16 +295,18 @@ export default function Home() {
               style={[
                 styles.moduleNode,
                 selectedModule?._id === module._id && styles.selectedNode,
-                !module.isUnlocked && styles.lockedNode, // Add locked styling
+                !module.isUnlocked && styles.lockedNode,
                 {
-                  left: (index % 3) * (Dimensions.get('window').width / 3) - 10,
+                  left: Platform.OS === 'web' 
+                    ? (index % 3) * 200 + (Dimensions.get('window').width / 2 - 300) 
+                    : (index % 3) * (Dimensions.get('window').width / 3) - 10,
                   top: Math.floor(index / 3) * 180,
                 }
               ]}
               onPress={() => module.isUnlocked ? movePlayerToModule(module, index) : null}
               disabled={!module.isUnlocked}
             >
-              {/* Add lock overlay for locked modules */}
+              {/* Lock overlay for locked modules */}
               {!module.isUnlocked && (
                 <View style={styles.lockOverlay}>
                   <Ionicons name="lock-closed" size={30} color="#ffffff" />
@@ -335,14 +347,14 @@ export default function Home() {
                   <TouchableOpacity
                     style={styles.optionsButton}
                     onPress={(e) => {
-                      e.stopPropagation(); // Prevent triggering the module selection
+                      e.stopPropagation(); 
                       setMenuVisible(menuVisible === module._id ? null : module._id);
                     }}
                   >
                     <Ionicons name="ellipsis-vertical" size={18} color="#ffffff" />
                   </TouchableOpacity>
                   
-                  {/* Options Menu Popup with improved structure */}
+                  {/* Options Menu Popup */}
                   {menuVisible === module._id && (
                     <>
                       <TouchableOpacity 
@@ -382,31 +394,40 @@ export default function Home() {
               )}
             </TouchableOpacity>
           ))}
-          
-          {/* Module Info Panel */}
-          
-          {selectedModule && (
-            
-            <View style={styles.infoPanel}>
-              <Text style={styles.infoTitle}>{selectedModule.title}</Text>
-              <Text style={styles.infoDescription}>{selectedModule.description}</Text>
-              <TouchableOpacity 
-                style={styles.startButton}
-                onPress={() => navigateToModule(selectedModule._id)}
-              >
-                <Text style={styles.startButtonText}>Begin Quest</Text>
-              </TouchableOpacity>
-            </View>
-
-          )}
-          
-          {/* Pagination Controls */}
-          
-        </ScrollView>
-      )}
-    </View>
-  );
-}
+                    
+                    {selectedModule && (
+                    <View
+                      style={[
+                        styles.infoPanel,
+                        Platform.OS === 'web' && {
+                          left: '50%',
+                          right: 'auto',
+                          transform: [{ translateX: -250 }],
+                          width: 500,
+                          marginBottom: 20,
+                          borderRadius: 18,
+                          alignSelf: 'center',
+                        }
+                      ]}
+                    >
+                      <Text style={styles.infoTitle}>{selectedModule.title}</Text>
+                      <Text style={styles.infoDescription}>{selectedModule.description}</Text>
+                      <TouchableOpacity 
+                        style={styles.startButton}
+                        onPress={() => navigateToModule(selectedModule._id)}
+                      >
+                        <Text style={styles.startButtonText}>Begin Quest</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                    
+                    {/* Pagination Controls */}
+                    
+                  </ScrollView>
+                )}
+              </View>
+            );
+          }
 
 const styles = StyleSheet.create({
   container: {

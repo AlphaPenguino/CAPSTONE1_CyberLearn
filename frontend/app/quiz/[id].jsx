@@ -912,32 +912,41 @@ if (quizCompleted) {
     source={battlefieldBg}
     style={{ flex: 1, resizeMode: 'cover', width: '100%', height: '100%' }}
   >
-    <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16 }}>
-        <View>
-        <CharacterSprite
-          action={
+      <View style={styles.rpgBattleArea}>
+    <View style={styles.rpgSpriteWrapper}>
+      {/* Wanderer Shadow */}
+      <View style={styles.rpgShadow} />
+      <CharacterSprite
+        action={
           attackAnim === true
-          ? 'attack'
-          : attackAnim === 'hurt'
-          ? 'hurt'
-          : 'idle'
-          }
-          speed={128}
-          scale={2}
-          spriteSet={sprite.wanderer_sprites}
-          frames={sprite.wanderer_frames}
-        />
-        </View>
-        <View style={{ transform: [{ scaleX: -1 }], marginRight: 0 }}>
-          <CharacterSprite
-            action={werewolfAnim }
-            speed={128}
-            scale={2}
-            spriteSet={sprite.black_werewolf_sprites}
-            frames={sprite.black_werewolf_frames}
-          />
-        </View>
-      </View>
+            ? 'attack'
+            : attackAnim === 'hurt'
+            ? 'hurt'
+            : 'idle'
+        }
+        speed={128}
+        scale={2}
+        spriteSet={sprite.wanderer_sprites}
+        frames={sprite.wanderer_frames}
+      />
+      <Text style={styles.questionText}>Wanderer</Text>
+    </View>
+    <View style={[styles.rpgSpriteWrapper, { transform: [{ scaleX: -1 }] }]}>
+  {/* Werewolf Shadow */}
+  <View style={styles.rpgShadow} />
+  <CharacterSprite
+    action={werewolfAnim}
+    speed={128}
+    scale={2}
+    spriteSet={sprite.black_werewolf_sprites}
+    frames={sprite.black_werewolf_frames}
+  />
+  {/* Flip text back */}
+  <View style={{ transform: [{ scaleX: -1 }] }}>
+    <Text style={styles.questionText}>Werewolf</Text>
+  </View>
+</View>
+  </View>
 
     </ImageBackground>
       {/* Question Content */}

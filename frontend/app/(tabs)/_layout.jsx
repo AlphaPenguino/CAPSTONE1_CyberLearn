@@ -116,6 +116,23 @@ export default function TabLayout() {
         />
         
         
+        
+
+        <Tabs.Screen 
+          name="leaderboards" 
+          options={{
+            title: 'Leaderboards',
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons 
+                name={focused ? "trophy" : "trophy-outline"} 
+                size={size} 
+                color={color} 
+              />
+            ),
+          }} 
+        />
+        
+
         <Tabs.Screen 
           name="settings" 
           options={{
@@ -129,7 +146,6 @@ export default function TabLayout() {
             ),
           }} 
         />
-        
         {Platform.OS === 'web' && (
           <Tabs.Screen
             name="menu"
