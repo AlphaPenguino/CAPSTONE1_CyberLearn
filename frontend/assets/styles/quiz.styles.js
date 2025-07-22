@@ -849,7 +849,7 @@ const dragDropStyles = {
   },
 
   //gamification
-    attackButton: {
+  attackButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#d32f2f',
@@ -858,6 +858,7 @@ const dragDropStyles = {
     borderRadius: 8,
     justifyContent: 'center',
     marginHorizontal: 8,
+    marginTop: 12,
   },
   attackButtonText: {
     color: '#fff',

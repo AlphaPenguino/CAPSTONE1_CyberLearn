@@ -14,7 +14,7 @@ export const wanderer_frames = {
   attack: 7,
   attack2: 9,
   idle: 8,
-  hurt: 6,
+  hurt: 4,
   dead: 5,
 };
 

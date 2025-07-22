@@ -9,7 +9,8 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
-  TextInput   
+  TextInput,
+  ImageBackground
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
@@ -19,11 +20,14 @@ import COLORS from '@/constants/custom-colors';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import styles from '../../assets/styles/quiz.styles.js';
-
+const battlefieldBg = require('../../assets/backgrounds/Battleground4.png');
 import CharacterSprite from '../../components/CharacterSprite.jsx'; // Adjust the path as necessary
 const { width, height } = Dimensions.get('window');
 import * as sprite from '../../components/spriteSets.js';
 export default function QuizPage() {
+
+  const [attackAnim, setAttackAnim] = useState(false);
+  const [werewolfAnim, setWerewolfAnim] = useState('idle');
   const { id } = useLocalSearchParams(); // This is the quizId
   const { token, user } = useAuthStore();
   const router = useRouter();
@@ -383,6 +387,34 @@ export default function QuizPage() {
       );
     };
 
+      const isAnswerCorrect = (questionIndex) => {
+    const question = quiz.questions[questionIndex];
+    const userAnswer = userAnswers[questionIndex];
+
+    switch (question.questionType) {
+      case 'multipleChoice':
+        return userAnswer === question.options?.find(opt => opt.isCorrect)?.text;
+      case 'fillInBlanks':
+        const blanks = question.blanks || [];
+        const userBlanks = fillInBlanksInputs[questionIndex] || {};
+        return blanks.every((blank, i) =>
+          userBlanks[i]?.toLowerCase().trim() === blank.answer?.toLowerCase().trim()
+        );
+      case 'codeSimulation':
+      case 'codeImplementation':
+        return userAnswer?.toLowerCase().trim() === question.correctAnswer?.toLowerCase().trim();
+      case 'codeOrdering':
+        const correctOrder = question.codeBlocks?.map((_, idx) => idx).sort((a, b) =>
+          question.codeBlocks[a].correctPosition - question.codeBlocks[b].correctPosition
+        );
+        const userOrder = orderedCodeBlocks[questionIndex];
+        return JSON.stringify(userOrder) === JSON.stringify(correctOrder);
+      default:
+        return false;
+    }
+  };
+
+  
 
   // Fetch quiz data
   const fetchQuizData = async () => {
@@ -484,24 +516,46 @@ export default function QuizPage() {
 
   // Navigate to next question
   const nextQuestion = () => {
-    if (currentQuestionIndex < quiz.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-      
-      // Animate transition
-      Animated.sequence([
-        Animated.timing(slideAnim, {
-          toValue: -50,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        })
-      ]).start();
+  if (currentQuestionIndex < quiz.questions.length - 1) {
+    // Check if previous question was correct
+    if (isAnswerCorrect(currentQuestionIndex)) {
+      setAttackAnim(true);
+      setWerewolfAnim('hurt');
+      setTimeout(() => {
+        
+        setAttackAnim(false);
+        setWerewolfAnim('idle');
+        setCurrentQuestionIndex(prev => prev + 1);
+      }, 1000); // Animation duration
+    } else {
+      setAttackAnim(false);
+      setWerewolfAnim('attack');
+      setTimeout(() => {
+        setWerewolfAnim('idle');
+        setAttackAnim('hurt');
+        setTimeout(() => {
+          setAttackAnim(false);
+          setCurrentQuestionIndex(prev => prev + 1);
+        }, 1200);
+      }, 1200); // Animation duration
     }
-  };
+
+    // Animate transition
+    Animated.sequence([
+      Animated.timing(slideAnim, {
+        toValue: -50,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }
+};
+
 
   // Navigate to previous question
   const previousQuestion = () => {
@@ -854,27 +908,38 @@ if (quizCompleted) {
           />
         </View>
       </View>
-
+<ImageBackground
+    source={battlefieldBg}
+    style={{ flex: 1, resizeMode: 'cover', width: '100%', height: '100%' }}
+  >
     <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16 }}>
-  <View >
-    <CharacterSprite
-      action="idle"
-      speed={128}
-      scale={2}
-      spriteSet={sprite.wanderer_sprites}
-      frames={sprite.wanderer_frames}
-    />
-  </View>
-  <View style={{ transform: [{ scaleX: -1 }], marginRight: 32 }}>
-    <CharacterSprite
-      action="idle"
-      speed={128}
-      scale={2}
-      spriteSet={sprite.black_werewolf_sprites}
-      frames={sprite.black_werewolf_frames}
-    />
-  </View>
-</View>
+        <View>
+        <CharacterSprite
+          action={
+          attackAnim === true
+          ? 'attack'
+          : attackAnim === 'hurt'
+          ? 'hurt'
+          : 'idle'
+          }
+          speed={128}
+          scale={2}
+          spriteSet={sprite.wanderer_sprites}
+          frames={sprite.wanderer_frames}
+        />
+        </View>
+        <View style={{ transform: [{ scaleX: -1 }], marginRight: 0 }}>
+          <CharacterSprite
+            action={werewolfAnim }
+            speed={128}
+            scale={2}
+            spriteSet={sprite.black_werewolf_sprites}
+            frames={sprite.black_werewolf_frames}
+          />
+        </View>
+      </View>
+
+    </ImageBackground>
       {/* Question Content */}
 <Animated.View style={[styles.questionContainer, {
   opacity: fadeAnim,
