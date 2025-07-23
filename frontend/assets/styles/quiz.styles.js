@@ -698,6 +698,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  safeContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
 });
 
 //code ordering styles

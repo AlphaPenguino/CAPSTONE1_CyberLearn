@@ -12,6 +12,9 @@ import {
   TextInput,
   ImageBackground
 } from 'react-native';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
+import RPG_COLORS from '@/constants/rpg-theme-colors';
+import rpgstyles from '../../assets/styles/quiz-rpg.styles.js';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/constants/api';
@@ -24,6 +27,7 @@ const battlefieldBg = require('../../assets/backgrounds/Battleground4.png');
 import CharacterSprite from '../../components/CharacterSprite.jsx'; // Adjust the path as necessary
 const { width, height } = Dimensions.get('window');
 import * as sprite from '../../components/spriteSets.js';
+
 export default function QuizPage() {
 
   const [attackAnim, setAttackAnim] = useState(false);
@@ -889,33 +893,97 @@ if (quizCompleted) {
   const currentQuestion = quiz.questions[currentQuestionIndex];
   
   return (
+    <SafeAreaProvider>
     <View style={styles.container}>
       {/* Quiz Header */}
-      <View style={styles.quizProgressHeader}>
-        <View style={styles.progressInfo}>
-          <Text style={styles.questionCounter}>
-            {currentQuestionIndex + 1} / {quiz.questions.length}
-          </Text>
-          <Text style={styles.timer}>{formatTime(timeRemaining)}</Text>
-        </View>
-        
-        <View style={styles.progressBarContainer}>
-          <View 
-            style={[
-              styles.progressBar, 
-              { width: `${((currentQuestionIndex + 1) / quiz.questions.length) * 100}%` }
-            ]} 
-          />
-        </View>
-      </View>
+      <View style={rpgstyles.quizProgressHeader}>
+  <View style={rpgstyles.rpgStatusBars}>
+    {/* Player Status */}
+    <View style={rpgstyles.characterStatus}>
+      <Text style={rpgstyles.statusName}>Adventurer</Text>
+  <View style={rpgstyles.statusBars}>
+    <View style={rpgstyles.barContainer}>
+      <View 
+        style={[
+          rpgstyles.barFill, 
+          rpgstyles.healthBarFill,
+          { 
+            // Player health decreases only when wrong answers are given
+            width: `${100 - Math.floor((
+              quiz.questions.slice(0, currentQuestionIndex).reduce((count, _, idx) => 
+                count + (isAnswerCorrect(idx) ? 0 : 1), 0
+              ) / quiz.questions.length) * 100)}%` 
+          }
+        ]} 
+      />
+      <Text style={rpgstyles.barText}>HP</Text>
+    </View>
+    <View style={rpgstyles.barContainer}>
+      <View 
+        style={[
+          rpgstyles.barFill,
+          rpgstyles.manaBarFill,
+          { width: `${(timeRemaining / quiz.timeLimit) * 100}%` }
+        ]} 
+      />
+      <Text style={rpgstyles.barText}>{formatTime(timeRemaining)}</Text>
+    </View>
+  </View>
+    </View>
+    
+    {/* Enemy Status */}
+    <View style={rpgstyles.characterStatus}>
+  <Text style={rpgstyles.statusName}>Werewolf</Text>
+  <View style={rpgstyles.statusBars}>
+    <View style={rpgstyles.barContainer}>
+      <View 
+        style={[
+          rpgstyles.barFill, 
+          rpgstyles.enemyHealthBarFill,
+          { 
+            // Werewolf health decreases when correct answers are given
+            width: `${100 - Math.floor((
+              quiz.questions.slice(0, currentQuestionIndex).reduce((count, _, idx) => 
+                count + (isAnswerCorrect(idx) ? 1 : 0), 0
+              ) / quiz.questions.length) * 100)}%` 
+          }
+        ]} 
+      />
+      <Text style={rpgstyles.barText}>HP</Text>
+    </View>
+  </View>
+</View>
+  </View>
+
+  <View style={rpgstyles.questProgress}>
+    <Text style={rpgstyles.questText}>Quest Progress</Text>
+    <View style={rpgstyles.progressBarContainer}>
+      <View 
+        style={[
+          rpgstyles.progressBar, 
+          { width: `${((currentQuestionIndex + 1) / quiz.questions.length) * 100}%` }
+        ]} 
+      />
+    </View>
+  </View>
+</View>
+
 <ImageBackground
-    source={battlefieldBg}
-    style={{ flex: 1, resizeMode: 'cover', width: '100%', height: '100%' }}
-  >
-      <View style={styles.rpgBattleArea}>
-    <View style={styles.rpgSpriteWrapper}>
+  source={battlefieldBg}
+  style={rpgstyles.battlefieldBackground}
+  imageStyle={{
+    resizeMode: Platform.OS === 'web' ? 'cover' : 'contain', // Use contain on mobile
+    width: '100%',
+    height: '100%'
+  }}
+>
+  {/* Centered battle area with characters */}
+  <View style={rpgstyles.rpgBattleArea}>
+  <View style={rpgstyles.battleCharactersContainer}>
+    {/* Wanderer Character */}
+    <View style={rpgstyles.rpgSpriteWrapper}>
       {/* Wanderer Shadow */}
-      <View style={styles.rpgShadow} />
+      <View style={rpgstyles.rpgShadow} />
       <CharacterSprite
         action={
           attackAnim === true
@@ -925,93 +993,103 @@ if (quizCompleted) {
             : 'idle'
         }
         speed={128}
-        scale={2}
+        // Consistent scaling for both characters
+        scale={Platform.OS === 'web' ? 2 : 1}
         spriteSet={sprite.wanderer_sprites}
         frames={sprite.wanderer_frames}
       />
-      <Text style={styles.questionText}>Wanderer</Text>
+      <Text style={rpgstyles.characterName}>Wanderer</Text>
     </View>
-    <View style={[styles.rpgSpriteWrapper, { transform: [{ scaleX: -1 }] }]}>
-  {/* Werewolf Shadow */}
-  <View style={styles.rpgShadow} />
-  <CharacterSprite
-    action={werewolfAnim}
-    speed={128}
-    scale={2}
-    spriteSet={sprite.black_werewolf_sprites}
-    frames={sprite.black_werewolf_frames}
-  />
-  {/* Flip text back */}
-  <View style={{ transform: [{ scaleX: -1 }] }}>
-    <Text style={styles.questionText}>Werewolf</Text>
+    
+    {/* Werewolf Character */}
+    <View style={[rpgstyles.rpgSpriteWrapper, { transform: [{ scaleX: -1 }] }]}>
+      {/* Werewolf Shadow */}
+      <View style={rpgstyles.rpgShadow} />
+      <CharacterSprite
+        action={werewolfAnim}
+        speed={128}
+        // Consistent scaling for both characters
+        scale={Platform.OS === 'web' ? 2 : 1}
+        spriteSet={sprite.black_werewolf_sprites}
+        frames={sprite.black_werewolf_frames}
+      />
+      {/* Flip text back */}
+      <View style={{ transform: [{ scaleX: -1 }] }}>
+        <Text style={rpgstyles.characterName}>Werewolf</Text>
+      </View>
+    </View>
   </View>
 </View>
-  </View>
+</ImageBackground>
 
-    </ImageBackground>
-      {/* Question Content */}
-<Animated.View style={[styles.questionContainer, {
+{/* Update Question Content */}
+<Animated.View style={[rpgstyles.questionContainer, {
   opacity: fadeAnim,
   transform: [{ translateY: slideAnim }]
 }]}>
-  <ScrollView style={styles.questionScrollContainer} showsVerticalScrollIndicator={false}>
-    <View style={styles.questionHeader}>
-      
-      <View style={styles.questionTypeIndicator}>
+  <View style={rpgstyles.rpgDialogHeader}>
+    <MaterialCommunityIcons 
+      name="sword-cross" 
+      size={22} 
+      color={RPG_COLORS.primaryLight} 
+    />
+    <Text style={rpgstyles.rpgDialogTitle}>Battle Challenge</Text>
+  </View>
+  
+  <ScrollView style={rpgstyles.questionScrollContainer} showsVerticalScrollIndicator={false}>
+    <View style={rpgstyles.questionHeader}>
+      <View style={rpgstyles.questionTypeIndicator}>
         <MaterialCommunityIcons 
           name={getQuestionTypeIcon(currentQuestion.questionType)} 
           size={24} 
-          color={COLORS.primary} 
+          color={RPG_COLORS.primaryLight} 
         />
-        <Text style={styles.questionTypeText}>
+        <Text style={rpgstyles.questionTypeText}>
           {getQuestionTypeLabel(currentQuestion.questionType)}
         </Text>
       </View>
-      <Text style={styles.questionPoints}>
+      <Text style={rpgstyles.questionPoints}>
         {currentQuestion.points || 1} {(currentQuestion.points || 1) === 1 ? 'point' : 'points'}
       </Text>
     </View>
     
-    <Text style={styles.questionText}>{currentQuestion.question}</Text>
+    <Text style={rpgstyles.questionText}>{currentQuestion.question}</Text>
     
-    {/* Render appropriate question type */}
+    {/* You'll need to update renderQuestionType function to use rpgstyles instead of styles */}
     {renderQuestionType(currentQuestion, currentQuestionIndex)}
   </ScrollView>
-
-
-  
-
 </Animated.View>
 
-      {/* Navigation Buttons */}
-      <View style={styles.navigationContainer}>
-        <TouchableOpacity 
-          style={[styles.navButton, currentQuestionIndex === 0 && styles.disabledButton]}
-          onPress={previousQuestion}
-          disabled={currentQuestionIndex === 0}
-        >
-          <MaterialCommunityIcons name="chevron-left" size={24} color="#ffffff" />
-          <Text style={styles.navButtonText}>Previous</Text>
-        </TouchableOpacity>
-        
-        {currentQuestionIndex === quiz.questions.length - 1 ? (
-          <TouchableOpacity style={styles.submitButton} onPress={submitQuiz}>
-            <LinearGradient
-              colors={['#4CAF50', '#388E3C']}
-              style={styles.submitButtonGradient}
-            >
-              <Text style={styles.submitButtonText}>Submit Quiz</Text>
-              <MaterialCommunityIcons name="check" size={24} color="#ffffff" />
-            </LinearGradient>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.navButton} onPress={nextQuestion}>
-            <Text style={styles.navButtonText}>Next</Text>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#ffffff" />
-          </TouchableOpacity>
-        )}
-      </View>
+{/* Navigation Buttons */}
+<View style={rpgstyles.navigationContainer}>
+  <TouchableOpacity 
+    style={[rpgstyles.navButton, currentQuestionIndex === 0 && rpgstyles.disabledButton]}
+    onPress={previousQuestion}
+    disabled={currentQuestionIndex === 0}
+  >
+    <MaterialCommunityIcons name="chevron-left" size={24} color="#ffffff" />
+    <Text style={rpgstyles.navButtonText}>Previous</Text>
+  </TouchableOpacity>
+  
+  {currentQuestionIndex === quiz.questions.length - 1 ? (
+    <TouchableOpacity style={rpgstyles.submitButton} onPress={submitQuiz}>
+      <LinearGradient
+        colors={[RPG_COLORS.success, RPG_COLORS.success]}
+        style={rpgstyles.submitButtonGradient}
+      >
+        <Text style={rpgstyles.submitButtonText}>Complete Quest</Text>
+        <MaterialCommunityIcons name="flag-checkered" size={24} color="#ffffff" />
+      </LinearGradient>
+    </TouchableOpacity>
+  ) : (
+    <TouchableOpacity style={rpgstyles.navButton} onPress={nextQuestion}>
+      <Text style={rpgstyles.navButtonText}>Attack</Text>
+      <MaterialCommunityIcons name="sword" size={24} color="#ffffff" />
+    </TouchableOpacity>
+  )}
+</View>
     </View>
+    </SafeAreaProvider>
   );
 }
 
