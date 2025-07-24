@@ -486,6 +486,68 @@ progressSchema.methods.recalculateCompletionPercentage = async function(moduleId
   }
 };
 
+// Add to the Progress model
+progressSchema.methods.ensureDefaultAccess = async function() {
+  try {
+    // Ensure first module is unlocked
+    const Module = mongoose.model('Module');
+    const firstModule = await Module.findOne({ order: 1 });
+    
+    if (!firstModule) return;
+    
+    let needsSaving = false;
+    
+    // Check if first module is in unlockedModules
+    if (!this.globalProgress.unlockedModules.some(id => 
+      id.toString() === firstModule._id.toString()
+    )) {
+      this.globalProgress.unlockedModules.push(firstModule._id);
+      needsSaving = true;
+    }
+    
+    // Find module progress for first module
+    let firstModuleProgress = this.moduleProgress.find(mp => 
+      mp.module.toString() === firstModule._id.toString()
+    );
+    
+    if (!firstModuleProgress) {
+      // Get first quiz in the module
+      const Quiz = mongoose.model('Quiz');
+      const firstQuiz = await Quiz.findOne({ 
+        module: firstModule._id,
+        order: 1 
+      });
+      
+      // Create module progress
+      firstModuleProgress = {
+        module: firstModule._id,
+        status: 'unlocked',
+        unlockedQuizzes: firstQuiz ? [firstQuiz._id] : [],
+        completedQuizzes: []
+      };
+      
+      this.moduleProgress.push(firstModuleProgress);
+      needsSaving = true;
+    }
+    
+    // If first module progress exists but is locked, unlock it
+    if (firstModuleProgress.status === 'locked') {
+      firstModuleProgress.status = 'unlocked';
+      needsSaving = true;
+    }
+    
+    // Save if changes were made
+    if (needsSaving) {
+      await this.save();
+    }
+    
+    return needsSaving;
+  } catch (error) {
+    console.error("Error ensuring default access:", error);
+    return false;
+  }
+};
+
 const Progress = mongoose.model("Progress", progressSchema);
 
 export default Progress;
