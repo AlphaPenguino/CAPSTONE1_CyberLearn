@@ -267,7 +267,7 @@ export default function Home() {
         >
           {/* Map Background */}
           <Image 
-  source={require('../../assets/images/background1.jpg')} 
+  source={require('../../assets/images/enemy1.png')} 
   style={[
     styles.mapBackground,
     { minHeight: Dimensions.get('window').height, height: '100%', bottom: 0 }
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   startButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: "#e01f1fff",
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
