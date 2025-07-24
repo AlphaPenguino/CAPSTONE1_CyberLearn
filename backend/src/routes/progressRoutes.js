@@ -89,7 +89,7 @@ router.get("/modules", protectRoute, async (req, res) => {
     const modules = await Module.find().sort({ order: 1 });
     
     // ✅ Check if user is admin
-    const isAdmin = req.user.privilege === 'admin';
+    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
     
     const modulesWithStatus = modules.map(module => ({
       ...module.toObject(),
@@ -115,7 +115,7 @@ router.get("/module/:moduleId/quizzes", protectRoute, async (req, res) => {
     
     console.log('📚 Fetching quizzes for module:', moduleId);
     
-    const isAdmin = req.user.privilege === 'admin';
+    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
     
     // Admin can access any module, students need unlock check
     if (!isAdmin && progress && !progress.isModuleUnlocked(moduleId)) {
@@ -198,7 +198,7 @@ router.post("/quiz/:quizId/complete", protectRoute, async (req, res) => {
     });
     
     // ✅ Check if user is admin
-    const isAdmin = req.user.privilege === 'admin';
+    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
     
     if (isAdmin) {
       console.log('👑 Admin quiz submission - no progress tracking');

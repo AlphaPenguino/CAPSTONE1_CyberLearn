@@ -9,10 +9,11 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
-  StyleSheet,
-  TextInput,    
-  Pressable    
+  TextInput,
+  ImageBackground
 } from 'react-native';
+
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/constants/api';
@@ -20,14 +21,21 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import COLORS from '@/constants/custom-colors';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import styles from '../../assets/styles/quiz.styles.js'; // Adjust the path as necessary
+import QuizBattle from './QuizBattle.jsx'; // Adjust the path as necessary
+
+import styles from '../../assets/styles/quiz.styles.js';
+
 const { width, height } = Dimensions.get('window');
 
+
 export default function QuizPage() {
+
+  const [attackAnim, setAttackAnim] = useState(false);
+  const [werewolfAnim, setWerewolfAnim] = useState('idle');
   const { id } = useLocalSearchParams(); // This is the quizId
   const { token, user } = useAuthStore();
   const router = useRouter();
-  
+
   // Quiz state
   const [quiz, setQuiz] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -383,6 +391,34 @@ export default function QuizPage() {
       );
     };
 
+      const isAnswerCorrect = (questionIndex) => {
+    const question = quiz.questions[questionIndex];
+    const userAnswer = userAnswers[questionIndex];
+
+    switch (question.questionType) {
+      case 'multipleChoice':
+        return userAnswer === question.options?.find(opt => opt.isCorrect)?.text;
+      case 'fillInBlanks':
+        const blanks = question.blanks || [];
+        const userBlanks = fillInBlanksInputs[questionIndex] || {};
+        return blanks.every((blank, i) =>
+          userBlanks[i]?.toLowerCase().trim() === blank.answer?.toLowerCase().trim()
+        );
+      case 'codeSimulation':
+      case 'codeImplementation':
+        return userAnswer?.toLowerCase().trim() === question.correctAnswer?.toLowerCase().trim();
+      case 'codeOrdering':
+        const correctOrder = question.codeBlocks?.map((_, idx) => idx).sort((a, b) =>
+          question.codeBlocks[a].correctPosition - question.codeBlocks[b].correctPosition
+        );
+        const userOrder = orderedCodeBlocks[questionIndex];
+        return JSON.stringify(userOrder) === JSON.stringify(correctOrder);
+      default:
+        return false;
+    }
+  };
+
+  
 
   // Fetch quiz data
   const fetchQuizData = async () => {
@@ -484,24 +520,46 @@ export default function QuizPage() {
 
   // Navigate to next question
   const nextQuestion = () => {
-    if (currentQuestionIndex < quiz.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-      
-      // Animate transition
-      Animated.sequence([
-        Animated.timing(slideAnim, {
-          toValue: -50,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        })
-      ]).start();
+  if (currentQuestionIndex < quiz.questions.length - 1) {
+    // Check if previous question was correct
+    if (isAnswerCorrect(currentQuestionIndex)) {
+      setAttackAnim(true);
+      setWerewolfAnim('hurt');
+      setTimeout(() => {
+        
+        setAttackAnim(false);
+        setWerewolfAnim('idle');
+        setCurrentQuestionIndex(prev => prev + 1);
+      }, 1000); // Animation duration
+    } else {
+      setAttackAnim(false);
+      setWerewolfAnim('attack');
+      setTimeout(() => {
+        setWerewolfAnim('idle');
+        setAttackAnim('hurt');
+        setTimeout(() => {
+          setAttackAnim(false);
+          setCurrentQuestionIndex(prev => prev + 1);
+        }, 1200);
+      }, 1200); // Animation duration
     }
-  };
+
+    // Animate transition
+    Animated.sequence([
+      Animated.timing(slideAnim, {
+        toValue: -50,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }
+};
+
 
   // Navigate to previous question
   const previousQuestion = () => {
@@ -834,85 +892,24 @@ if (quizCompleted) {
   // Quiz questions screen
   const currentQuestion = quiz.questions[currentQuestionIndex];
   
-  return (
-    <View style={styles.container}>
-      {/* Quiz Header */}
-      <View style={styles.quizProgressHeader}>
-        <View style={styles.progressInfo}>
-          <Text style={styles.questionCounter}>
-            {currentQuestionIndex + 1} / {quiz.questions.length}
-          </Text>
-          <Text style={styles.timer}>{formatTime(timeRemaining)}</Text>
-        </View>
-        
-        <View style={styles.progressBarContainer}>
-          <View 
-            style={[
-              styles.progressBar, 
-              { width: `${((currentQuestionIndex + 1) / quiz.questions.length) * 100}%` }
-            ]} 
-          />
-        </View>
-      </View>
-
-      {/* Question Content */}
-<Animated.View style={[styles.questionContainer, {
-  opacity: fadeAnim,
-  transform: [{ translateY: slideAnim }]
-}]}>
-  <ScrollView style={styles.questionScrollContainer} showsVerticalScrollIndicator={false}>
-    <View style={styles.questionHeader}>
-      <View style={styles.questionTypeIndicator}>
-        <MaterialCommunityIcons 
-          name={getQuestionTypeIcon(currentQuestion.questionType)} 
-          size={24} 
-          color={COLORS.primary} 
-        />
-        <Text style={styles.questionTypeText}>
-          {getQuestionTypeLabel(currentQuestion.questionType)}
-        </Text>
-      </View>
-      <Text style={styles.questionPoints}>
-        {currentQuestion.points || 1} {(currentQuestion.points || 1) === 1 ? 'point' : 'points'}
-      </Text>
-    </View>
-    
-    <Text style={styles.questionText}>{currentQuestion.question}</Text>
-    
-    {/* Render appropriate question type */}
-    {renderQuestionType(currentQuestion, currentQuestionIndex)}
-  </ScrollView>
-</Animated.View>
-
-      {/* Navigation Buttons */}
-      <View style={styles.navigationContainer}>
-        <TouchableOpacity 
-          style={[styles.navButton, currentQuestionIndex === 0 && styles.disabledButton]}
-          onPress={previousQuestion}
-          disabled={currentQuestionIndex === 0}
-        >
-          <MaterialCommunityIcons name="chevron-left" size={24} color="#ffffff" />
-          <Text style={styles.navButtonText}>Previous</Text>
-        </TouchableOpacity>
-        
-        {currentQuestionIndex === quiz.questions.length - 1 ? (
-          <TouchableOpacity style={styles.submitButton} onPress={submitQuiz}>
-            <LinearGradient
-              colors={['#4CAF50', '#388E3C']}
-              style={styles.submitButtonGradient}
-            >
-              <Text style={styles.submitButtonText}>Submit Quiz</Text>
-              <MaterialCommunityIcons name="check" size={24} color="#ffffff" />
-            </LinearGradient>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.navButton} onPress={nextQuestion}>
-            <Text style={styles.navButtonText}>Next</Text>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#ffffff" />
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
+    return (
+    <QuizBattle
+      quiz={quiz}
+      currentQuestionIndex={currentQuestionIndex}
+      timeRemaining={timeRemaining}
+      fadeAnim={fadeAnim}
+      slideAnim={slideAnim}
+      isAnswerCorrect={isAnswerCorrect}
+      attackAnim={attackAnim}
+      werewolfAnim={werewolfAnim}
+      formatTime={formatTime}
+      renderQuestionType={renderQuestionType}
+      nextQuestion={nextQuestion}
+      previousQuestion={previousQuestion}
+      submitQuiz={submitQuiz}
+      getQuestionTypeIcon={getQuestionTypeIcon}
+      getQuestionTypeLabel={getQuestionTypeLabel}
+    />
   );
 }
 

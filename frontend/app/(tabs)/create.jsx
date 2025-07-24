@@ -1,9 +1,9 @@
 import { 
-
+  Platform,
   View, 
   Text,
   SafeAreaView, 
-
+  ScrollView
   } from 'react-native'
 import { useState } from 'react'
 
@@ -43,10 +43,16 @@ export default function Create() {
   };
   return (
     <SafeAreaView style={styles.container }>
+        <ScrollView
+    contentContainerStyle={Platform.OS === 'web' ? { alignItems: 'center', width: '100%' } : undefined}
+    style={{ flex: 1 }}
+  >
       <SegmentedButtons
         value={value}
         onValueChange={setValue}
-        style={styles.group}
+        style={[styles.group,
+          Platform.OS === 'web' && { width: 500, borderRadius: 18 }
+        ]}
         buttons={[
           {
             value: 'level',
@@ -74,21 +80,11 @@ export default function Create() {
             checkedColor: COLORS.white,
             uncheckedColor: COLORS.textSecondary,
           },
-          {
-            value: 'class',
-            label: 'Class',
-            style: styles.segmentButton,
-            showSelectedCheck: false,
-            buttonStyle: ({checked}) => ({
-              backgroundColor: checked ? COLORS.primaryLight : 'transparent',
-              borderColor: checked ? COLORS.primary : COLORS.border,
-            }),
-            checkedColor: COLORS.white,
-            uncheckedColor: COLORS.textSecondary,
-          },
+          
         ]}
       />
       {renderForm()}
+      </ScrollView>
     </SafeAreaView>
   )
 }

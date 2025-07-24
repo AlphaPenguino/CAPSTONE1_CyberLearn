@@ -7,6 +7,8 @@ import { useAuthStore } from '@/store/authStore';
 import { PaperProvider } from 'react-native-paper';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native';
+import CustomDrawer from '../components/drawer/drawer';
+
 
 export default function RootLayout() {
   const [mounted, setMounted] = useState(false);
@@ -35,20 +37,18 @@ export default function RootLayout() {
 
   return (
    
-       
+    <SafeAreaProvider>
     
     <PaperProvider>
-    <SafeAreaProvider>
+    
        
-      <SafeScreen>
         
          <Slot />
-      </SafeScreen>
       <StatusBar style="light" />
       
-    </SafeAreaProvider>
+    
     </PaperProvider>
-
+    </SafeAreaProvider>
     
   );
 }

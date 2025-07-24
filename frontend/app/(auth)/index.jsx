@@ -54,9 +54,9 @@ export default function Login() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <View style={styles.container}>
       <View style={styles.topIllustration}>
-        
+        <Text style={styles.title}>CyberLearn</Text>
         <Image
-          source={require("../../assets/images/cyberlearn-logo-transparent.png")}
+          source={require("../../assets/images/character1.png")}
           style={styles.illustrationImage}
           resizeMode= 'contain'
         />
@@ -133,17 +133,25 @@ export default function Login() {
             )}
           </TouchableOpacity>
 
-          <View style={styles.footer}>
+          
+            
+            {/*
+            <View style={styles.footer}>
             <Text style={styles.footerText}>Don&apos;t have an account?</Text>
             <Link href="/(auth)/signup" asChild>
               <TouchableOpacity>
                 <Text style={styles.link}>Sign Up</Text>
               </TouchableOpacity>
             </Link>
+            </View>
+            */}
+            
+            
+            
 
 
             
-          </View>
+          
             
         </View>
 

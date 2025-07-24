@@ -108,7 +108,7 @@ router.get("/:id", protectRoute, async (req, res) => {
     }
     
     // ✅ Allow access if user is admin OR quiz is order 1
-    const isAdmin = req.user.privilege === 'admin';
+    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
     const isFirstQuiz = quiz.order === 1;
     
     if (!isAdmin && !isFirstQuiz) {
@@ -157,7 +157,7 @@ router.get("/:id", protectRoute, async (req, res) => {
 });
 
 // Add helper route for next order
-router.get("/next-order/:moduleId", protectRoute, authorizeRole(['admin']), async (req, res) => {
+router.get("/next-order/:moduleId", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
   try {
     const { moduleId } = req.params;
     
@@ -179,7 +179,7 @@ router.get("/next-order/:moduleId", protectRoute, authorizeRole(['admin']), asyn
 });
 
 // CREATE a new quiz (admin only) - Updated with Cloudinary handling
-router.post("/", protectRoute, authorizeRole(['admin']), async (req, res) => {
+router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
   try {
     const {
       title,
@@ -285,7 +285,7 @@ router.post("/", protectRoute, authorizeRole(['admin']), async (req, res) => {
 });
 
 // UPDATE a quiz (admin only) - Updated with Cloudinary handling
-router.put("/:id", protectRoute, authorizeRole(['admin']), async (req, res) => {
+router.put("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, difficulty, timeLimit, passingScore, questions, image } = req.body;
@@ -372,7 +372,7 @@ router.put("/:id", protectRoute, authorizeRole(['admin']), async (req, res) => {
 });
 
 // DELETE a quiz (admin only) - Updated with Cloudinary handling
-router.delete("/:id", protectRoute, authorizeRole(['admin']), async (req, res) => {
+router.delete("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -451,7 +451,7 @@ async function reorderQuizzesAfterDeletion(moduleId, deletedOrder) {
 }
 
 // ✅ Add a route to manually re-order all quizzes in a module (admin only)
-router.post("/reorder/:moduleId", protectRoute, authorizeRole(['admin']), async (req, res) => {
+router.post("/reorder/:moduleId", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
   try {
     const { moduleId } = req.params;
     const { quizOrder } = req.body; // Array of quiz IDs in desired order
@@ -482,7 +482,7 @@ router.post("/reorder/:moduleId", protectRoute, authorizeRole(['admin']), async 
 });
 
 // ✅ Add route to get quiz for editing
-router.get("/edit/:id", protectRoute, authorizeRole(['admin']), async (req, res) => {
+router.get("/edit/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
   try {
     const { id } = req.params;
     

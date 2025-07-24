@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema({
     },
     privilege: {
     type: String,
-    enum: ['student', 'admin'],
+    enum: ['student', 'admin', 'superadmin'],
     required: true,
     default: 'student'
     },

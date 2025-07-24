@@ -1,10 +1,13 @@
 import { View, Text } from 'react-native'
 import React from 'react'
 
-export default function Leaderboard() {
+export default function id() {
   return (
     <View>
-      <Text>leaderboard tab</Text>
+      <Text>idtttttttt
+
+        grgrgs
+      </Text>
     </View>
   )
 }
