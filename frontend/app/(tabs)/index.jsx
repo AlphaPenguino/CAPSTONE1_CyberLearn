@@ -21,7 +21,7 @@ import { useFocusEffect } from '@react-navigation/native';
 
 export default function Home() {
   const { user, token, checkAuth, logout } = useAuthStore();
-  const isAdmin = user?.privilege === 'admin';
+  const isAdmin = user?.privilege === 'admin' || user?.privilege === 'superadmin';
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

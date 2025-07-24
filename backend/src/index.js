@@ -10,6 +10,7 @@ import authRoutes from "./routes/authRoutes.js"
 import quizRoutes from "./routes/quizRoutes.js"
 import moduleRoutes from "./routes/moduleRoutes.js"
 import progressRoutes from "./routes/progressRoutes.js"
+import userRoutes from "./routes/userRoutes.js"
 import { connectDB } from "./lib/db.js"
 
 const app = express()
@@ -35,6 +36,7 @@ app.use("/api/auth", authRoutes)
 app.use("/api/quiz", quizRoutes)
 app.use("/api/modules", moduleRoutes)
 app.use("/api/progress", progressRoutes)
+app.use("/api/users", userRoutes)
 
 // Game state for Socket.IO
 const games = new Map()

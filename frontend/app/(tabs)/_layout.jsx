@@ -10,8 +10,8 @@ import { useAuthStore } from '../../store/authStore';
 export default function TabLayout() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const { user, token, checkAuth, logout } = useAuthStore();
-  const isAdmin = user?.privilege === 'admin';
-
+  const isAdmin = user?.privilege === 'admin' || user?.privilege === 'superadmin';
+  const isSuperAdmin = user?.privilege === 'superadmin';
   useEffect(() => {
     checkAuth();
     console.log("Is Admin:", isAdmin);
@@ -95,6 +95,8 @@ export default function TabLayout() {
                 color={color}
               />
             ),
+            href: isAdmin ? null : undefined,
+            headerShown: isAdmin,
           }}
         />
         
@@ -114,7 +116,22 @@ export default function TabLayout() {
             
           }} 
         />
-        
+        <Tabs.Screen
+          name="users"
+          options={{
+            title: 'Manage Users',
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "person" : "person-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+            href: isSuperAdmin ? undefined : null,
+            headerShown: isSuperAdmin,
+            
+          }} 
+        />
         
         
 

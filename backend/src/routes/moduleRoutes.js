@@ -15,7 +15,7 @@ cloudinary.config({
 //create
 
 
-router.post("/", protectRoute, authorizeRole(['admin']), async (req, res) => {
+router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
     try {
         const { title, description, category, image } = req.body;
 
@@ -88,7 +88,7 @@ router.post("/", protectRoute, authorizeRole(['admin']), async (req, res) => {
     }
 });
 // Enhanced GET endpoint with better filtering, sorting and projection
-router.get("/", protectRoute, authorizeRole(['admin', 'student']), async (req, res) => {
+router.get("/", protectRoute, authorizeRole(['admin', 'student', 'superadmin']), async (req, res) => {
     try {
         // Pagination parameters
         const page = parseInt(req.query.page) || 1;
@@ -163,7 +163,7 @@ router.get("/", protectRoute, authorizeRole(['admin', 'student']), async (req, r
     }
 });
 // Update all instances where "lessons" is populated
-router.get("/recent", protectRoute, authorizeRole(['admin', 'student']), async (req, res) => {
+router.get("/recent", protectRoute, authorizeRole(['admin', 'student', 'superadmin']), async (req, res) => {
         try {
         const limit = parseInt(req.query.limit) || 5; // Default to 5 recent modules
         
@@ -183,7 +183,7 @@ router.get("/recent", protectRoute, authorizeRole(['admin', 'student']), async (
     }
 });
 // Update the get single module endpoint
-router.get("/:id", protectRoute, authorizeRole(['admin', 'student']), async (req, res) => {
+router.get("/:id", protectRoute, authorizeRole(['admin', 'student', 'superadmin']), async (req, res) => {
     try {
         const module = await Module.findById(req.params.id)
             .populate("quizzes", "title description image difficulty");
@@ -201,7 +201,7 @@ router.get("/:id", protectRoute, authorizeRole(['admin', 'student']), async (req
         res.status(500).json({ message: "Internal server error" });
     }
 });
-router.delete("/:id", protectRoute, authorizeRole(['admin']), async (req, res) => {
+router.delete("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
     try {
         // 1. Find the module to get its image URL
         const module = await Module.findById(req.params.id);
@@ -234,7 +234,7 @@ router.delete("/:id", protectRoute, authorizeRole(['admin']), async (req, res) =
       }
 });
 // Update module endpoint
-router.put("/:id", protectRoute, authorizeRole(['admin']), async (req, res) => {
+router.put("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, category, image } = req.body;

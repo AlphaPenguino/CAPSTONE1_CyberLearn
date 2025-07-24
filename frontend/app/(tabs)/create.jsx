@@ -80,18 +80,7 @@ export default function Create() {
             checkedColor: COLORS.white,
             uncheckedColor: COLORS.textSecondary,
           },
-          {
-            value: 'class',
-            label: 'Class',
-            style: styles.segmentButton,
-            showSelectedCheck: false,
-            buttonStyle: ({checked}) => ({
-              backgroundColor: checked ? COLORS.primaryLight : 'transparent',
-              borderColor: checked ? COLORS.primary : COLORS.border,
-            }),
-            checkedColor: COLORS.white,
-            uncheckedColor: COLORS.textSecondary,
-          },
+          
         ]}
       />
       {renderForm()}
