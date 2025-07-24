@@ -10,7 +10,7 @@ import { useAuthStore } from '../../store/authStore';
 export default function TabLayout() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const { user, token, checkAuth, logout } = useAuthStore();
-  const isAdmin = user?.privilege === 'admin' || user?.privilege === 'superadmin';
+  const isAdmin = user?.privilege === 'admin';
   const isSuperAdmin = user?.privilege === 'superadmin';
   useEffect(() => {
     checkAuth();
@@ -82,8 +82,11 @@ export default function TabLayout() {
                 color={color}
               />
             ),
+            href: isSuperAdmin ? null : undefined,
+            headerShown: !isSuperAdmin,
           }}
         />
+        
         <Tabs.Screen
           name="game"
           options={{
@@ -95,8 +98,8 @@ export default function TabLayout() {
                 color={color}
               />
             ),
-            href: isAdmin ? null : undefined,
-            headerShown: isAdmin,
+            href: isSuperAdmin ? null : undefined,
+            headerShown: !isSuperAdmin,
           }}
         />
         
@@ -113,7 +116,6 @@ export default function TabLayout() {
             ),
             href: isAdmin ? undefined : null,
             headerShown: isAdmin,
-            
           }} 
         />
         <Tabs.Screen
@@ -129,7 +131,6 @@ export default function TabLayout() {
             ),
             href: isSuperAdmin ? undefined : null,
             headerShown: isSuperAdmin,
-            
           }} 
         />
         
@@ -146,6 +147,8 @@ export default function TabLayout() {
                 color={color} 
               />
             ),
+            href: isSuperAdmin ? null : undefined,
+            headerShown: !isSuperAdmin,
           }} 
         />
         

@@ -188,6 +188,11 @@ export default function Home() {
   };
 
   useEffect(() => {
+
+    if (user?.privilege === 'superadmin') {
+      router.replace('/(tabs)/users');
+    }
+
     if (user?.profileImage) {
       //console.log("Attempting to load profile image:", user.profileImage);
       
@@ -200,8 +205,9 @@ export default function Home() {
           //console.log("Profile image fetch error:", error);
         });
     }
-  }, [user?.profileImage]);
+  }, [user?.profileImage], [user?.privilege, router]);
 
+    
   // Add this helper function to your Home component
   const getCompatibleImageUrl = (url) => {
     if (!url) return null;
