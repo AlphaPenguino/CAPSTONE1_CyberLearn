@@ -177,14 +177,7 @@ export default function GameArcade() {
       color: '#7209B7',
       bgImage: require('../../assets/images/character1.png')
     },
-    {
-      id: 'network-puzzle',
-      title: 'Network Puzzle',
-      description: 'Connect the network components correctly',
-      icon: 'lan',
-      color: '#F72585',
-      bgImage: require('../../assets/images/character1.png')
-    },
+    
     {
       id: 'trivia-master',
       title: 'Trivia Master',
