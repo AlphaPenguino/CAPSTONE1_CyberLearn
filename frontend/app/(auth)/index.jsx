@@ -54,7 +54,7 @@ export default function Login() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <View style={styles.container}>
       <View style={styles.topIllustration}>
-        <Text style={styles.title}>CyberLearn</Text>
+        <Text style={styles.title}>EmpTech</Text>
         <Image
           source={require("../../assets/images/character1.png")}
           style={styles.illustrationImage}
