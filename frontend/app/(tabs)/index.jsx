@@ -33,6 +33,7 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [menuVisible, setMenuVisible] = useState(null);
+  const [isInfoPanelHovered, setIsInfoPanelHovered] = useState(false);
   const router = useRouter();
   const playerPosition = useRef(new Animated.ValueXY({ x: 50, y: 100 })).current;
   const [profileImageError, setProfileImageError] = useState(false);
@@ -267,7 +268,7 @@ export default function Home() {
         >
           {/* Map Background */}
           <Image 
-  source={require('../../assets/images/enemy1.png')} 
+  source={require('../../assets/images/background1.jpg')} 
   style={[
     styles.mapBackground,
     { minHeight: Dimensions.get('window').height, height: '100%', bottom: 0 }
@@ -402,30 +403,35 @@ export default function Home() {
           ))}
                     
                     {selectedModule && (
-                    <View
-                      style={[
-                        styles.infoPanel,
-                        Platform.OS === 'web' && {
-                          left: '50%',
-                          right: 'auto',
-                          transform: [{ translateX: -250 }],
-                          width: 500,
-                          marginBottom: 20,
-                          borderRadius: 18,
-                          alignSelf: 'center',
-                        }
-                      ]}
-                    >
-                      <Text style={styles.infoTitle}>{selectedModule.title}</Text>
-                      <Text style={styles.infoDescription}>{selectedModule.description}</Text>
-                      <TouchableOpacity 
-                        style={styles.startButton}
-                        onPress={() => navigateToModule(selectedModule._id)}
-                      >
-                        <Text style={styles.startButtonText}>Begin Quest</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+  <View
+    style={[
+      styles.infoPanel,
+      Platform.OS === 'web' && {
+        left: '50%',
+        right: 'auto',
+        transform: [{ translateX: -150 }],
+        width: 300,
+        marginBottom: 20,
+        borderRadius: 18,
+        alignSelf: 'center',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+      },
+      Platform.OS === 'web' && isInfoPanelHovered && styles.infoPanelHovered,
+    ]}
+    onMouseEnter={() => Platform.OS === 'web' && setIsInfoPanelHovered(true)}
+    onMouseLeave={() => Platform.OS === 'web' && setIsInfoPanelHovered(false)}
+  >
+    <Text style={styles.infoTitle}>{selectedModule.title}</Text>
+    <Text style={styles.infoDescription}>{selectedModule.description}</Text>
+    <TouchableOpacity 
+      style={styles.startButton}
+      onPress={() => navigateToModule(selectedModule._id)}
+    >
+      <Text style={styles.startButtonText}>Begin Quest</Text>
+    </TouchableOpacity>
+  </View>
+)}
                     
                     {/* Pagination Controls */}
                     
@@ -593,6 +599,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 2,
     borderTopColor: COLORS.primary,
   },
+  infoPanelHovered: {
+    transform: [{ translateX: -250 }, { scale: 1.02 }],
+    backgroundColor: 'rgba(15, 35, 55, 0.95)',
+    borderTopColor: '#2196f3',
+    shadowColor: '#2196f3',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
   infoTitle: {
     color: '#ffffff',
     fontSize: 20,
@@ -604,7 +619,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   startButton: {
-    backgroundColor: "#e01f1fff",
+    backgroundColor: "#010157ff",
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
