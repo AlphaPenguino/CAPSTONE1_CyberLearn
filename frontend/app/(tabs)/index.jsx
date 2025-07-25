@@ -33,6 +33,7 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [menuVisible, setMenuVisible] = useState(null);
+  const [scrollY, setScrollY] = useState(0);
   const router = useRouter();
   const playerPosition = useRef(new Animated.ValueXY({ x: 50, y: 100 })).current;
   const [profileImageError, setProfileImageError] = useState(false);
@@ -51,32 +52,25 @@ export default function Home() {
 
   // Move player animation
   const movePlayerToModule = (module, index) => {
-  // Close any open menu when selecting a module
-  if (menuVisible) {
-    setMenuVisible(null);
-  }
-  
-  const screenWidth = Dimensions.get('window').width;
-  const modulePosition = Platform.OS === 'web' 
-    ? {
-        // For web: calculate position based on centered grid
-        x: (index % 3) * 200 + (screenWidth / 2 - 300) + 40, // Add 40 to center on the module
-        y: Math.floor(index / 3) * 180 + 40 // Add 40 to center on the module
-      }
-    : {
-        // For mobile: use the existing calculation
-        x: (index % 3) * (screenWidth / 3) + 60,
-        y: Math.floor(index / 3) * 180 + 120
-      };
-  
-  Animated.spring(playerPosition, {
-    toValue: modulePosition,
-    friction: 6,
-    useNativeDriver: false,
-  }).start();
-  
-  setSelectedModule(module);
-};
+    if (menuVisible) {
+      setMenuVisible(null);
+    }
+    
+    const screenWidth = Dimensions.get('window').width;
+    const modulePosition = {
+      x: screenWidth / 2 + (index % 2 === 0 ? -150 : 150) - 15, // Adjust by -15 to center horizontally
+      y: index * 300 + 15 // Adjust by +15 to center vertically
+    };
+    
+    Animated.spring(playerPosition, {
+      toValue: modulePosition,
+      friction: 6,
+      tension: 40,
+      useNativeDriver: false,
+    }).start();
+    
+    setSelectedModule(module);
+  };
   
   // Enhanced fetchModules with pagination, sorting and filtering
   const fetchModules = async (pageNum = 1, sortOrder = 'order') => {
@@ -254,6 +248,11 @@ export default function Home() {
         <ScrollView 
           style={styles.mapContainer} 
           contentContainerStyle={styles.mapContent}
+          onScroll={(event) => {
+            const offsetY = event.nativeEvent.contentOffset.y;
+            setScrollY(offsetY);
+          }}
+          scrollEventThrottle={16} // Optimize scroll event firing
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -270,9 +269,15 @@ export default function Home() {
   source={require('../../assets/images/background1.jpg')} 
   style={[
     styles.mapBackground,
-    { minHeight: Dimensions.get('window').height, height: '100%', bottom: 0 }
+    { 
+      minHeight: Math.max(
+        Dimensions.get('window').height,
+        modules.length * 300 + 600 // Dynamic height based on number of modules
+      ),
+      height: '100%',
+    }
   ]}
-  resizeMode="cover"
+  resizeMode="repeat" // Changed from "cover" to "repeat"
 />
           
           {/* Player Character */}
@@ -296,123 +301,167 @@ export default function Home() {
           
           {/* Module Locations */}
           {modules.map((module, index) => (
-            <TouchableOpacity
-              key={module._id}
-              style={[
-                styles.moduleNode,
-                selectedModule?._id === module._id && styles.selectedNode,
-                !module.isUnlocked && styles.lockedNode,
-                {
-                  left: Platform.OS === 'web' 
-                    ? (index % 3) * 200 + (Dimensions.get('window').width / 2 - 300) 
-                    : (index % 3) * (Dimensions.get('window').width / 3) - 10,
-                  top: Math.floor(index / 3) * 180,
-                }
-              ]}
-              onPress={() => module.isUnlocked ? movePlayerToModule(module, index) : null}
-              disabled={!module.isUnlocked}
-            >
-              {/* Lock overlay for locked modules */}
-              {!module.isUnlocked && (
-                <View style={styles.lockOverlay}>
-                  <Ionicons name="lock-closed" size={30} color="#ffffff" />
-                </View>
+            <React.Fragment key={`module-group-${module._id}`}>
+              {index > 0 && (
+                <ModulePath
+                  startX={Dimensions.get('window').width / 2 + (index % 2 === 0 ? 150 : -150)}
+                  startY={(index - 1) * 300 + 40} // Add offset to align with module center
+                  endX={Dimensions.get('window').width / 2 + (index % 2 === 0 ? -150 : 150)}
+                  endY={index * 300 + 40} // Add offset to align with module center
+                  completed={module.isCompleted}
+                  locked={!module.isUnlocked}
+                />
               )}
-              
-              <Image 
-                source={{ uri: module.image }} 
+              <TouchableOpacity
+                key={module._id}
                 style={[
-                  styles.moduleImage,
-                  !module.isUnlocked && styles.lockedImage
-                ]} 
-              />
-              <Text style={[
-                styles.moduleName,
-                !module.isUnlocked && styles.lockedText
-              ]}>
-                {module.title}
-              </Text>
-              <Text style={styles.moduleLevel}>Level {index + 1}</Text>
-              
-              {/* Progress indicator */}
-              {module.isCompleted && (
-                <View style={styles.completedBadge}>
-                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                </View>
-              )}
-              
-              {module.isCurrent && !module.isCompleted && (
-                <View style={styles.currentBadge}>
-                  <Ionicons name="play-circle" size={20} color="#FF9800" />
-                </View>
-              )}
-              
-              {/* Admin Options Button */}
-              {isAdmin && (
-                <View style={styles.adminOptionsContainer}>
-                  <TouchableOpacity
-                    style={styles.optionsButton}
-                    onPress={(e) => {
-                      e.stopPropagation(); 
-                      setMenuVisible(menuVisible === module._id ? null : module._id);
-                    }}
-                  >
-                    <Ionicons name="ellipsis-vertical" size={18} color="#ffffff" />
-                  </TouchableOpacity>
-                  
-                  {/* Options Menu Popup */}
-                  {menuVisible === module._id && (
-                    <>
-                      <TouchableOpacity 
-                        style={styles.optionsOverlay}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          setMenuVisible(null);
-                        }}
-                        activeOpacity={0}
-                      />
-                      <View style={styles.optionsMenu}>
-                        <TouchableOpacity 
-                          style={styles.optionItem}
-                          onPress={() => {
-                            setMenuVisible(null);
-                            router.push(`/module/edit/${module._id}`);
-                          }}
-                        >
-                          <Ionicons name="create-outline" size={16} color="#ffffff" />
-                          <Text style={styles.optionText}>Edit</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity 
-                          style={[styles.optionItem, styles.deleteOption]}
-                          onPress={() => {
-                            setMenuVisible(null);
-                            handleDeleteModule(module._id);
-                          }}
-                        >
-                          <Ionicons name="trash-outline" size={16} color="#ff4d4f" />
-                          <Text style={[styles.optionText, {color: '#ff4d4f'}]}>Delete</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  )}
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
+                  styles.moduleNode,
+                  selectedModule?._id === module._id && styles.selectedNode,
+                  !module.isUnlocked && styles.lockedNode,
+                  {
+                    position: 'absolute',
+                    left: Platform.OS === 'web'
+                      ? Dimensions.get('window').width / 2 - 40
+                      : Dimensions.get('window').width / 2 - 40,
+                    top: index * 300, // Match with path coordinates
+                    transform: [
+                      { translateX: index % 2 === 0 ? -150 : 150 }, // Match with path coordinates
+                    ],
+                  }
+                ]}
+                onPress={() => module.isUnlocked ? movePlayerToModule(module, index) : null}
+                disabled={!module.isUnlocked}
+              >
+                {/* Lock overlay for locked modules */}
+                {!module.isUnlocked && (
+                  <View style={styles.lockOverlay}>
+                    <Ionicons name="lock-closed" size={30} color="#ffffff" />
+                  </View>
+                )}
+                
+                <Image 
+                  source={{ uri: module.image }} 
+                  style={[
+                    styles.moduleImage,
+                    !module.isUnlocked && styles.lockedImage
+                  ]} 
+                />
+                <Text style={[
+                  styles.moduleName,
+                  !module.isUnlocked && styles.lockedText
+                ]}>
+                  {module.title}
+                </Text>
+                <Text style={styles.moduleLevel}>Level {index + 1}</Text>
+                
+                {/* Progress indicator */}
+                {module.isCompleted && (
+                  <View style={styles.completedBadge}>
+                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                  </View>
+                )}
+                
+                {module.isCurrent && !module.isCompleted && (
+                  <View style={styles.currentBadge}>
+                    <Ionicons name="play-circle" size={20} color="#FF9800" />
+                  </View>
+                )}
+                
+                {/* Admin Options Button */}
+                {isAdmin && (
+                  <View style={styles.adminOptionsContainer}>
+                    <TouchableOpacity
+                      style={styles.optionsButton}
+                      onPress={(e) => {
+                        e.stopPropagation(); 
+                        setMenuVisible(menuVisible === module._id ? null : module._id);
+                      }}
+                    >
+                      <Ionicons name="ellipsis-vertical" size={18} color="#ffffff" />
+                    </TouchableOpacity>
                     
+                    {/* Options Menu Popup */}
+                    {menuVisible === module._id && (
+                      <>
+                        <TouchableOpacity 
+                          style={styles.optionsOverlay}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            setMenuVisible(null);
+                          }}
+                          activeOpacity={0}
+                        />
+                        <View style={styles.optionsMenu}>
+                          <TouchableOpacity 
+                            style={styles.optionItem}
+                            onPress={() => {
+                              setMenuVisible(null);
+                              router.push(`/module/edit/${module._id}`);
+                            }}
+                          >
+                            <Ionicons name="create-outline" size={16} color="#ffffff" />
+                            <Text style={styles.optionText}>Edit</Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity 
+                            style={[styles.optionItem, styles.deleteOption]}
+                            onPress={() => {
+                              setMenuVisible(null);
+                              handleDeleteModule(module._id);
+                            }}
+                          >
+                            <Ionicons name="trash-outline" size={16} color="#ff4d4f" />
+                            <Text style={[styles.optionText, {color: '#ff4d4f'}]}>Delete</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
+                    <View
+      style={[
+        styles.infoPanel,
+        Platform.OS === 'web' && {
+          position: 'absolute',
+          left: '50%',
+          top: Math.max(scrollY + 100, 100),
+          transform: [
+            {translateX: -700},
+            {translateY: 0}
+          ],
+          width: 300,
+          marginBottom: 20,
+          borderRadius: 18,
+          alignSelf: 'center',
+          zIndex: 10,
+        }
+      ]}
+    >
+      <Text style={styles.infoTitle}>Player Status</Text>
+      <Text style={styles.infoDescription}>Your progress details will appear here</Text>
+    </View>
+
                     {selectedModule && (
+                      
                     <View
                       style={[
                         styles.infoPanel,
                         Platform.OS === 'web' && {
+                          position: 'absolute',
                           left: '50%',
-                          right: 'auto',
-                          transform: [{ translateX: -250 }],
-                          width: 500,
+                          top: Math.max(scrollY + 100, 100), // Keep panel visible but follow scroll
+                          transform: [
+                            {translateX: 400},
+                            {translateY: 0} // Remove fixed translateY
+                          ],
+                          width: 300,
                           marginBottom: 20,
                           borderRadius: 18,
                           alignSelf: 'center',
+                          zIndex: 10,
                         }
                       ]}
                     >
@@ -434,6 +483,36 @@ export default function Home() {
               </View>
             );
           }
+
+const ModulePath = ({ startX, startY, endX, endY, completed, locked }) => {
+  // Calculate the line properties
+  const deltaX = endX - startX;
+  const deltaY = endY - startY;
+  const length = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+  const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+
+  return (
+    <View
+      style={[
+        styles.pathLine,
+        completed && styles.pathLineCompleted,
+        locked && styles.pathLineLocked,
+        {
+          position: 'absolute',
+          left: startX,
+          top: startY,
+          width: length,
+          height: 4,
+          transform: [
+            { translateY: 40 }, // Center with module
+            { rotate: `${angle}deg` },
+          ],
+          transformOrigin: 'left',
+        }
+      ]}
+    />
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -509,25 +588,36 @@ const styles = StyleSheet.create({
   },
   mapContent: {
     position: 'relative',
-    minHeight: 600,
-    paddingBottom: 100,
+    minHeight: 1000,
+    paddingTop: 50, // Reduced top padding
+    paddingBottom: 300,
   },
   mapBackground: {
     position: 'absolute',
     width: '100%',
     height: '100%',
     opacity: 0.7,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   player: {
     position: 'absolute',
-    width: 40,
-    height: 40,
-    zIndex: 5, // Reduced from 10 to 5
+    width: 40, // Reduce from 50 to 40
+    height: 40, // Reduce from 50 to 40
+    zIndex: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   playerImage: {
-    width: 40,
-    height: 40,
+    width: 35, // Reduce from 45 to 35
+    height: 35, // Reduce from 45 to 35
+    borderRadius: 17.5, // Half of width/height
     resizeMode: 'contain',
+    borderWidth: 2,
+    borderColor: '#1976d2',
+    backgroundColor: 'rgba(25, 118, 210, 0.2)',
   },
   moduleNode: {
     position: 'absolute',
@@ -546,7 +636,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 10,
     elevation: 1,
-    zIndex: 4, // Add this line
+    zIndex: 2, // Add this line
   },
   selectedNode: {
     borderColor: '#cfb645ff',
@@ -568,8 +658,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     position: 'absolute',
-    bottom: -25,
-    width: 100,
+    bottom: -40,
+    width: 250,
     fontSize: 12,
   },
   moduleLevel: {
@@ -585,13 +675,16 @@ const styles = StyleSheet.create({
   },
   infoPanel: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(10, 25, 41, 0.9)',
+    backgroundColor: 'rgba(10, 25, 41, 0.95)',
     padding: 16,
-    borderTopWidth: 2,
-    borderTopColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    borderRadius: 18,
+    backdropFilter: 'blur(10px)',
+    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+    maxHeight: '80vh',
+    overflowY: 'auto',
+    zIndex: 1000,
   },
   infoTitle: {
     color: '#ffffff',
@@ -629,9 +722,10 @@ const styles = StyleSheet.create({
   adminOptionsContainer: {
     position: 'absolute',
     top: -6,
-    right: -6,
-    zIndex: 30, // Increased from 20 to 30
+    right: -6, // Keep this as is
+    zIndex: 60, // Increased to be above player
   },
+
   optionsButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     width: 24,
@@ -645,29 +739,30 @@ const styles = StyleSheet.create({
   optionsMenu: {
     position: 'absolute',
     top: 28,
-    right: 0,
+    right: -80, // Change from 0 to -80 to shift menu to the right
     backgroundColor: 'rgba(10, 25, 41, 0.95)',
     borderRadius: 8,
     width: 100,
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: '#1976d2',
-    zIndex: 50, // This is already good
-    elevation: 6, // Add elevation for Android
-    // Add shadow for better visibility
+    zIndex: 60, // Increased to be above player
+    elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },
+
   optionsOverlay: {
     position: 'absolute',
     top: -10,
-    right: -10,
+    right: -90, // Adjust to match new menu position
     padding: 10,
     backgroundColor: 'transparent',
-    zIndex: 45, // Add this line
+    zIndex: 55,
   },
+
   optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -737,5 +832,26 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     fontSize: 14,
+  },
+  pathLine: {
+    position: 'absolute',
+    backgroundColor: '#1976d2',
+    height: 50,
+    borderRadius: 2,
+    zIndex: 1,
+    shadowColor: '#1976d2',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 5,
+    shadowRadius: 0.10,
+    transformOrigin: 'left',
+  },
+  pathLineCompleted: {
+    backgroundColor: '#4CAF50',
+    shadowColor: '#4CAF50',
+  },
+  pathLineLocked: {
+    backgroundColor: '#666666',
+    opacity: 0.5,
+    shadowOpacity: 0.2,
   },
 });
