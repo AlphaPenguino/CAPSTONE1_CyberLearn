@@ -847,10 +847,11 @@ if (quizCompleted) {
   // Quiz start screen
   if (!quizStarted) {
     return (
-      <ScrollView style={styles.container}>
+      <ScrollView style={[styles.container, { backgroundColor: '#0a1929' }]}>
         <Animated.View style={[styles.startContainer, { 
           opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
+          transform: [{ translateY: slideAnim }],
+          backgroundColor: '#0b1b2dff' // Add this line
         }]}>
           <View style={styles.quizHeader}>
             <MaterialCommunityIcons name="sword-cross" size={60} color={COLORS.primary} />
@@ -881,7 +882,7 @@ if (quizCompleted) {
               style={styles.startButtonGradient}
             >
               <Text style={styles.startButtonText}>Begin Quest</Text>
-              <MaterialCommunityIcons name="sword" size={24} color="#ffffff" />
+              <MaterialCommunityIcons name="sword" size={24} color="#fc0303ff" />
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>

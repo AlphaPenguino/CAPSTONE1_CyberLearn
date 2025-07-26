@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Dimensions, Animated } from 'react-native';
 import COLORS from '@/constants/custom-colors';
 import { useFocusEffect } from '@react-navigation/native';
+import {Easing} from 'react-native';
 
 
 export default function Home() {
@@ -266,18 +267,25 @@ export default function Home() {
         >
           {/* Map Background */}
           <Image 
-  source={require('../../assets/images/background1.jpg')} 
+  source={require('../../assets/images/background2.jpg')} 
   style={[
     styles.mapBackground,
     { 
       minHeight: Math.max(
         Dimensions.get('window').height,
-        modules.length * 300 + 600 // Dynamic height based on number of modules
+        modules.length * 300 + 600
       ),
       height: '100%',
+      width: '100%',
     }
   ]}
-  resizeMode="repeat" // Changed from "cover" to "repeat"
+  resizeMode="cover"
+  fadeDuration={0}
+  loading="eager"
+  // Add these quality settings
+  resizeMethod="scale"
+  progressiveRenderingEnabled={true}
+  defaultSource={require('../../assets/images/background2.jpg')}
 />
           
           {/* Player Character */}
@@ -348,7 +356,8 @@ export default function Home() {
                 />
                 <Text style={[
                   styles.moduleName,
-                  !module.isUnlocked && styles.lockedText
+                  !module.isUnlocked && styles.lockedText,
+                  index % 2 === 0 ? styles.moduleNameLeft : styles.moduleNameRight
                 ]}>
                   {module.title}
                 </Text>
@@ -502,7 +511,7 @@ const ModulePath = ({ startX, startY, endX, endY, completed, locked }) => {
           left: startX,
           top: startY,
           width: length,
-          height: 4,
+          height: 18,
           transform: [
             { translateY: 40 }, // Center with module
             { rotate: `${angle}deg` },
@@ -601,6 +610,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    // Add these properties
+    backfaceVisibility: 'hidden',
+    imageRendering: 'auto',
+    objectFit: 'repeat',
   },
   player: {
     position: 'absolute',
@@ -658,9 +671,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     position: 'absolute',
-    bottom: -40,
-    width: 250,
     fontSize: 12,
+    top: '50%', // Center vertically with the circle
+    transform: [{ translateY: -6 }], // Fine-tune vertical alignment
+  },
+  moduleNameLeft: {
+    right: 'auto',
+    left: -170,
+    width: 150,
+    textAlign: 'right',
+  },
+  moduleNameRight: {
+    left: 'auto',
+    right: -170,
+    width: 150,
+    textAlign: 'left',
   },
   moduleLevel: {
     position: 'absolute',
@@ -841,7 +866,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
     shadowColor: '#1976d2',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 5,
+    shadowOpacity: 0.5,
     shadowRadius: 0.10,
     transformOrigin: 'left',
   },

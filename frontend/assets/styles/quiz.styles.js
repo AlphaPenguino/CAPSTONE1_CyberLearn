@@ -58,15 +58,17 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   quizDescription: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
     lineHeight: 22,
   },
   quizInfo: {
     backgroundColor: '#ffffff',
+    width: '30%',
     borderRadius: 12,
     padding: 20,
+    alignSelf: 'center',
     marginBottom: 30,
   },
   infoItem: {
@@ -81,8 +83,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   startButton: {
+    width: '30%',
     borderRadius: 12,
     overflow: 'hidden',
+    marginTop: 30,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   startButtonGradient: {
     flexDirection: 'row',
