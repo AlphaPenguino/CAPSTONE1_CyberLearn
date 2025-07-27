@@ -851,15 +851,16 @@ if (quizCompleted) {
         <Animated.View style={[styles.startContainer, { 
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
-          backgroundColor: '#0b1b2dff' // Add this line
+          backgroundColor: '#0b1b2dff'
         }]}>
-          <View style={styles.quizHeader}>
-            <MaterialCommunityIcons name="sword-cross" size={60} color={COLORS.primary} />
+          <View style={styles.quizInfo}>
+            <View style={styles.iconContainer}>
+              <MaterialCommunityIcons name="sword-cross" size={48} color={COLORS.primary} />
+            </View>
             <Text style={styles.quizTitle}>{quiz.title}</Text>
             <Text style={styles.quizDescription}>{quiz.description}</Text>
-          </View>
-          
-          <View style={styles.quizInfo}>
+            
+            {/* Existing info items */}
             <View style={styles.infoItem}>
               <MaterialCommunityIcons name="clock-outline" size={24} color="#FF9800" />
               <Text style={styles.infoText}>Time: {formatTime(quiz.timeLimit)}</Text>
@@ -882,7 +883,7 @@ if (quizCompleted) {
               style={styles.startButtonGradient}
             >
               <Text style={styles.startButtonText}>Begin Quest</Text>
-              <MaterialCommunityIcons name="sword" size={24} color="#fc0303ff" />
+              <MaterialCommunityIcons name="sword" size={24} color="#ffffff" />
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>

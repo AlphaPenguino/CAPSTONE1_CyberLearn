@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginVertical: 16,
-  },
+  }, 
   retryButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
@@ -55,32 +55,52 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
-    marginVertical: 16,
+    marginTop: 15, // Add this
+    marginBottom: 16,
   },
   quizDescription: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 24, // Add this to create space before info items
   },
   quizInfo: {
-    backgroundColor: '#ffffff',
-    width: '30%',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: '#ffffff', // Change to solid white for better contrast
+    width: '35%', // Slightly wider container
+    borderRadius: 16, // Increased border radius
+    padding: 32, // More padding
     alignSelf: 'center',
     marginBottom: 30,
+    alignItems: 'center',
+    gap: 24, // Increased gap between elements
+    marginTop: 80, // Reduced top margin
+    justifyContent: 'center',
+    paddingHorizontal: 48, // Reduced horizontal padding
+    // Add shadow for depth
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 4, // Reduced bottom margin
+    width: '100%',
+    gap: 12, // Increased gap between icon and text
+    paddingVertical: 8, // Added vertical padding
+    paddingHorizontal: 16, // Added horizontal padding
+    backgroundColor: '#f8f9fa', // Light background for each item
+    borderRadius: 8, // Rounded corners
   },
   infoText: {
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 12,
-    fontWeight: '500',
+    fontSize: 18, // Larger font size
+    color: '#2c3e50', // Darker text color
+    marginLeft: 8,
+    fontWeight: '600', // Slightly bolder
+    letterSpacing: 0.3, // Added letter spacing
   },
   startButton: {
     width: '30%',

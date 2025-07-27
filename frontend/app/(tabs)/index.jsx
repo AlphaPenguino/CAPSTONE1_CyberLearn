@@ -267,7 +267,7 @@ export default function Home() {
         >
           {/* Map Background */}
           <Image 
-  source={require('../../assets/images/background2.jpg')} 
+  source={require('../../assets/images/BG5.jpg')} 
   style={[
     styles.mapBackground,
     { 
@@ -285,7 +285,7 @@ export default function Home() {
   // Add these quality settings
   resizeMethod="scale"
   progressiveRenderingEnabled={true}
-  defaultSource={require('../../assets/images/background2.jpg')}
+  defaultSource={require('../../assets/images/BG5.jpg')}
 />
           
           {/* Player Character */}
@@ -610,10 +610,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    // Add these properties
     backfaceVisibility: 'hidden',
-    imageRendering: 'auto',
-    objectFit: 'repeat',
+    imageRendering: 'crisp-edges', // Add this line
+    objectFit: 'fill', // Change from 'repeat' to 'fill'
+    quality: 1, // Add this line
   },
   player: {
     position: 'absolute',
