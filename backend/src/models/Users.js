@@ -83,6 +83,34 @@ userSchema.methods.comparePassword = async function(userPassword) {
     return await bcrypt.compare(userPassword,this.password);
 };
 
+userSchema.statics.updateSchema = async function(newSectionName) {
+  try {
+    // Get the current enum values
+    const enumValues = this.schema.path('section').enumValues;
+    
+    // Add new value if it doesn't exist
+    if (!enumValues.includes(newSectionName)) {
+      // Add the new value to the enum
+      this.schema.path('section').enumValues.push(newSectionName);
+      
+      // You might need to update any existing validation logic here
+      this.schema.path('section').validators = [
+        {
+          validator: function(v) {
+            return this.schema.path('section').enumValues.includes(v);
+          },
+          message: props => `${props.value} is not a valid section!`
+        }
+      ];
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error updating user schema:", error);
+    return false;
+  }
+};
+
 const User = mongoose.model("User", userSchema);
 //mongoose converts User to user
 

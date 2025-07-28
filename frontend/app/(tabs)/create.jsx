@@ -16,6 +16,8 @@ import { useAuthStore } from '@/store/authStore.js';
 
 import QuizForm from '../../components/quiz/QuizForm.jsx';
 import LevelForm from '../../components/level/LevelForm.jsx';
+import ClassForm from '../../components/class/ClassForm.jsx';
+
 
 export default function Create() {
   const [value, setValue] = useState('');
@@ -31,11 +33,7 @@ export default function Create() {
       case 'quiz':
         return <QuizForm token={token} />;
       case 'class':
-        return (
-          <View style={styles.formContainer}>
-            <Text>Goals Form</Text>
-          </View>
-        );
+        return <ClassForm token={token} />;
       default:
         return null;
     }
@@ -80,7 +78,18 @@ export default function Create() {
             checkedColor: COLORS.white,
             uncheckedColor: COLORS.textSecondary,
           },
-          
+          {
+            value: 'class',
+            label: 'Class',
+            style: styles.segmentButton,
+            showSelectedCheck: false,
+            buttonStyle: ({checked}) => ({
+              backgroundColor: checked ? COLORS.primaryLight : 'transparent',
+              borderColor: checked ? COLORS.primary : COLORS.border,
+            }),
+            checkedColor: COLORS.white,
+            uncheckedColor: COLORS.textSecondary,
+          },
         ]}
       />
       {renderForm()}
