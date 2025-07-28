@@ -181,9 +181,9 @@ export default function UsersScreen() {
   // Get role-specific properties
   const getRoleColor = (role) => {
     switch(role?.toLowerCase()) {
-      case 'admin':
+      case 'instructor':
         return '#FF5722';
-      case 'superadmin':
+      case 'admin':
         return '#673AB7';
       default:
         return COLORS.primary;
@@ -193,9 +193,9 @@ export default function UsersScreen() {
   const getRoleIcon = (role) => {
     switch(role?.toLowerCase()) {
       
-      case 'superadmin':
-        return 'shield-crown-outline';
       case 'admin':
+        return 'shield-crown-outline';
+      case 'instructor':
         return 'school-outline';
       default:
         return 'account-outline';
@@ -363,7 +363,7 @@ export default function UsersScreen() {
 
             <Text style={styles.roleLabel}>Role:</Text>
             <View style={styles.roleContainer}>
-              {['student', 'admin', 'superadmin'].map(role => (
+              {['student', 'instructor', 'admin'].map(role => (
                 <TouchableOpacity
                   key={role}
                   style={[

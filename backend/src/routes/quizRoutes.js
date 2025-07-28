@@ -107,12 +107,12 @@ router.get("/:id", protectRoute, async (req, res) => {
       return res.status(404).json({ message: "Quiz not found" });
     }
     
-    // ✅ Allow access if user is admin OR quiz is order 1
-    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
+    // ✅ Allow access if user is instructor OR quiz is order 1
+    const isinstructor = req.user.privilege === 'instructor' || req.user.privilege === 'admin';
     const isFirstQuiz = quiz.order === 1;
     
-    if (!isAdmin && !isFirstQuiz) {
-      // For non-admin and non-first quiz, check progress
+    if (!isinstructor && !isFirstQuiz) {
+      // For non-instructor and non-first quiz, check progress
       const progress = await Progress.findOne({ user: req.user.id });
       
       if (progress && !progress.isQuizUnlockedSync(quiz._id, quiz.order)) {
@@ -120,7 +120,7 @@ router.get("/:id", protectRoute, async (req, res) => {
       }
     }
     
-    // Remove correct answers for students (unless admin)
+    // Remove correct answers for students (unless instructor)
     let sanitizedQuiz;
     
     if (req.user.role === 'student') {
@@ -157,7 +157,7 @@ router.get("/:id", protectRoute, async (req, res) => {
 });
 
 // Add helper route for next order
-router.get("/next-order/:moduleId", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.get("/next-order/:moduleId", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { moduleId } = req.params;
     
@@ -178,8 +178,8 @@ router.get("/next-order/:moduleId", protectRoute, authorizeRole(['admin', 'super
   }
 });
 
-// CREATE a new quiz (admin only) - Updated with Cloudinary handling
-router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+// CREATE a new quiz (instructor only) - Updated with Cloudinary handling
+router.post("/", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const {
       title,
@@ -284,8 +284,8 @@ router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (re
   }
 });
 
-// UPDATE a quiz (admin only) - Updated with Cloudinary handling
-router.put("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+// UPDATE a quiz (instructor only) - Updated with Cloudinary handling
+router.put("/:id", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, difficulty, timeLimit, passingScore, questions, image } = req.body;
@@ -371,8 +371,8 @@ router.put("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (
   }
 });
 
-// DELETE a quiz (admin only) - Updated with Cloudinary handling
-router.delete("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+// DELETE a quiz (instructor only) - Updated with Cloudinary handling
+router.delete("/:id", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -450,8 +450,8 @@ async function reorderQuizzesAfterDeletion(moduleId, deletedOrder) {
   }
 }
 
-// ✅ Add a route to manually re-order all quizzes in a module (admin only)
-router.post("/reorder/:moduleId", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+// ✅ Add a route to manually re-order all quizzes in a module (instructor only)
+router.post("/reorder/:moduleId", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { moduleId } = req.params;
     const { quizOrder } = req.body; // Array of quiz IDs in desired order
@@ -482,7 +482,7 @@ router.post("/reorder/:moduleId", protectRoute, authorizeRole(['admin', 'superad
 });
 
 // ✅ Add route to get quiz for editing
-router.get("/edit/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.get("/edit/:id", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -496,7 +496,7 @@ router.get("/edit/:id", protectRoute, authorizeRole(['admin', 'superadmin']), as
       return res.status(404).json({ message: "Quiz not found" });
     }
     
-    // Return full quiz data including correct answers for admin editing
+    // Return full quiz data including correct answers for instructor editing
     res.json(quiz);
   } catch (error) {
     console.error("Error fetching quiz for editing:", error);

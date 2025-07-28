@@ -16,9 +16,9 @@ const generateToken = (userId, privilege) => {
 /**
  * @route   GET /api/users
  * @desc    Get all users with filtering, sorting and pagination
- * @access  Private/Admin
+ * @access  Private/instructor
  */
-router.get("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.get("/", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     // Pagination parameters
     const page = parseInt(req.query.page) || 1;
@@ -88,9 +88,9 @@ router.get("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req
 /**
  * @route   GET /api/users/:id
  * * @desc    Get user by ID
- * @access  Private/Admin
+ * @access  Private/instructor
  */
-router.get("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.get("/:id", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
     
@@ -117,9 +117,9 @@ router.get("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (
 /**
  * @route   POST /api/users
  * @desc    Create a new user
- * @access  Private/Admin
+ * @access  Private/instructor
  */
-router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.post("/", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { username, email, password, role, profilePicture } = req.body;
     
@@ -236,9 +236,9 @@ router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (re
 /**
  * @route   PUT /api/users/:id
  * @desc    Update user
- * @access  Private/Admin
+ * @access  Private/instructor
  */
-router.put("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.put("/:id", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { username, email, password, role, profilePicture } = req.body;
     const userId = req.params.id;
@@ -371,9 +371,9 @@ router.put("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (
 /**
  * @route   DELETE /api/users/:id
  * @desc    Delete user
- * @access  Private/Admin
+ * @access  Private/instructor
  */
-router.delete("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.delete("/:id", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const userId = req.params.id;
     

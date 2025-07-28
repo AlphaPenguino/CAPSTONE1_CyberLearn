@@ -21,7 +21,7 @@ import { useFocusEffect } from '@react-navigation/native';
 
 export default function Home() {
   const { user, token, checkAuth, logout } = useAuthStore();
-  const isAdmin = user?.privilege === 'admin' || user?.privilege === 'superadmin';
+  const isinstructor = user?.privilege === 'instructor' || user?.privilege === 'admin';
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -189,7 +189,7 @@ export default function Home() {
 
   useEffect(() => {
 
-    if (user?.privilege === 'superadmin') {
+    if (user?.privilege === 'admin') {
       router.replace('/(tabs)/users');
     }
 
@@ -227,12 +227,12 @@ export default function Home() {
       {/* RPG Map Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Cyber Quest Map</Text>
-        {isAdmin && (
+        {isinstructor && (
           <TouchableOpacity 
-            style={styles.adminButton}
+            style={styles.instructorButton}
             onPress={() => router.push('/(tabs)/create')}>
             <Ionicons name="add-circle" size={24} color={COLORS.primary} />
-            <Text style={styles.adminButtonText}>Create</Text>
+            <Text style={styles.instructorButtonText}>Create</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -255,7 +255,7 @@ export default function Home() {
           <Ionicons name="school-outline" size={50} color={COLORS.textSecondary} />
           <Text style={styles.emptyModulesTitle}>No Modules Available</Text>
           <Text style={styles.emptyModulesText}>
-            Your instructor hasn't created any modules for your class yet.
+            Your instructor hasn&apos;t created any modules for your class yet.
           </Text>
         </View>
       ) : (
@@ -355,9 +355,9 @@ export default function Home() {
                 </View>
               )}
               
-              {/* Admin Options Button */}
-              {isAdmin && (
-                <View style={styles.adminOptionsContainer}>
+              {/* instructor Options Button */}
+              {isinstructor && (
+                <View style={styles.instructorOptionsContainer}>
                   <TouchableOpacity
                     style={styles.optionsButton}
                     onPress={(e) => {
@@ -468,8 +468,8 @@ export default function Home() {
                         <View style={styles.roleBadge}>
                           <Ionicons 
                             name={
-                              user?.privilege === 'admin' ? 'shield' : 
-                              user?.privilege === 'superadmin' ? 'star' : 
+                              user?.privilege === 'instructor' ? 'shield' : 
+                              user?.privilege === 'admin' ? 'star' : 
                               'person'
                             } 
                             size={12} 
@@ -489,8 +489,8 @@ export default function Home() {
                             color={COLORS.primary} 
                           />
                           <Text style={styles.infoText}>
-                            {user?.privilege === 'admin' ? 'Instructor' : 
-                             user?.privilege === 'superadmin' ? 'Master' : 
+                            {user?.privilege === 'instructor' ? 'Instructor' : 
+                             user?.privilege === 'admin' ? 'Admin' : 
                              'Student'}
                           </Text>
                         </View>
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
   },
-  adminButton: {
+  instructorButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(25, 118, 210, 0.2)',
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primary,
   },
-  adminButtonText: {
+  instructorButtonText: {
     color: COLORS.primary,
     marginLeft: 4,
     fontWeight: 'bold',
@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-  adminOptionsContainer: {
+  instructorOptionsContainer: {
     position: 'absolute',
     top: -6,
     right: -6,
@@ -882,8 +882,7 @@ userProfilePanel: {
     },
   }),
 },
-
-  userProfileHeader: {
+userProfileHeader: {
   borderBottomWidth: 1,
   borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   paddingBottom: 8,

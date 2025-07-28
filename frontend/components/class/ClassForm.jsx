@@ -167,7 +167,7 @@ export default function ClassForm() {
 
   const fetchSections = async () => {
 
-    if (user.privilege !== 'admin' && user.privilege !== 'superadmin') {
+    if (user.privilege !== 'instructor' && user.privilege !== 'admin') {
   console.error('User does not have permission to view sections');
   return;
 }

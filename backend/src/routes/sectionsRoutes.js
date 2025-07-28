@@ -6,7 +6,7 @@ import { protectRoute, authorizeRole } from "../middleware/auth.middleware.js";
 const router = express.Router();
 // Create a new section
 // POST /api/sections
-router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.post("/", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { name, instructor, description, isActive } = req.body;
     
@@ -59,7 +59,7 @@ router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (re
 
 // Assign students to a section
 // PUT /api/sections/:id/students
-router.put("/:id/students", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.put("/:id/students", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { studentIds, instructorId } = req.body;
     const sectionId = req.params.id;
@@ -122,7 +122,7 @@ router.put("/:id/students", protectRoute, authorizeRole(['admin', 'superadmin'])
 });
 
 // Add this route to get students with no section
-router.get("/unassigned-students", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.get("/unassigned-students", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     // Pagination parameters
     const page = parseInt(req.query.page) || 1;
@@ -186,7 +186,7 @@ router.get("/unassigned-students", protectRoute, authorizeRole(['admin', 'supera
 });
 
 // Add this route to fetch all sections
-router.get("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.get("/", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const Section = await import("../models/Section.js").then(module => module.default);
     
@@ -244,7 +244,7 @@ router.get("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req
 });
 
 // Add this route to delete a section
-router.delete("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.delete("/:id", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const sectionId = req.params.id;
     
@@ -287,7 +287,7 @@ router.delete("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), asyn
 });
 
 // GET /sections/:id/students - Get all students in a section
-router.get("/:id/students", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.get("/:id/students", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const sectionId = req.params.id;
     

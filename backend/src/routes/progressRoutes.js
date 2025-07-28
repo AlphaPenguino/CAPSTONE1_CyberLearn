@@ -100,8 +100,8 @@ router.get("/modules", protectRoute, async (req, res) => {
     
     let modules;
     
-    // If user is admin or superadmin, return all modules
-    if (user.privilege === 'admin' || user.privilege === 'superadmin') {
+    // If user is instructor or admin, return all modules
+    if (user.privilege === 'instructor' || user.privilege === 'admin') {
       modules = await Module.find()
         .select('title description category image order isActive totalQuizzes lastAccessed')
         .sort({ order: 1 });
@@ -135,8 +135,8 @@ router.get("/modules", protectRoute, async (req, res) => {
     const enhancedModules = modules.map((module, index) => {
       const moduleObj = module.toObject();
       
-      // First module or admin always unlocked
-      if (index === 0 || user.privilege === 'admin' || user.privilege === 'superadmin') {
+      // First module or instructor always unlocked
+      if (index === 0 || user.privilege === 'instructor' || user.privilege === 'admin') {
         moduleObj.isUnlocked = true;
       } else if (!userProgress) {
         moduleObj.isUnlocked = false;
@@ -185,10 +185,10 @@ router.get("/module/:moduleId/quizzes", protectRoute, async (req, res) => {
     
     console.log('📚 Fetching quizzes for module:', moduleId);
     
-    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
+    const isinstructor = req.user.privilege === 'instructor' || req.user.privilege === 'admin';
     
-    // Admin can access any module, students need unlock check
-    if (!isAdmin && progress && !progress.isModuleUnlocked(moduleId)) {
+    // instructor can access any module, students need unlock check
+    if (!isinstructor && progress && !progress.isModuleUnlocked(moduleId)) {
       console.log('🔒 Module is locked for student');
       return res.status(403).json({ message: "Module is locked" });
     }
@@ -205,8 +205,8 @@ router.get("/module/:moduleId/quizzes", protectRoute, async (req, res) => {
       let bestScore = null;
       let attempts = 0;
       
-      if (isAdmin) {
-        // Admin has access to all quizzes
+      if (isinstructor) {
+        // instructor has access to all quizzes
         isUnlocked = true;
       } else if (quiz.order === 1) {
         // ✅ ALWAYS unlock the first quiz
@@ -219,7 +219,7 @@ router.get("/module/:moduleId/quizzes", protectRoute, async (req, res) => {
       }
       
       // ✅ Get completion status for students
-      if (!isAdmin && moduleProgress) {
+      if (!isinstructor && moduleProgress) {
         const completion = moduleProgress.completedQuizzes.find(
           cq => cq.quiz.toString() === quiz._id.toString()
         );
@@ -232,7 +232,7 @@ router.get("/module/:moduleId/quizzes", protectRoute, async (req, res) => {
         }
       }
       
-      const isCurrent = isAdmin ? false : (moduleProgress?.currentQuiz?.toString() === quiz._id.toString());
+      const isCurrent = isinstructor ? false : (moduleProgress?.currentQuiz?.toString() === quiz._id.toString());
       
       console.log(`📝 Quiz: ${quiz.title}, Order: ${quiz.order}, Unlocked: ${isUnlocked}, Completed: ${isCompleted}, Passed: ${isPassed}`);
       
@@ -267,14 +267,14 @@ router.post("/quiz/:quizId/complete", protectRoute, async (req, res) => {
       score: attemptData.score
     });
     
-    // ✅ Check if user is admin
-    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
+    // ✅ Check if user is instructor
+    const isinstructor = req.user.privilege === 'instructor' || req.user.privilege === 'admin';
     
-    if (isAdmin) {
-      console.log('👑 Admin quiz submission - no progress tracking');
+    if (isinstructor) {
+      console.log('👑 instructor quiz submission - no progress tracking');
       return res.json({
-        message: "Quiz completed successfully (Admin mode)",
-        isAdmin: true
+        message: "Quiz completed successfully (instructor mode)",
+        isinstructor: true
       });
     }
     
@@ -350,7 +350,7 @@ router.post("/quiz/:quizId/complete", protectRoute, async (req, res) => {
       passingScore: quiz.passingScore,
       passed: hasPassed,
       unlockedContent: hasPassed ? "Next quiz/module unlocked!" : "Complete this quiz to unlock next content",
-      isAdmin: false
+      isinstructor: false
     });
   } catch (error) {
     console.error('❌ Error in quiz completion:', error);
