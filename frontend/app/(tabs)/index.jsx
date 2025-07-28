@@ -83,7 +83,7 @@ export default function Home() {
     try {
       setLoading(refreshing ? false : true);
       
-      // ✅ Use the progress endpoint instead of the regular modules endpoint
+      // Use the progress endpoint
       const response = await fetch(`${API_URL}/progress/modules`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -249,6 +249,14 @@ export default function Home() {
           <TouchableOpacity style={styles.retryButton} onPress={fetchModules}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
+        </View>
+      ) : modules.length === 0 ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="school-outline" size={50} color={COLORS.textSecondary} />
+          <Text style={styles.emptyModulesTitle}>No Modules Available</Text>
+          <Text style={styles.emptyModulesText}>
+            Your instructor hasn't created any modules for your class yet.
+          </Text>
         </View>
       ) : (
         <ScrollView 
@@ -430,6 +438,101 @@ export default function Home() {
                     {/* Pagination Controls */}
                     
                   </ScrollView>
+                )}
+                
+                {/* User Profile Panel */}
+                {!loading && (
+                  <View style={styles.userProfilePanel}>
+                    <View style={styles.userProfileHeader}>
+                      <Text style={styles.userProfileTitle}>Profile</Text>
+                    </View>
+                    
+                    <View style={styles.userProfileContent}>
+                      {/* User Avatar */}
+                      <View style={styles.avatarContainer}>
+                        {(user?.profileImage && !profileImageError) ? (
+                          <Image 
+                            source={{ uri: getCompatibleImageUrl(user?.profileImage) }} 
+                            style={styles.userAvatar}
+                            onError={() => setProfileImageError(true)}
+                          />
+                        ) : (
+                          <View style={styles.userAvatarFallback}>
+                            <Text style={styles.avatarLetterText}>
+                              {user?.username?.charAt(0).toUpperCase() || '?'}
+                            </Text>
+                          </View>
+                        )}
+                        
+                        {/* User Role Badge */}
+                        <View style={styles.roleBadge}>
+                          <Ionicons 
+                            name={
+                              user?.privilege === 'admin' ? 'shield' : 
+                              user?.privilege === 'superadmin' ? 'star' : 
+                              'person'
+                            } 
+                            size={12} 
+                            color="#fff" 
+                          />
+                        </View>
+                      </View>
+                      
+                      {/* User Info */}
+                      <View style={styles.userInfoBox}>
+                        <Text style={styles.usernameText}>{user?.username || 'Unknown Hero'}</Text>
+                        
+                        <View style={styles.infoRow}>
+                          <Ionicons 
+                            name="ribbon-outline" 
+                            size={16} 
+                            color={COLORS.primary} 
+                          />
+                          <Text style={styles.infoText}>
+                            {user?.privilege === 'admin' ? 'Instructor' : 
+                             user?.privilege === 'superadmin' ? 'Master' : 
+                             'Student'}
+                          </Text>
+                        </View>
+                        
+                        <View style={styles.infoRow}>
+                          <Ionicons 
+                            name={user?.section === 'no_section' ? 'school-outline' : 'school'} 
+                            size={16} 
+                            color={user?.section === 'no_section' ? '#aaa' : '#4CAF50'}
+                          />
+                          <Text style={[
+                            styles.infoText,
+                            user?.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
+                          ]}>
+                            {user?.section === 'no_section' ? 'No Class Assigned' : user?.section}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    
+                    {/* Stats Section */}
+                    <View style={styles.statsContainer}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>
+                          {modules?.filter(m => m.isCompleted)?.length || 0}
+                        </Text>
+                        <Text style={styles.statLabel}>Completed</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>
+                          {modules?.filter(m => m.isUnlocked && !m.isCompleted)?.length || 0}
+                        </Text>
+                        <Text style={styles.statLabel}>Available</Text>
+                      </View>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statValue}>
+                          {modules?.filter(m => !m.isUnlocked)?.length || 0}
+                        </Text>
+                        <Text style={styles.statLabel}>Locked</Text>
+                      </View>
+                    </View>
+                  </View>
                 )}
               </View>
             );
@@ -738,4 +841,158 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
   },
+  emptyModulesTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyModulesText: {
+    color: COLORS.textSecondary,
+    fontSize: 16,
+    textAlign: 'center',
+    marginHorizontal: 32,
+    lineHeight: 24,
+  },
+  userProfilePanel: {
+    backgroundColor: 'rgba(10, 25, 41, 0.9)',
+    padding: 16,
+    borderTopWidth: 2,
+    borderTopColor: COLORS.primary,
+    borderRadius: 18,
+    marginTop: 16,
+    marginBottom: 32,
+    marginHorizontal: 16,
+    ...Platform.select({
+      web: {
+        position: 'relative',
+        left: '50%',
+        transform: [{ translateX: -250 }],
+        width: 500,
+      },
+      default: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+      },
+    }),
+    zIndex: 20,
+  },
+ userProfilePanel: {
+  position: 'absolute',
+  top: 70,
+  left: 16,
+  width: 220,
+  backgroundColor: 'rgba(10, 25, 41, 0.9)',
+  borderRadius: 12,
+  padding: 12,
+  zIndex: 10,
+  borderWidth: 1,
+  borderColor: '#1976d2',
+  shadowColor: '#1976d2',
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0.5,
+  shadowRadius: 10,
+  elevation: 5,
+  // Responsive display
+  display: Platform.OS !== 'web' && Dimensions.get('window').width < 600 ? 'none' : 'flex',
+},
+userProfileHeader: {
+  borderBottomWidth: 1,
+  borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  paddingBottom: 8,
+  marginBottom: 12,
+},
+userProfileTitle: {
+  color: '#cfb645ff',
+  fontSize: 16,
+  fontWeight: 'bold',
+  textShadowColor: 'rgba(0, 0, 0, 0.5)',
+  textShadowOffset: { width: 1, height: 1 },
+  textShadowRadius: 2,
+},
+userProfileContent: {
+  flexDirection: 'row',
+  marginBottom: 12,
+},
+avatarContainer: {
+  position: 'relative',
+  marginRight: 12,
+},
+userAvatar: {
+  width: 60,
+  height: 60,
+  borderRadius: 30,
+  borderWidth: 2,
+  borderColor: COLORS.primary,
+},
+userAvatarFallback: {
+  width: 60,
+  height: 60,
+  borderRadius: 30,
+  backgroundColor: '#1976d2',
+  justifyContent: 'center',
+  alignItems: 'center',
+  borderWidth: 2,
+  borderColor: '#1976d2',
+},
+  avatarLetterText: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  roleBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0, 150, 255, 0.7)',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userInfoBox: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  usernameText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  infoText: {
+    color: '#cccccc',
+    marginLeft: 4,
+    fontSize: 14,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#ffffff22',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  statLabel: {
+    color: '#cccccc',
+    fontSize: 12,
+  },
+  
 });
