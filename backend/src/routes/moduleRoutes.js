@@ -24,23 +24,22 @@ router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (re
             return res.status(400).json({ message: "Please provide all fields" });
         }
 
-        // ✅ Auto-assign the next order number
+        // Auto-assign the next order number
         const lastModule = await Module.findOne().sort({ order: -1 }).select('order');
         const nextOrder = lastModule ? lastModule.order + 1 : 1;
 
         try {
-            //upload image to cloudinary with options
+            // Upload image to cloudinary
             console.log("Starting Cloudinary upload...");
             
             // Ensure image has proper format before uploading
             let imageDataUrl = image;
             if (!image.startsWith('data:image')) {
-              // Try to detect type or default to jpeg
               imageDataUrl = `data:image/jpeg;base64,${image}`;
             } 
             
             const uploadResponse = await cloudinary.uploader.upload(imageDataUrl, {
-                timeout: 120000, // Increase timeout to 2 minutes
+                timeout: 120000,
                 resource_type: 'image',
             });
             
@@ -52,7 +51,8 @@ router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (re
                 description,
                 category,
                 image: imageUrl,
-                order: nextOrder // ✅ Add the auto-generated order
+                order: nextOrder,
+                createdBy: req.user.id // Add the user ID who created the module
             });
 
             await newModule.save();

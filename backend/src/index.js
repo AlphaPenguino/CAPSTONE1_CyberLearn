@@ -10,6 +10,7 @@ import authRoutes from "./routes/authRoutes.js"
 import quizRoutes from "./routes/quizRoutes.js"
 import moduleRoutes from "./routes/moduleRoutes.js"
 import progressRoutes from "./routes/progressRoutes.js"
+import sectionsRoutes from "./routes/sectionsRoutes.js"
 import userRoutes from "./routes/userRoutes.js"
 import { connectDB } from "./lib/db.js"
 import { initializeGameSocket } from "./controllers/gameController.js"
@@ -38,6 +39,7 @@ app.use("/api/quiz", quizRoutes)
 app.use("/api/modules", moduleRoutes)
 app.use("/api/progress", progressRoutes)
 app.use("/api/users", userRoutes)
+app.use("/api/sections", sectionsRoutes)
 
 // Initialize Socket.IO game handlers
 initializeGameSocket(io);
