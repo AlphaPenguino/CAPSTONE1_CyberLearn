@@ -855,32 +855,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 32,
     lineHeight: 24,
   },
-  userProfilePanel: {
-    backgroundColor: 'rgba(10, 25, 41, 0.9)',
-    padding: 16,
-    borderTopWidth: 2,
-    borderTopColor: COLORS.primary,
-    borderRadius: 18,
-    marginTop: 16,
-    marginBottom: 32,
-    marginHorizontal: 16,
-    ...Platform.select({
-      web: {
-        position: 'relative',
-        left: '50%',
-        transform: [{ translateX: -250 }],
-        width: 500,
-      },
-      default: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-      },
-    }),
-    zIndex: 20,
-  },
- userProfilePanel: {
+userProfilePanel: {
   position: 'absolute',
   top: 70,
   left: 16,
@@ -896,10 +871,19 @@ const styles = StyleSheet.create({
   shadowOpacity: 0.5,
   shadowRadius: 10,
   elevation: 5,
-  // Responsive display
-  display: Platform.OS !== 'web' && Dimensions.get('window').width < 600 ? 'none' : 'flex',
+  ...Platform.select({
+    web: {
+      // Keep position absolute but adjust display for web
+      display: 'flex',
+    },
+    default: {
+      // For mobile, hide on small screens
+      display: Dimensions.get('window').width < 600 ? 'none' : 'flex',
+    },
+  }),
 },
-userProfileHeader: {
+
+  userProfileHeader: {
   borderBottomWidth: 1,
   borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   paddingBottom: 8,
