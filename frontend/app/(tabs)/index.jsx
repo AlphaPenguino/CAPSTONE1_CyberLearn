@@ -18,7 +18,49 @@ import { StyleSheet, Dimensions, Animated } from 'react-native';
 import COLORS from '@/constants/custom-colors';
 import { useFocusEffect } from '@react-navigation/native';
 import {Easing} from 'react-native';
+import { useWindowDimensions } from 'react-native';
 
+// 1. Move these constants and functions outside of the Home component
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const getResponsiveSize = () => {
+  const isWeb = Platform.OS === 'web';
+  const screenWidth = Dimensions.get('window').width;
+  return {
+    spacing: isWeb ? 300 : screenWidth * 0.35,    // Reduced spacing for mobile
+    offset: isWeb ? 150 : screenWidth * 0.2,      // Reduced offset for mobile
+    nodeSize: isWeb ? 100 : screenWidth * 0.15,   // Responsive node size
+    fontSize: isWeb ? 14 : 12,                    // Adjusted font size
+    panelWidth: isWeb ? 400 : screenWidth * 0.9,  // Responsive panel width
+  };
+};
+
+const getNodeSize = () => {
+  const { nodeSize } = getResponsiveSize();
+  if (Platform.OS === 'web') {
+    return Math.min(Math.max(SCREEN_WIDTH * 0.06, nodeSize), 120);
+  }
+  return Math.min(Math.max(SCREEN_WIDTH * 0.15, nodeSize), 100);
+};
+
+const getNodeStyles = () => {
+  const nodeSize = getNodeSize();
+  return {
+    base: {
+      width: nodeSize,
+      height: nodeSize,
+      borderRadius: nodeSize / 2,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    image: {
+      width: nodeSize * 0.75,
+      height: nodeSize * 0.75,
+      borderRadius: (nodeSize * 0.75) / 2,
+      resizeMode: 'cover',
+    }
+  };
+};
 
 export default function Home() {
   const { user, token, checkAuth, logout } = useAuthStore();
@@ -38,6 +80,10 @@ export default function Home() {
   const router = useRouter();
   const playerPosition = useRef(new Animated.ValueXY({ x: 50, y: 100 })).current;
   const [profileImageError, setProfileImageError] = useState(false);
+  const VERTICAL_SPACING = 250; // Reduce from 300 to 250 for closer spacing
+  const HORIZONTAL_OFFSET = 150; // Adjust this to move modules left/right
+  const { width, height } = useWindowDimensions();
+
   
   // Fetch modules data
   useFocusEffect(
@@ -53,26 +99,32 @@ export default function Home() {
 
   // Move player animation
   const movePlayerToModule = (module, index) => {
-    if (menuVisible) {
-      setMenuVisible(null);
-    }
+    if (menuVisible) setMenuVisible(null);
     
     const screenWidth = Dimensions.get('window').width;
+    const spacing = getResponsiveSize().spacing;
+    const offset = getResponsiveSize().offset;
+    
     const modulePosition = {
-      x: screenWidth / 2 + (index % 2 === 0 ? -150 : 150) - 15, // Adjust by -15 to center horizontally
-      y: index * 300 + 15 // Adjust by +15 to center vertically
+      x: screenWidth/2 + (index % 2 === 0 ? -offset : offset) - 20,
+      y: index * spacing + (Platform.OS === 'web' ? 15 : 25)
     };
     
     Animated.spring(playerPosition, {
       toValue: modulePosition,
-      friction: 6,
+      friction: 7,
       tension: 40,
-      useNativeDriver: false,
+      useNativeDriver: true
     }).start();
     
     setSelectedModule(module);
   };
   
+  const getLevelButtonSize = () => {
+  return Platform.OS === 'web' ? 
+    { width: 70, height: 28 } : 
+    { width: 60, height: 24 };
+};
   // Enhanced fetchModules with pagination, sorting and filtering
   const fetchModules = async (pageNum = 1, sortOrder = 'order') => {
     try {
@@ -90,7 +142,7 @@ export default function Home() {
         router.replace('/login');
         return;
       }
-      
+
       const modulesData = await response.json();
       
       if (!response.ok) {
@@ -217,6 +269,13 @@ export default function Home() {
     return url;
   };
 
+  // Add this effect to handle window resizing
+  useEffect(() => {
+    // Recalculate layout when dimensions change
+    const responsive = getResponsiveSize();
+    // Update any state that depends on screen size
+  }, [width, height]);
+
   return (
     <View style={styles.container}>
       {/* RPG Map Header */}
@@ -248,7 +307,10 @@ export default function Home() {
       ) : (
         <ScrollView 
           style={styles.mapContainer} 
-          contentContainerStyle={styles.mapContent}
+          contentContainerStyle={[
+            styles.mapContent,
+            Platform.OS === 'web' ? styles.webContent : styles.mobileContent
+          ]}
           onScroll={(event) => {
             const offsetY = event.nativeEvent.contentOffset.y;
             setScrollY(offsetY);
@@ -320,25 +382,27 @@ export default function Home() {
                   locked={!module.isUnlocked}
                 />
               )}
+
+              
               <TouchableOpacity
                 key={module._id}
-                style={[
-                  styles.moduleNode,
-                  selectedModule?._id === module._id && styles.selectedNode,
-                  !module.isUnlocked && styles.lockedNode,
-                  {
-                    position: 'absolute',
-                    left: Platform.OS === 'web'
-                      ? Dimensions.get('window').width / 2 - 40
-                      : Dimensions.get('window').width / 2 - 40,
-                    top: index * 300, // Match with path coordinates
-                    transform: [
-                      { translateX: index % 2 === 0 ? -150 : 150 }, // Match with path coordinates
-                    ],
-                  }
-                ]}
-                onPress={() => module.isUnlocked ? movePlayerToModule(module, index) : null}
-                disabled={!module.isUnlocked}
+  style={[
+    styles.moduleNode,
+    selectedModule?._id === module._id && styles.selectedNode,
+    !module.isUnlocked && styles.lockedNode,
+    {
+      position: 'absolute',
+      left: SCREEN_WIDTH / 2 - getNodeSize() / 2,
+      top: index * getResponsiveSize().spacing,
+      transform: [
+        {translateX: index % 2 === 0 
+          ? -getResponsiveSize().offset 
+          : getResponsiveSize().offset },
+                 ]
+              }
+            ]}
+            onPress={() => module.isUnlocked ? movePlayerToModule(module, index) : null}
+            disabled={!module.isUnlocked}
               >
                 {/* Lock overlay for locked modules */}
                 {!module.isUnlocked && (
@@ -433,57 +497,37 @@ export default function Home() {
                     <View
       style={[
         styles.infoPanel,
-        Platform.OS === 'web' && {
-          position: 'absolute',
-          left: '50%',
-          top: Math.max(scrollY + 100, 100),
-          transform: [
-            {translateX: -700},
-            {translateY: 0}
-          ],
-          width: 300,
-          marginBottom: 20,
-          borderRadius: 18,
-          alignSelf: 'center',
-          zIndex: 10,
-        }
+    Platform.OS === 'web' ? {
+      position: 'fixed',
+      bottom: 20,
+      left: '50%',
+      transform: [{ translateX: '-50%' }],
+      width: getResponsiveSize().panelWidth,
+      zIndex: 999,
+    } : {
+      position: 'absolute',
+      bottom: 80,
+      left: '5%',
+      width: '90%',
+      zIndex: 999,
+    }
       ]}
     >
-      <Text style={styles.infoTitle}>Player Status</Text>
-      <Text style={styles.infoDescription}>Your progress details will appear here</Text>
+      <Text style={styles.infoTitle}>{selectedModule?.title || 'Player Status'}</Text>
+  <Text style={styles.infoDescription}>
+    {selectedModule?.description || 'Your progress details will appear here'}
+  </Text>
+  {selectedModule && (
+    <TouchableOpacity 
+      style={styles.startButton}
+      onPress={() => navigateToModule(selectedModule._id)}
+    >
+      <Text style={styles.startButtonText}>Begin Quest</Text>
+    </TouchableOpacity>
+  )}
     </View>
 
-                    {selectedModule && (
-                      
-                    <View
-                      style={[
-                        styles.infoPanel,
-                        Platform.OS === 'web' && {
-                          position: 'absolute',
-                          left: '50%',
-                          top: Math.max(scrollY + 100, 100), // Keep panel visible but follow scroll
-                          transform: [
-                            {translateX: 400},
-                            {translateY: 0} // Remove fixed translateY
-                          ],
-                          width: 300,
-                          marginBottom: 20,
-                          borderRadius: 18,
-                          alignSelf: 'center',
-                          zIndex: 10,
-                        }
-                      ]}
-                    >
-                      <Text style={styles.infoTitle}>{selectedModule.title}</Text>
-                      <Text style={styles.infoDescription}>{selectedModule.description}</Text>
-                      <TouchableOpacity 
-                        style={styles.startButton}
-                        onPress={() => navigateToModule(selectedModule._id)}
-                      >
-                        <Text style={styles.startButtonText}>Begin Quest</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                    
                     
                     {/* Pagination Controls */}
                     
@@ -494,11 +538,14 @@ export default function Home() {
           }
 
 const ModulePath = ({ startX, startY, endX, endY, completed, locked }) => {
-  // Calculate the line properties
-  const deltaX = endX - startX;
-  const deltaY = endY - startY;
-  const length = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
-  const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+  const screenWidth = Dimensions.get('window').width;
+  const spacing = getResponsiveSize().spacing;
+  const offset = getResponsiveSize().offset;
+  
+  const adjustedStartX = screenWidth/2;
+  const adjustedEndX = screenWidth/2;
+  const adjustedStartY = startY * (spacing/300);
+  const adjustedEndY = endY * (spacing/300);
 
   return (
     <View
@@ -508,15 +555,13 @@ const ModulePath = ({ startX, startY, endX, endY, completed, locked }) => {
         locked && styles.pathLineLocked,
         {
           position: 'absolute',
-          left: startX,
-          top: startY,
-          width: length,
-          height: 18,
+          left: adjustedStartX,
+          top: adjustedStartY,
+          width: Platform.OS === 'web' ? 18 : 12,
+          height: adjustedEndY - adjustedStartY,
           transform: [
-            { translateY: 40 }, // Center with module
-            { rotate: `${angle}deg` },
-          ],
-          transformOrigin: 'left',
+            { translateX: Platform.OS === 'web' ? -9 : -6 }
+          ]
         }
       ]}
     />
@@ -594,12 +639,23 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     flex: 1,
+    width: '100%',
   },
   mapContent: {
     position: 'relative',
-    minHeight: 1000,
-    paddingTop: 50, // Reduced top padding
-    paddingBottom: 300,
+    minHeight: Platform.OS === 'web' 
+      ? window.innerHeight 
+      : Dimensions.get('window').height * 1.5,
+    paddingTop: Platform.OS === 'web' ? 50 : 20,
+    paddingBottom: Platform.OS === 'web' ? 300 : 100,
+  },
+  webContent: {
+    maxWidth: 1200,
+    alignSelf: 'center',
+    width: '100%', 
+  },
+  mobileContent: {
+    width: SCREEN_WIDTH // Less space for mobile
   },
   mapBackground: {
     position: 'absolute',
@@ -611,69 +667,65 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backfaceVisibility: 'hidden',
-    imageRendering: 'crisp-edges', // Add this line
-    objectFit: 'fill', // Change from 'repeat' to 'fill'
-    quality: 1, // Add this line
+    imageRendering: 'crisp-edges',
+    objectFit: 'fill',
+    quality: 1,
   },
   player: {
     position: 'absolute',
-    width: 40, // Reduce from 50 to 40
-    height: 40, // Reduce from 50 to 40
+    width: 40,
+    height: 40,
     zIndex: 45,
     justifyContent: 'center',
     alignItems: 'center',
   },
   playerImage: {
-    width: 35, // Reduce from 45 to 35
-    height: 35, // Reduce from 45 to 35
-    borderRadius: 17.5, // Half of width/height
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
     resizeMode: 'contain',
     borderWidth: 2,
     borderColor: '#1976d2',
     backgroundColor: 'rgba(25, 118, 210, 0.2)',
   },
   moduleNode: {
+    ...getNodeStyles().base,
     position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 20,
-    marginVertical: 40,
     backgroundColor: 'rgba(25, 118, 210, 0.3)',
-    borderWidth: 2,
-    borderColor: '#1976d2',
-    shadowColor: '#1976d2',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 1,
-    zIndex: 2, // Add this line
+    borderWidth: Platform.OS === 'web' ? 2 : 1.5,
+    elevation: Platform.OS === 'android' ? 5 : 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  moduleImage: {
+    ...getNodeStyles().image,
+    resizeMode: 'cover',
+    backgroundColor: 'rgba(25, 118, 210, 0.2)',
   },
   selectedNode: {
     borderColor: '#cfb645ff',
     borderWidth: 3,
-    backgroundColor: 'rgba(199, 255, 94, 0.3)',
+    backgroundColor: 'rgba(199, 255, 94, 0.2)',
     shadowColor: '#b9ee56ff',
     transform: [{ scale: 1.1 }],
+    shadowRadius: 15,
+    shadowOpacity: 0.9,
   },
   lockedNode: {
     opacity: 0.5,
   },
-  moduleImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
   moduleName: {
-    color: '#ffffff',
+   color: '#ffffff',
     fontWeight: 'bold',
     textAlign: 'center',
     position: 'absolute',
-    fontSize: 12,
-    top: '50%', // Center vertically with the circle
-    transform: [{ translateY: -6 }], // Fine-tune vertical alignment
+    fontSize: getResponsiveSize().fontSize,
+    width: Platform.OS === 'web' ? 150 : SCREEN_WIDTH * 0.25,
+    top: Platform.OS === 'web' ? 'auto' : getNodeSize() + 10,
   },
   moduleNameLeft: {
     right: 'auto',
@@ -697,20 +749,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+    zIndex: 3,
   },
   infoPanel: {
-    position: 'absolute',
-    backgroundColor: 'rgba(10, 25, 41, 0.95)',
-    padding: 16,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    borderRadius: 18,
-    backdropFilter: 'blur(10px)',
-    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-    maxHeight: '80vh',
-    overflowY: 'auto',
-    zIndex: 1000,
-  },
+  backgroundColor: 'rgba(10, 25, 41, 0.95)',
+  padding: Platform.OS === 'web' ? 16 : 12,
+  width: Platform.OS === 'web' ? 400 : '90%',
+  borderRadius: 18,
+  backdropFilter: 'blur(10px)',
+  borderWidth: 1,
+  borderColor: 'rgba(255,255,255,0.1)',
+  position: 'absolute', // Add this
+},
   infoTitle: {
     color: '#ffffff',
     fontSize: 20,
@@ -747,10 +797,9 @@ const styles = StyleSheet.create({
   adminOptionsContainer: {
     position: 'absolute',
     top: -6,
-    right: -6, // Keep this as is
-    zIndex: 60, // Increased to be above player
+    right: -6,
+    zIndex: 60,
   },
-
   optionsButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     width: 24,
@@ -764,30 +813,28 @@ const styles = StyleSheet.create({
   optionsMenu: {
     position: 'absolute',
     top: 28,
-    right: -80, // Change from 0 to -80 to shift menu to the right
+    right: -80,
     backgroundColor: 'rgba(10, 25, 41, 0.95)',
     borderRadius: 8,
     width: 100,
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: '#1976d2',
-    zIndex: 60, // Increased to be above player
+    zIndex: 60,
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },
-
   optionsOverlay: {
     position: 'absolute',
     top: -10,
-    right: -90, // Adjust to match new menu position
+    right: -90,
     padding: 10,
     backgroundColor: 'transparent',
     zIndex: 55,
   },
-
   optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -813,7 +860,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
-    borderRadius: 10,
+    borderRadius: getNodeSize() / 2,
   },
   lockedImage: {
     opacity: 0.3,
@@ -843,14 +890,6 @@ const styles = StyleSheet.create({
   quizLockOverlay: {
     position: 'absolute',
     top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-    borderRadius: 15,
   },
   lockText: {
     color: '#ffffff',

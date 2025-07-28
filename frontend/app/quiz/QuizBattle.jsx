@@ -17,6 +17,7 @@ import styles from '../../assets/styles/quiz.styles.js';
 import CharacterSprite from '../../components/CharacterSprite.jsx';
 import * as sprite from '../../components/spriteSets.js';
 
+
 const battlefieldBg = require('../../assets/backgrounds/Battleground4.png');
 
 const QuizBattle = ({
@@ -41,20 +42,19 @@ const QuizBattle = ({
   return (
     <SafeAreaProvider>
       <View style={styles.container}>
-        {/* Quiz Header */}
+        {/* Status Bars Section */}
         <View style={rpgstyles.quizProgressHeader}>
-          <View style={rpgstyles.rpgStatusBars}>
+          <View style={[rpgstyles.rpgStatusBars]}>
             {/* Player Status */}
-            <View style={rpgstyles.characterStatus}>
+            <View style={[rpgstyles.characterStatus]}>
               <Text style={rpgstyles.statusName}>Adventurer</Text>
               <View style={rpgstyles.statusBars}>
-                <View style={rpgstyles.barContainer}>
+                <View style={[rpgstyles.barContainer]}>
                   <View 
                     style={[
                       rpgstyles.barFill, 
                       rpgstyles.healthBarFill,
                       { 
-                        // Player health decreases only when wrong answers are given
                         width: `${100 - Math.floor((
                           quiz.questions.slice(0, currentQuestionIndex).reduce((count, _, idx) => 
                             count + (isAnswerCorrect(idx) ? 0 : 1), 0
@@ -64,7 +64,7 @@ const QuizBattle = ({
                   />
                   <Text style={rpgstyles.barText}>HP</Text>
                 </View>
-                <View style={rpgstyles.barContainer}>
+                <View style={[rpgstyles.barContainer]}>
                   <View 
                     style={[
                       rpgstyles.barFill,
@@ -78,16 +78,15 @@ const QuizBattle = ({
             </View>
             
             {/* Enemy Status */}
-            <View style={rpgstyles.characterStatus}>
+            <View style={[rpgstyles.characterStatus]}>
               <Text style={rpgstyles.statusName}>Werewolf</Text>
               <View style={rpgstyles.statusBars}>
-                <View style={rpgstyles.barContainer}>
+                <View style={[rpgstyles.barContainer]}>
                   <View 
                     style={[
                       rpgstyles.barFill, 
                       rpgstyles.enemyHealthBarFill,
                       { 
-                        // Werewolf health decreases when correct answers are given
                         width: `${100 - Math.floor((
                           quiz.questions.slice(0, currentQuestionIndex).reduce((count, _, idx) => 
                             count + (isAnswerCorrect(idx) ? 1 : 0), 0
@@ -101,7 +100,10 @@ const QuizBattle = ({
             </View>
           </View>
 
-          <View style={rpgstyles.questProgress}>
+          <View style={[rpgstyles.questProgress, {
+            width: '100%',
+            alignSelf: 'center'
+          }]}>
             <Text style={rpgstyles.questText}>Quest Progress</Text>
             <View style={rpgstyles.progressBarContainer}>
               <View 
@@ -114,21 +116,28 @@ const QuizBattle = ({
           </View>
         </View>
 
+        {/* Battle Area */}
         <ImageBackground
           source={battlefieldBg}
           style={rpgstyles.battlefieldBackground}
-          imageStyle={{
-            resizeMode: Platform.OS === 'web' ? 'cover' : 'contain',
-            width: '100%',
-            height: '100%'
-          }}
+          imageStyle={{ width: '100%', height: '100%' }}
         >
-          {/* Centered battle area with characters */}
-          <View style={rpgstyles.rpgBattleArea}>
-            <View style={rpgstyles.battleCharactersContainer}>
+          <View style={[rpgstyles.rpgBattleArea, {
+            paddingHorizontal: 16,
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100%'
+          }]}>
+            <View style={[rpgstyles.battleCharactersContainer, {
+              width: '100%',
+              justifyContent: 'space-between',
+              alignItems: 'flex-end',
+              flexDirection: 'row'
+            }]}>
               {/* Wanderer Character */}
-              <View style={rpgstyles.rpgSpriteWrapper}>
-                {/* Wanderer Shadow */}
+              <View style={[rpgstyles.rpgSpriteWrapper, { 
+                transform: [{ scale: 1 }]
+              }]}>
                 <View style={rpgstyles.rpgShadow} />
                 <CharacterSprite
                   action={
@@ -139,7 +148,7 @@ const QuizBattle = ({
                       : 'idle'
                   }
                   speed={128}
-                  scale={Platform.OS === 'web' ? 2 : 1}
+                  scale={1}
                   spriteSet={sprite.wanderer_sprites}
                   frames={sprite.wanderer_frames}
                 />
@@ -147,17 +156,20 @@ const QuizBattle = ({
               </View>
               
               {/* Werewolf Character */}
-              <View style={[rpgstyles.rpgSpriteWrapper, { transform: [{ scaleX: -1 }] }]}>
-                {/* Werewolf Shadow */}
+              <View style={[rpgstyles.rpgSpriteWrapper, { 
+                transform: [
+                  { scaleX: -1 }, 
+                  { scale: 1 }
+                ]
+              }]}>
                 <View style={rpgstyles.rpgShadow} />
                 <CharacterSprite
                   action={werewolfAnim}
                   speed={128}
-                  scale={Platform.OS === 'web' ? 2 : 1}
+                  scale={1}
                   spriteSet={sprite.black_werewolf_sprites}
                   frames={sprite.black_werewolf_frames}
                 />
-                {/* Flip text back */}
                 <View style={{ transform: [{ scaleX: -1 }] }}>
                   <Text style={rpgstyles.characterName}>Werewolf</Text>
                 </View>
@@ -166,11 +178,14 @@ const QuizBattle = ({
           </View>
         </ImageBackground>
 
-        {/* Question Content */}
-        <Animated.View style={[rpgstyles.questionContainer, {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
-        }]}>
+        {/* Question Container */}
+        <Animated.View style={[
+          rpgstyles.questionContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}>
           <View style={rpgstyles.rpgDialogHeader}>
             <MaterialCommunityIcons 
               name="sword-cross" 
@@ -203,7 +218,7 @@ const QuizBattle = ({
           </ScrollView>
         </Animated.View>
 
-        {/* Navigation Buttons */}
+        {/* Navigation */}
         <View style={rpgstyles.navigationContainer}>
           <TouchableOpacity 
             style={[rpgstyles.navButton, currentQuestionIndex === 0 && rpgstyles.disabledButton]}
