@@ -16,7 +16,7 @@ cloudinary.config({
 //create
 
 
-router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.post("/", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
     try {
         const { title, description, category, image } = req.body;
 
@@ -24,23 +24,22 @@ router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (re
             return res.status(400).json({ message: "Please provide all fields" });
         }
 
-        // ✅ Auto-assign the next order number
+        // Auto-assign the next order number
         const lastModule = await Module.findOne().sort({ order: -1 }).select('order');
         const nextOrder = lastModule ? lastModule.order + 1 : 1;
 
         try {
-            //upload image to cloudinary with options
+            // Upload image to cloudinary
             console.log("Starting Cloudinary upload...");
             
             // Ensure image has proper format before uploading
             let imageDataUrl = image;
             if (!image.startsWith('data:image')) {
-              // Try to detect type or default to jpeg
               imageDataUrl = `data:image/jpeg;base64,${image}`;
             } 
             
             const uploadResponse = await cloudinary.uploader.upload(imageDataUrl, {
-                timeout: 120000, // Increase timeout to 2 minutes
+                timeout: 120000,
                 resource_type: 'image',
             });
             
@@ -52,7 +51,8 @@ router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (re
                 description,
                 category,
                 image: imageUrl,
-                order: nextOrder // ✅ Add the auto-generated order
+                order: nextOrder,
+                createdBy: req.user.id // Add the user ID who created the module
             });
 
             await newModule.save();
@@ -89,7 +89,7 @@ router.post("/", protectRoute, authorizeRole(['admin', 'superadmin']), async (re
     }
 });
 // Enhanced GET endpoint with better filtering, sorting and projection
-router.get("/", protectRoute, authorizeRole(['admin', 'student', 'superadmin']), async (req, res) => {
+router.get("/", protectRoute, authorizeRole(['instructor', 'student', 'admin']), async (req, res) => {
     try {
         // Pagination parameters
         const page = parseInt(req.query.page) || 1;
@@ -164,7 +164,7 @@ router.get("/", protectRoute, authorizeRole(['admin', 'student', 'superadmin']),
     }
 });
 // Update all instances where "lessons" is populated
-router.get("/recent", protectRoute, authorizeRole(['admin', 'student', 'superadmin']), async (req, res) => {
+router.get("/recent", protectRoute, authorizeRole(['instructor', 'student', 'admin']), async (req, res) => {
         try {
         const limit = parseInt(req.query.limit) || 5; // Default to 5 recent modules
         
@@ -184,7 +184,7 @@ router.get("/recent", protectRoute, authorizeRole(['admin', 'student', 'superadm
     }
 });
 // Update the get single module endpoint
-router.get("/:id", protectRoute, authorizeRole(['admin', 'student', 'superadmin']), async (req, res) => {
+router.get("/:id", protectRoute, authorizeRole(['instructor', 'student', 'admin']), async (req, res) => {
     try {
         const module = await Module.findById(req.params.id)
             .populate("quizzes", "title description image difficulty");
@@ -202,7 +202,7 @@ router.get("/:id", protectRoute, authorizeRole(['admin', 'student', 'superadmin'
         res.status(500).json({ message: "Internal server error" });
     }
 });
-router.delete("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.delete("/:id", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const moduleId = req.params.id;
     const module = await Module.findById(moduleId);
@@ -249,7 +249,7 @@ router.delete("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), asyn
   }
 });
 // Update module endpoint
-router.put("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.put("/:id", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, category, image } = req.body;
@@ -333,7 +333,7 @@ router.put("/:id", protectRoute, authorizeRole(['admin', 'superadmin']), async (
 });
 
 // Add to progressRoutes.js
-router.post("/repair-system", protectRoute, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+router.post("/repair-system", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const { userId } = req.body;
     

@@ -17,9 +17,9 @@ const moduleSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-        quizzes: [{
+    quizzes: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Quiz" // Changed from "Module"
+        ref: "Quiz"
     }],
     totalQuizzes: {
         type: Number,
@@ -28,17 +28,22 @@ const moduleSchema = new mongoose.Schema({
     order: {
         type: Number,
         required: true,
-        unique: true // Ensures no duplicate order numbers
+        unique: true
     },
     isLocked: {
         type: Boolean,
         default: function() {
-        return this.order > 1; // First module is unlocked by default
+            return this.order > 1;
         }
     },
     lastAccessed: {
         type: Date,
         default: Date.now
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     }
 }, { timestamps: true });
 

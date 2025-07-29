@@ -85,25 +85,101 @@ router.post("/initialize", protectRoute, async (req, res) => {
 // Get all modules with lock status
 router.get("/modules", protectRoute, async (req, res) => {
   try {
-    const progress = await Progress.findOne({ user: req.user.id });
-    const modules = await Module.find().sort({ order: 1 });
+    const userId = req.user.id;
     
-    // ✅ Check if user is admin
-    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
+    // Get the user to check their section and role
+    const User = await import("../models/Users.js").then(module => module.default);
+    const user = await User.findById(userId).select('section privilege');
     
-    const modulesWithStatus = modules.map(module => ({
-      ...module.toObject(),
-      // Admin has access to all modules, students follow progress rules
-      isUnlocked: isAdmin ? true : (progress ? progress.isModuleUnlocked(module._id) : module.order === 1),
-      isCompleted: isAdmin ? false : (progress ? progress.globalProgress.completedModules.some(
-        cm => cm.module.toString() === module._id.toString()
-      ) : false),
-      isCurrent: isAdmin ? false : (progress ? progress.globalProgress.currentModule?.toString() === module._id.toString() : false)
-    }));
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
     
-    res.json(modulesWithStatus);
+    let modules;
+    
+    // If user is admin, return all modules
+    if (user.privilege === 'admin') {
+      modules = await Module.find()
+        .select('title description category image order isActive totalQuizzes lastAccessed')
+        .sort({ order: 1 });
+    } 
+    // If user is instructor, only return modules they created
+    else if (user.privilege === 'instructor') {
+      modules = await Module.find({ createdBy: userId })
+        .select('title description category image order isActive totalQuizzes lastAccessed')
+        .sort({ order: 1 });
+    }
+    // If user is a student, only return modules created by their section's instructor
+    else if (user.privilege === 'student' && user.section !== 'no_section') {
+      // Find the section to get instructor
+      const Section = await import("../models/Section.js").then(module => module.default);
+      const section = await Section.findOne({ sectionCode: user.section })
+        .populate('instructor');
+      
+      if (!section) {
+        return res.status(200).json([]);
+      }
+      
+      // Find all modules where createdBy is the section's instructor
+      modules = await Module.find({ createdBy: section.instructor._id })
+        .select('title description category image order isActive totalQuizzes lastAccessed')
+        .sort({ order: 1 });
+    } 
+    // If no section or not a student, return empty array
+    else {
+      return res.status(200).json([]);
+    }
+    
+    // Get user progress
+    const Progress = await import("../models/Progress.js").then(module => module.default);
+    const userProgress = await Progress.findOne({ user: userId });
+    
+    // Enhance modules with unlock status and completion status
+    const enhancedModules = modules.map((module, index) => {
+      const moduleObj = module.toObject();
+      
+      // First module or instructor always unlocked
+      if (index === 0 || user.privilege === 'instructor' || user.privilege === 'admin') {
+        moduleObj.isUnlocked = true;
+      } else if (!userProgress) {
+        moduleObj.isUnlocked = false;
+      } else {
+        // Check if this module is in the unlocked modules list
+        moduleObj.isUnlocked = userProgress.globalProgress.unlockedModules.some(
+          id => id.toString() === module._id.toString()
+        );
+      }
+      
+      // Check if module is completed
+      if (userProgress && userProgress.globalProgress.completedModules) {
+        moduleObj.isCompleted = userProgress.globalProgress.completedModules.some(
+          item => item.module.toString() === module._id.toString()
+        );
+      } else {
+        moduleObj.isCompleted = false;
+      }
+      
+      // Check if module is current
+      if (userProgress && userProgress.globalProgress.currentModule) {
+        moduleObj.isCurrent = userProgress.globalProgress.currentModule.toString() === module._id.toString();
+      } else {
+        moduleObj.isCurrent = index === 0;
+      }
+      
+      return moduleObj;
+    });
+    
+    res.json(enhancedModules);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Error fetching modules with progress:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch modules with progress",
+      error: error.message 
+    });
   }
 });
 
@@ -115,10 +191,10 @@ router.get("/module/:moduleId/quizzes", protectRoute, async (req, res) => {
     
     console.log('📚 Fetching quizzes for module:', moduleId);
     
-    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
+    const isinstructor = req.user.privilege === 'instructor' || req.user.privilege === 'admin';
     
-    // Admin can access any module, students need unlock check
-    if (!isAdmin && progress && !progress.isModuleUnlocked(moduleId)) {
+    // instructor can access any module, students need unlock check
+    if (!isinstructor && progress && !progress.isModuleUnlocked(moduleId)) {
       console.log('🔒 Module is locked for student');
       return res.status(403).json({ message: "Module is locked" });
     }
@@ -135,8 +211,8 @@ router.get("/module/:moduleId/quizzes", protectRoute, async (req, res) => {
       let bestScore = null;
       let attempts = 0;
       
-      if (isAdmin) {
-        // Admin has access to all quizzes
+      if (isinstructor) {
+        // instructor has access to all quizzes
         isUnlocked = true;
       } else if (quiz.order === 1) {
         // ✅ ALWAYS unlock the first quiz
@@ -149,7 +225,7 @@ router.get("/module/:moduleId/quizzes", protectRoute, async (req, res) => {
       }
       
       // ✅ Get completion status for students
-      if (!isAdmin && moduleProgress) {
+      if (!isinstructor && moduleProgress) {
         const completion = moduleProgress.completedQuizzes.find(
           cq => cq.quiz.toString() === quiz._id.toString()
         );
@@ -162,7 +238,7 @@ router.get("/module/:moduleId/quizzes", protectRoute, async (req, res) => {
         }
       }
       
-      const isCurrent = isAdmin ? false : (moduleProgress?.currentQuiz?.toString() === quiz._id.toString());
+      const isCurrent = isinstructor ? false : (moduleProgress?.currentQuiz?.toString() === quiz._id.toString());
       
       console.log(`📝 Quiz: ${quiz.title}, Order: ${quiz.order}, Unlocked: ${isUnlocked}, Completed: ${isCompleted}, Passed: ${isPassed}`);
       
@@ -197,14 +273,14 @@ router.post("/quiz/:quizId/complete", protectRoute, async (req, res) => {
       score: attemptData.score
     });
     
-    // ✅ Check if user is admin
-    const isAdmin = req.user.privilege === 'admin' || req.user.privilege === 'superadmin';
+    // ✅ Check if user is instructor
+    const isinstructor = req.user.privilege === 'instructor' || req.user.privilege === 'admin';
     
-    if (isAdmin) {
-      console.log('👑 Admin quiz submission - no progress tracking');
+    if (isinstructor) {
+      console.log('👑 instructor quiz submission - no progress tracking');
       return res.json({
-        message: "Quiz completed successfully (Admin mode)",
-        isAdmin: true
+        message: "Quiz completed successfully (instructor mode)",
+        isinstructor: true
       });
     }
     
@@ -280,7 +356,7 @@ router.post("/quiz/:quizId/complete", protectRoute, async (req, res) => {
       passingScore: quiz.passingScore,
       passed: hasPassed,
       unlockedContent: hasPassed ? "Next quiz/module unlocked!" : "Complete this quiz to unlock next content",
-      isAdmin: false
+      isinstructor: false
     });
   } catch (error) {
     console.error('❌ Error in quiz completion:', error);

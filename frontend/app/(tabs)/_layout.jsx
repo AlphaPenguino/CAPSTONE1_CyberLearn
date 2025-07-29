@@ -11,13 +11,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function TabLayout() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const { user, token, checkAuth, logout } = useAuthStore();
+  const isInstructor = user?.privilege === 'instructor';
   const isAdmin = user?.privilege === 'admin';
-  const isSuperAdmin = user?.privilege === 'superadmin';
   const insets = useSafeAreaInsets();
   
   useEffect(() => {
     checkAuth();
-    console.log("Is Admin:", isAdmin);
+    console.log("Is Admin:", isInstructor);
     console.log("Platform:", Platform.OS);
   }, []);
 
@@ -86,8 +86,8 @@ export default function TabLayout() {
         color={color}
       />
     ),
-    href: isSuperAdmin ? null : undefined,
-    headerShown: !isSuperAdmin,
+    href: isAdmin ? null : undefined,
+    headerShown: !isAdmin,
   }}
 />
 
@@ -102,8 +102,8 @@ export default function TabLayout() {
         color={color}
       />
     ),
-    href: isSuperAdmin ? null : undefined,
-    headerShown: !isSuperAdmin,
+    href: isAdmin ? null : undefined,
+    headerShown: !isAdmin,
   }}
 />
 
@@ -118,8 +118,8 @@ export default function TabLayout() {
         color={color}
       />
     ),
-    href: isAdmin ? undefined : null,
-    headerShown: isAdmin,
+    href: isInstructor ? undefined : null,
+    headerShown: isInstructor,
   }} 
 />
 
@@ -134,8 +134,8 @@ export default function TabLayout() {
         color={color}
       />
     ),
-    href: isSuperAdmin ? undefined : null,
-    headerShown: isSuperAdmin,
+    href: isAdmin ? undefined : null,
+    headerShown: isAdmin,
   }} 
 />
 
@@ -150,8 +150,8 @@ export default function TabLayout() {
         color={color} 
       />
     ),
-    href: isSuperAdmin ? null : undefined,
-    headerShown: !isSuperAdmin,
+    href: isAdmin ? null : undefined,
+    headerShown: !isAdmin,
   }} 
 />
 
