@@ -1,0 +1,170 @@
+[
+  {
+    "email": "maria.delacruz@example.com",
+    "username": "mariadc",
+    "password": "12345678",
+    "role": "admin"
+  },
+  {
+    "email": "juan.santos@example.com",
+    "username": "juansantos",
+    "password": "12345678",
+    "role": "admin"
+  },
+   {
+    "email": "cristina.lopez@example.com",
+    "username": "cristinalopez",
+    "password": "12345678",
+    "role": "admin"
+  },
+  {
+    "email": "miguel.reyes@example.com",
+    "username": "mreyes_admin",
+    "password": "12345678",
+    "role": "admin"
+  },
+  {
+    "email": "andrea.garcia@example.com",
+    "username": "andrea_g",
+    "password": "12345678",
+    "role": "admin"
+  },
+  {
+    "email": "paul.torres@example.com",
+    "username": "paultorres",
+    "password": "12345678",
+    "role": "instructor"
+  },
+  {
+    "email": "lisa.mendoza@example.com",
+    "username": "lisamdz",
+    "password": "12345678",
+    "role": "instructor"
+  },
+  {
+    "email": "mark.ang@example.com",
+    "username": "mark_ang",
+    "password": "12345678",
+    "role": "instructor"
+  },
+  {
+    "email": "carla.ramos@example.com",
+    "username": "c.ramos",
+    "password": "12345678",
+    "role": "instructor"
+  },
+  {
+    "email": "james.bautista@example.com",
+    "username": "jamesb",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "kim.delarosa@example.com",
+    "username": "kimd",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "ronald.tan@example.com",
+    "username": "ronaldt23",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "alyssa.cortez@example.com",
+    "username": "alyssacrtz",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "patrick.gomez@example.com",
+    "username": "patrickg",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "bella.sison@example.com",
+    "username": "bellas",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "nathan.lim@example.com",
+    "username": "nathanlim",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "trisha.uy@example.com",
+    "username": "trishauy",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "darren.chan@example.com",
+    "username": "dchan09",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "faith.ong@example.com",
+    "username": "faithong",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "ian.villanueva@example.com",
+    "username": "ianv99",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "julia.reyes@example.com",
+    "username": "juliareyes",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "kenji.santos@example.com",
+    "username": "kenjisan",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "marie.cruz@example.com",
+    "username": "mariecrz",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "leo.manalo@example.com",
+    "username": "leom",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "charmaine.yu@example.com",
+    "username": "charmyu",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "vince.david@example.com",
+    "username": "v.david",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "ella.morales@example.com",
+    "username": "ellamorales",
+    "password": "12345678",
+    "role": "student"
+  },
+  {
+    "email": "sean.fernandez@example.com",
+    "username": "seanfern",
+    "password": "12345678",
+    "role": "student"
+  }
+]
