@@ -100,12 +100,18 @@ router.get("/modules", protectRoute, async (req, res) => {
     
     let modules;
     
-    // If user is instructor or admin, return all modules
-    if (user.privilege === 'instructor' || user.privilege === 'admin') {
+    // If user is admin, return all modules
+    if (user.privilege === 'admin') {
       modules = await Module.find()
         .select('title description category image order isActive totalQuizzes lastAccessed')
         .sort({ order: 1 });
     } 
+    // If user is instructor, only return modules they created
+    else if (user.privilege === 'instructor') {
+      modules = await Module.find({ createdBy: userId })
+        .select('title description category image order isActive totalQuizzes lastAccessed')
+        .sort({ order: 1 });
+    }
     // If user is a student, only return modules created by their section's instructor
     else if (user.privilege === 'student' && user.section !== 'no_section') {
       // Find the section to get instructor

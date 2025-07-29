@@ -185,7 +185,7 @@ router.get("/unassigned-students", protectRoute, authorizeRole(['instructor', 'a
   }
 });
 
-// Add this route to fetch all sections
+// Modify the GET /sections route
 router.get("/", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
   try {
     const Section = await import("../models/Section.js").then(module => module.default);
@@ -199,6 +199,15 @@ router.get("/", protectRoute, authorizeRole(['instructor', 'admin']), async (req
     if (search) {
       filter.name = { $regex: search, $options: 'i' };
     }
+    
+    // For instructors, only show sections they created or where they are the instructor
+    if (req.user.privilege === 'instructor') {
+      filter.$or = [
+        { instructor: req.user.id },
+        { createdBy: req.user.id }
+      ];
+    }
+    // Admin can see all sections, so no additional filter needed for them
     
     // Set sort options
     const sortOptions = {};
