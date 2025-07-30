@@ -16,16 +16,22 @@ cloudinary.config({
 //create
 
 
+// Modify the POST route to use instructor-specific order numbers
 router.post("/", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
     try {
         const { title, description, category, image } = req.body;
+        const creatorId = req.user.id;
 
         if (!title || !description || !category || !image) {
             return res.status(400).json({ message: "Please provide all fields" });
         }
 
-        // Auto-assign the next order number
-        const lastModule = await Module.findOne().sort({ order: -1 }).select('order');
+        // Auto-assign the next order number for this specific instructor
+        const lastModule = await Module.findOne({ 
+            createdBy: creatorId 
+        }).sort({ order: -1 }).select('order');
+        
+        // Start numbering at 1 for each instructor
         const nextOrder = lastModule ? lastModule.order + 1 : 1;
 
         try {
@@ -52,12 +58,12 @@ router.post("/", protectRoute, authorizeRole(['instructor', 'admin']), async (re
                 category,
                 image: imageUrl,
                 order: nextOrder,
-                createdBy: req.user.id // Add the user ID who created the module
+                createdBy: creatorId
             });
 
             await newModule.save();
             
-            console.log(`Module created with order: ${nextOrder}`);
+            console.log(`Module created with order: ${nextOrder} for instructor ${creatorId}`);
             res.status(201).json({ 
                 message: "Module created successfully", 
                 module: newModule 
@@ -211,8 +217,9 @@ router.delete("/:id", protectRoute, authorizeRole(['instructor', 'admin']), asyn
       return res.status(404).json({ message: "Module not found" });
     }
     
-    // 1. Get the deleted module's order number
+    // 1. Get the deleted module's order number and creator
     const deletedModuleOrder = module.order;
+    const creatorId = module.createdBy;
     
     // 2. Handle image deletion with Cloudinary
     if (module.image) {
@@ -233,11 +240,11 @@ router.delete("/:id", protectRoute, authorizeRole(['instructor', 'admin']), asyn
     // 4. Delete the module itself
     await Module.findByIdAndDelete(moduleId);
     
-    // 5. Reorder remaining modules to close the gap
-    await reorderModulesAfterDeletion(deletedModuleOrder);
+    // 5. Reorder remaining modules to close the gap (only for the same creator)
+    await reorderModulesAfterDeletion(deletedModuleOrder, creatorId);
     
     // 6. Update all progress records to repair student progression
-    await repairProgressAfterModuleDeletion(moduleId, deletedModuleOrder);
+    await repairProgressAfterModuleDeletion(moduleId, deletedModuleOrder, creatorId);
     
     res.json({ 
       success: true, 
@@ -485,14 +492,15 @@ const updateLastAccessed = async (moduleId) => {
 };
 
 // Helper function to reorder modules after deletion
-async function reorderModulesAfterDeletion(deletedOrder) {
+async function reorderModulesAfterDeletion(deletedOrder, creatorId) {
   try {
-    // Find all modules with order greater than the deleted module
+    // Find all modules with order greater than the deleted module AND created by the same instructor
     const modulesToReorder = await Module.find({
-      order: { $gt: deletedOrder }
+      order: { $gt: deletedOrder },
+      createdBy: creatorId
     }).sort({ order: 1 });
     
-    console.log(`Reordering ${modulesToReorder.length} modules after deletion of order ${deletedOrder}`);
+    console.log(`Reordering ${modulesToReorder.length} modules after deletion of order ${deletedOrder} for instructor ${creatorId}`);
     
     // Update each module's order by decreasing by 1
     const updatePromises = modulesToReorder.map((module, index) => {
@@ -511,35 +519,43 @@ async function reorderModulesAfterDeletion(deletedOrder) {
 }
 
 // Helper function to repair progress records
-async function repairProgressAfterModuleDeletion(deletedModuleId, deletedModuleOrder) {
+async function repairProgressAfterModuleDeletion(deletedModuleId, deletedModuleOrder, creatorId) {
   try {
     const Progress = mongoose.model('Progress');
     const Module = mongoose.model('Module');
     
-    // Find the next accessible module (new first module or next one in sequence)
-    const nextModule = await Module.findOne({ order: deletedModuleOrder })
-      .select('_id');
+    // Find the next accessible module created by the same instructor
+    const nextModule = await Module.findOne({ 
+      order: deletedModuleOrder,
+      createdBy: creatorId
+    }).select('_id');
     
-    // If no replacement exists at this order (it was the last module), find previous one
-    const replacementModule = nextModule || await Module.findOne({ order: deletedModuleOrder - 1 })
-      .select('_id');
+    // If no replacement exists at this order, find previous one from same instructor
+    const replacementModule = nextModule || await Module.findOne({ 
+      order: deletedModuleOrder - 1,
+      createdBy: creatorId
+    }).select('_id');
       
-    // If no modules exist at all, nothing to repair
+    // If no modules exist for this instructor, nothing to repair
     if (!replacementModule) {
-      console.log("No replacement modules found - system has no modules left");
+      console.log("No replacement modules found for this instructor");
       return;
     }
     
     console.log(`Using ${nextModule ? 'next' : 'previous'} module as replacement for deleted module`);
     
-    // Get all user progress records
-    const progressRecords = await Progress.find();
+    // Get all user progress records for students with this instructor's modules
+    const progressRecords = await Progress.find({
+      'moduleProgress.module': { $in: await Module.find({ createdBy: creatorId }).distinct('_id') }
+    });
+    
     console.log(`Repairing ${progressRecords.length} progress records`);
     
     // Process each progress record
     for (const progress of progressRecords) {
       let needsSaving = false;
       
+      // Repair logic remains similar but uses instructor-specific modules
       // 1. Fix global progress references
       if (progress.globalProgress.currentModule && 
           progress.globalProgress.currentModule.toString() === deletedModuleId.toString()) {
@@ -557,7 +573,7 @@ async function repairProgressAfterModuleDeletion(deletedModuleId, deletedModuleO
         progress.globalProgress.unlockedModules = unlockedModulesFiltered;
         
         // Make sure the first module is always unlocked
-        const firstModule = await Module.findOne({ order: 1 }).select('_id');
+        const firstModule = await Module.findOne({ order: 1, createdBy: creatorId }).select('_id');
         if (firstModule && !unlockedModulesFiltered.some(id => id.toString() === firstModule._id.toString())) {
           progress.globalProgress.unlockedModules.push(firstModule._id);
         }
