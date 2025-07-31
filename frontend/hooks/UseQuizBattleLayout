@@ -1,0 +1,71 @@
+import { useWindowDimensions, Platform } from 'react-native';
+import { useState, useEffect } from 'react';
+
+export const useQuizBattleLayout = () => {
+  const { width, height } = useWindowDimensions();
+  const [orientation, setOrientation] = useState('portrait');
+  
+  useEffect(() => {
+    setOrientation(width > height ? 'landscape' : 'portrait');
+  }, [width, height]);
+
+  const isMobile = Platform.OS === 'ios' || Platform.OS === 'android';
+  const isWeb = Platform.OS === 'web';
+  const isLargeScreen = width >= 1024;
+
+  return {
+    isMobile,
+    isWeb,
+    orientation,
+    screenWidth: width,
+    screenHeight: height,
+    layoutStyles: {
+      container: {
+        maxWidth: isWeb ? (isLargeScreen ? 1200 : 900) : '100%',
+        alignSelf: 'center',
+        width: '100%'
+      },
+      statusBars: {
+        flexDirection: orientation === 'landscape' ? 'row' : 'column',
+        width: isWeb ? '90%' : '100%',
+        maxWidth: 1000,
+        alignSelf: 'center',
+        padding: isWeb ? 16 : 8,
+        marginBottom: isWeb ? 20 : 10
+      },
+      barContainer: {
+        height: isWeb ? 24 : 16,
+        marginVertical: 4,
+        borderRadius: isWeb ? 12 : 8
+      },
+      battleArea: {
+        height: isWeb ? (orientation === 'portrait' ? 450 : 550) : 300, // Adjusted heights
+        width: '100%',
+        maxWidth: isLargeScreen ? 1200 : 900,
+        alignSelf: 'center'
+      },
+      characters: {
+        scale: isWeb ? (isLargeScreen ? 2 : 1.5) : 1,
+        spacing: isWeb ? (isLargeScreen ? '20%' : '15%') : '10%'
+      },
+      battleBackground: {
+        width: '100%',
+        height: '100%',
+        resizeMode: isWeb ? 'cover' : 'contain'
+      },
+      questionContainer: {
+        width: isWeb ? '80%' : '95%',
+        maxWidth: 800,
+        marginTop: isWeb ? -60 : -30,
+        padding: isWeb ? 24 : 16,
+        alignSelf: 'center'
+      },
+      navigationButtons: {
+        width: isWeb ? '80%' : '95%',
+        maxWidth: 800,
+        marginTop: isWeb ? 24 : 16,
+        alignSelf: 'center'
+      }
+    }
+  };
+};
