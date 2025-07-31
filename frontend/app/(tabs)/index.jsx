@@ -30,12 +30,15 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [selectedModule, setSelectedModule] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showProfileOnMobile, setShowProfileOnMobile] = useState(false); // <-- New state variable
 
   const { width, height } = useWindowDimensions();
 
   const isMobile = Platform.OS !== 'web' && width < 768;
 
+  // 1. Create two separate Animated.Value instances
   const scrollY = useRef(new Animated.Value(0)).current;
+  const nativeScrollY = useRef(new Animated.Value(0)).current;
 
   const [menuVisible, setMenuVisible] = useState(null);
   const router = useRouter();
@@ -52,17 +55,30 @@ export default function Home() {
   const INFO_PANEL_HEIGHT = isMobile ? 150 : 180;
   const PROFILE_PANEL_HEIGHT = isMobile ? 180 : 200;
 
-  const infoPanelTranslateY = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [0, 10], 
-    extrapolate: 'clamp',
-  });
+  // Update the panel animations
+  const infoPanelTranslateY = Platform.OS === 'web' ? 
+    scrollY.interpolate({
+      inputRange: [0, 100],
+      outputRange: [0, 10],
+      extrapolate: 'clamp',
+    }) :
+    nativeScrollY.interpolate({
+      inputRange: [0, 100],
+      outputRange: [0, 10],
+      extrapolate: 'clamp',
+    });
 
-  const profilePanelTranslateY = scrollY.interpolate({
-    inputRange: [0, 100],
-    outputRange: [0, 10],
-    extrapolate: 'clamp',
-  });
+  const profilePanelTranslateY = Platform.OS === 'web' ? 
+    scrollY.interpolate({
+      inputRange: [0, 100],
+      outputRange: [0, 10],
+      extrapolate: 'clamp',
+    }) :
+    nativeScrollY.interpolate({
+      inputRange: [0, 100],
+      outputRange: [0, 10],
+      extrapolate: 'clamp',
+    });
 
   useFocusEffect(
     useCallback(() => {
@@ -202,7 +218,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-
     if (user?.privilege === 'admin') {
       router.replace('/(tabs)/users');
     }
@@ -233,18 +248,36 @@ export default function Home() {
     return pathD;
   };
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      // Preload background image
+      Image.prefetch(Image.resolveAssetSource(require('../../assets/images/BG5.jpg')).uri)
+        .then(() => console.log('Background image preloaded successfully'))
+        .catch(err => console.error('Error preloading background image:', err));
+    }
+  }, []);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Cyber Quest Map</Text>
-        {isInstructor && (
-          <TouchableOpacity
-            style={styles.instructorButton}
-            onPress={() => router.push('/(tabs)/create')}>
-            <Ionicons name="add-circle" size={24} color={COLORS.primary} />
-            <Text style={styles.instructorButtonText}>Create</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ flexDirection: 'row' }}>
+          {Platform.OS !== 'web' && (
+            <TouchableOpacity
+              style={[styles.instructorButton, styles.profileToggleButton]}
+              onPress={() => setShowProfileOnMobile(!showProfileOnMobile)}>
+              <Ionicons name="person" size={24} color={COLORS.primary} />
+            </TouchableOpacity>
+          )}
+          {isInstructor && (
+            <TouchableOpacity
+              style={styles.instructorButton}
+              onPress={() => router.push('/(tabs)/create')}>
+              <Ionicons name="add-circle" size={24} color={COLORS.primary} />
+              <Text style={styles.instructorButtonText}>Create</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
       {loading ? (
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -271,25 +304,49 @@ export default function Home() {
             styles.mapContent,
             { paddingBottom: Platform.OS === 'web' ? 300 : height * 0.35 }
           ]}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
-          )}
+          onScroll={Platform.OS === 'web' ? 
+            // For web: Use the regular scrollY value
+            Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: false }  // Set to false for web
+            ) : 
+            // For mobile: Use the native-driver compatible value
+            Animated.event(
+              [{ nativeEvent: { contentOffset: { y: nativeScrollY } } }],
+              { useNativeDriver: true }   // Keep true for mobile
+            )
+          }
           scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         >
-          {/* Background Image - CORRECTED PATH */}
-          {/* This path assumes BG5.jpg is in app/assets/images/ relative to your project root */}
-          <Image
-            source={require('../../assets/images/BG5.jpg')}
-            style={{
-              position: 'absolute',
-              width: '100%',
-              minHeight: Math.max(height, modules.length * MODULE_VERTICAL_SPACING + INITIAL_TOP_OFFSET + 300),
-              opacity: 0.7,
-            }}
-            resizeMode="cover"
-          />
+          <View style={{
+  position: 'absolute',
+  width: '100%',
+  height: '100%',
+  backgroundColor: '#061223', // Dark blue fallback
+  opacity: 1,
+  left: 0,
+  top: 0,
+  zIndex: 0,
+}} />
+
+{/* Then your Image component */}
+<Image
+  source={require('../../assets/images/BG5.jpg')}
+  style={{
+    position: 'absolute',
+    width: '100%',
+    height: Platform.OS === 'web' 
+      ? Math.max(height, modules.length * MODULE_VERTICAL_SPACING + INITIAL_TOP_OFFSET + 300) 
+      : '100%',
+    opacity: 0.7,
+    left: 0,
+    top: 0,
+    zIndex: 1,
+  }}
+  resizeMode={Platform.OS === 'web' ? "cover" : "repeat"}
+  onError={() => console.log('Error loading background image')}
+/>
 
           <Svg
             height={modules.length * MODULE_VERTICAL_SPACING + 600}
@@ -458,7 +515,7 @@ export default function Home() {
             {
               width: width * 0.9,
               left: width * 0.05,
-              bottom: 20, // Use bottom instead of top
+              bottom: 20,
             },
             Platform.OS === 'web' ? {
               maxWidth: 500,
@@ -483,36 +540,68 @@ export default function Home() {
       )}
 
       {/* Profile Panel */}
-      {!loading && (
+      {!loading && (Platform.OS === 'web' || showProfileOnMobile) && (
         <Animated.View
           style={[
             styles.userProfilePanel,
-            {
-              display: isMobile ? 'none' : 'flex',
-              width: isMobile ? width * 0.4 : 220,
-              left: isMobile ? 8 : 16,
-              top: 80, // Fixed position
-            },
-            Platform.OS === 'web' ? {} : {
-              transform: [{ translateY: profilePanelTranslateY }],
-            }
+            Platform.OS === 'web' 
+              ? {
+                  display: 'flex',
+                  width: 220,
+                  left: 16,
+                  top: 80,
+                }
+              : {
+                  display: 'flex', // Show on mobile too
+                  width: width * 0.9,
+                  left: width * 0.05,
+                  bottom: selectedModule ? 200 : 20, // Position above info panel if it exists
+                  top: undefined, // Remove top positioning
+                  maxHeight: height * 0.3, // Limit height on mobile
+                  transform: [{ translateY: profilePanelTranslateY }],
+                }
           ]}
         >
-          <View style={styles.userProfileHeader}>
+          {/* Mobile Header with Close button */}
+          <View style={[
+            styles.userProfileHeader, 
+            Platform.OS !== 'web' && { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }
+          ]}>
             <Text style={styles.userProfileTitle}>Profile</Text>
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity onPress={() => setShowProfileOnMobile(false)}>
+                <Ionicons name="close" size={20} color={COLORS.primary} />
+              </TouchableOpacity>
+            )}
           </View>
 
-          <View style={styles.userProfileContent}>
-            <View style={styles.avatarContainer}>
+          {/* Adjust content for mobile */}
+          <View style={[
+            styles.userProfileContent,
+            Platform.OS !== 'web' && { flexDirection: 'row', alignItems: 'center' }
+          ]}>
+            <View style={[
+              styles.avatarContainer,
+              Platform.OS !== 'web' && { marginRight: 16 }
+            ]}>
               {(user?.profileImage && !profileImageError) ? (
                 <Image
                   source={{ uri: getCompatibleImageUrl(user?.profileImage) }}
-                  style={styles.userAvatar}
+                  style={[
+                    styles.userAvatar,
+                    Platform.OS !== 'web' && { width: 50, height: 50, borderRadius: 25 }
+                  ]}
                   onError={() => setProfileImageError(true)}
                 />
               ) : (
-                <View style={styles.userAvatarFallback}>
-                  <Text style={styles.avatarLetterText}>
+                <View style={[
+                  styles.userAvatarFallback,
+                  Platform.OS !== 'web' && { width: 50, height: 50, borderRadius: 25 }
+                ]}>
+                  <Text style={[
+                    styles.avatarLetterText,
+                    Platform.OS !== 'web' && { fontSize: 20 }
+                  ]}>
                     {user?.username?.charAt(0).toUpperCase() || '?'}
                   </Text>
                 </View>
@@ -525,22 +614,30 @@ export default function Home() {
                       user?.privilege === 'admin' ? 'star' :
                         'person'
                   }
-                  size={12}
+                  size={Platform.OS === 'web' ? 12 : 10}
                   color="#fff"
                 />
               </View>
             </View>
 
             <View style={styles.userInfoBox}>
-              <Text style={styles.usernameText}>{user?.username || 'Unknown Hero'}</Text>
+              <Text style={[
+                styles.usernameText,
+                Platform.OS !== 'web' && { fontSize: 14 }
+              ]}>
+                {user?.username || 'Unknown Hero'}
+              </Text>
 
               <View style={styles.infoRow}>
                 <Ionicons
                   name="ribbon-outline"
-                  size={16}
+                  size={Platform.OS === 'web' ? 16 : 14}
                   color={COLORS.primary}
                 />
-                <Text style={styles.infoText}>
+                <Text style={[
+                  styles.infoText, 
+                  Platform.OS !== 'web' && { fontSize: 12 }
+                ]}>
                   {user?.privilege === 'instructor' ? 'Instructor' :
                     user?.privilege === 'admin' ? 'Admin' :
                       'Student'}
@@ -550,37 +647,59 @@ export default function Home() {
               <View style={styles.infoRow}>
                 <Ionicons
                   name={user?.section === 'no_section' ? 'school-outline' : 'school'}
-                  size={16}
+                  size={Platform.OS === 'web' ? 16 : 14}
                   color={user?.section === 'no_section' ? '#aaa' : '#4CAF50'}
                 />
                 <Text style={[
                   styles.infoText,
+                  Platform.OS !== 'web' && { fontSize: 12 },
                   user?.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
                 ]}>
-                  {user?.section === 'no_section' ? 'No Class Assigned' : user?.section}
+                  {user?.section === 'no_section' ? 'No Class' : user?.section}
                 </Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.statsContainer}>
+          <View style={[
+            styles.statsContainer,
+            Platform.OS !== 'web' && { paddingVertical: 4 }
+          ]}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>
+              <Text style={[
+                styles.statValue,
+                Platform.OS !== 'web' && { fontSize: 16 }
+              ]}>
                 {modules?.filter(m => m.isCompleted)?.length || 0}
               </Text>
-              <Text style={styles.statLabel}>Completed</Text>
+              <Text style={[
+                styles.statLabel,
+                Platform.OS !== 'web' && { fontSize: 10 }
+              ]}>Completed</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>
+              <Text style={[
+                styles.statValue,
+                Platform.OS !== 'web' && { fontSize: 16 }
+              ]}>
                 {modules?.filter(m => m.isUnlocked && !m.isCompleted)?.length || 0}
               </Text>
-              <Text style={styles.statLabel}>Available</Text>
+              <Text style={[
+                styles.statLabel,
+                Platform.OS !== 'web' && { fontSize: 10 }
+              ]}>Available</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>
+              <Text style={[
+                styles.statValue,
+                Platform.OS !== 'web' && { fontSize: 16 }
+              ]}>
                 {modules?.filter(m => !m.isUnlocked)?.length || 0}
               </Text>
-              <Text style={styles.statLabel}>Locked</Text>
+              <Text style={[
+                styles.statLabel,
+                Platform.OS !== 'web' && { fontSize: 10 }
+              ]}>Locked</Text>
             </View>
           </View>
         </Animated.View>
@@ -817,6 +936,11 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
+  userProfilePanelMobile: {
+    marginVertical: 10,
+    borderRadius: 16,
+    padding: 16,
+  },
   userProfileHeader: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
@@ -911,5 +1035,14 @@ const styles = StyleSheet.create({
   statLabel: {
     color: '#cccccc',
     fontSize: 12,
+  },
+  profileToggleButton: {
+    marginRight: 8,
+    backgroundColor: 'rgba(25, 118, 210, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
   },
 });

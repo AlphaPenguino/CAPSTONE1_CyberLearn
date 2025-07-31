@@ -53,7 +53,7 @@ export default function SettingsScreen() {
           <DrawerItem
             title="Profile"
             icon="person-outline"
-            onPress={() => router.push('/(tabs)/profile')}
+            onPress={() => router.push('/profile/profile')}
           />
           <DrawerItem
             title="Settings"
