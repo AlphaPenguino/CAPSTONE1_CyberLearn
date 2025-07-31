@@ -12,39 +12,92 @@ router.post("/initialize", protectRoute, async (req, res) => {
   try {
     console.log('🚀 Initializing progress for user:', req.user.id);
     
+    // Get the user with their section information
+    const User = await import("../models/Users.js").then(module => module.default);
+    const Section = await import("../models/Section.js").then(module => module.default);
+    
+    const user = await User.findById(req.user.id).select('section privilege');
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
     const existingProgress = await Progress.findOne({ user: req.user.id });
     if (existingProgress) {
-      console.log('✅ Progress already exists');
+      console.log('✅ Progress already exists, ensuring module access...');
+      // Instead of just returning, ensure the student has access
+      await ensureStudentModuleAccess(user, existingProgress);
       return res.json(existingProgress);
     }
     
-    // Find first module
-    const firstModule = await Module.findOne({ order: 1 });
-    if (!firstModule) {
-      return res.status(404).json({ message: "No modules found" });
+    // Find modules based on user role and section
+    let instructorId = null;
+    let firstModule = null;
+    let allModules = [];
+    
+    if (user.privilege === 'instructor' || user.privilege === 'admin') {
+      // For instructors/admins, get their own modules or all modules
+      if (user.privilege === 'instructor') {
+        firstModule = await Module.findOne({ createdBy: user._id, order: 1 });
+        allModules = await Module.find({ createdBy: user._id }).sort({ order: 1 });
+      } else {
+        // Admin gets first module from system
+        firstModule = await Module.findOne().sort({ order: 1 });
+        allModules = await Module.find().sort({ order: 1 });
+      }
+    } 
+    else if (user.privilege === 'student' && user.section !== 'no_section') {
+      // Get the instructor for the student's section
+      const section = await Section.findOne({ sectionCode: user.section })
+        .populate('instructor');
+      
+      if (section && section.instructor) {
+        instructorId = section.instructor._id;
+        // Get modules created by the section's instructor
+        firstModule = await Module.findOne({ 
+          createdBy: instructorId, 
+          order: 1 
+        });
+        
+        allModules = await Module.find({ 
+          createdBy: instructorId 
+        }).sort({ order: 1 });
+        
+        console.log(`🔄 Found ${allModules.length} modules from instructor ${instructorId} for section ${user.section}`);
+      }
     }
     
-    console.log('🎯 First module found:', firstModule.title);
+    // If no modules found or no section assigned, create empty progress
+    if (!firstModule) {
+      console.log('⚠️ No modules found or no section assigned');
+      const emptyProgress = new Progress({
+        user: req.user.id,
+        globalProgress: {
+          unlockedModules: [],
+          completedModules: []
+        },
+        moduleProgress: []
+      });
+      
+      await emptyProgress.save();
+      return res.json(emptyProgress);
+    }
     
-    // ✅ Find ALL modules and create progress for each
-    const allModules = await Module.find().sort({ order: 1 });
+    // Rest of your code remains the same for creating moduleProgressArray
     const moduleProgressArray = [];
     
     for (const module of allModules) {
-      // ✅ Get ALL quizzes in this module (not just first one)
+      // Get quizzes in this module
       const allQuizzesInModule = await Quiz.find({ 
         module: module._id 
       }).sort({ order: 1 });
       
       const firstQuizInModule = allQuizzesInModule.find(q => q.order === 1);
       
-      console.log(`📚 Module: ${module.title}, Quizzes: ${allQuizzesInModule.length}, First Quiz: ${firstQuizInModule?.title || 'None'}`);
-      
       const moduleProgress = {
         module: module._id,
         status: module._id.toString() === firstModule._id.toString() ? 'unlocked' : 'locked',
         currentQuiz: firstQuizInModule?._id,
-        // ✅ For first module, unlock first quiz. For others, still add first quiz but mark module as locked
         unlockedQuizzes: firstQuizInModule ? [firstQuizInModule._id] : [],
         completedQuizzes: [],
         totalXP: 0,
@@ -69,11 +122,6 @@ router.post("/initialize", protectRoute, async (req, res) => {
     await progress.save();
     
     console.log('✅ Progress initialized successfully');
-    console.log('📊 Progress details:', {
-      modules: moduleProgressArray.length,
-      unlockedModules: 1,
-      firstQuizzes: moduleProgressArray.filter(mp => mp.unlockedQuizzes.length > 0).length
-    });
     
     res.json(progress);
   } catch (error) {
@@ -446,6 +494,130 @@ router.get("/completed-quizzes", protectRoute, async (req, res) => {
   } catch (error) {
     console.error("❌ Error fetching completed quizzes:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// Helper function to ensure students have access to their instructor's modules
+async function ensureStudentModuleAccess(user, progress) {
+  try {
+    // Only needed for students with a section
+    if (user.privilege !== 'student' || user.section === 'no_section') {
+      return false;
+    }
+    
+    // Get the instructor for the student's section
+    const Section = await import("../models/Section.js").then(module => module.default);
+    const section = await Section.findOne({ sectionCode: user.section })
+      .populate('instructor');
+    
+    if (!section || !section.instructor) {
+      console.log('⚠️ Section or instructor not found');
+      return false;
+    }
+    
+    const instructorId = section.instructor._id;
+    
+    // Get first module from the instructor
+    const firstInstructorModule = await Module.findOne({ 
+      createdBy: instructorId, 
+      order: 1 
+    });
+    
+    if (!firstInstructorModule) {
+      console.log('⚠️ No modules found for instructor');
+      return false;
+    }
+    
+    let needsSaving = false;
+    
+    // Ensure first module is in unlockedModules
+    if (!progress.globalProgress.unlockedModules.some(id => 
+      id.toString() === firstInstructorModule._id.toString()
+    )) {
+      progress.globalProgress.unlockedModules.push(firstInstructorModule._id);
+      needsSaving = true;
+      console.log('🔓 Added first instructor module to unlocked modules');
+    }
+    
+    // Ensure there's a moduleProgress entry for the first module
+    let firstModuleProgress = progress.moduleProgress.find(mp => 
+      mp.module.toString() === firstInstructorModule._id.toString()
+    );
+    
+    if (!firstModuleProgress) {
+      // Get first quiz in the module
+      const firstQuiz = await Quiz.findOne({ 
+        module: firstInstructorModule._id,
+        order: 1 
+      });
+      
+      // Create module progress
+      firstModuleProgress = {
+        module: firstInstructorModule._id,
+        status: 'unlocked',
+        currentQuiz: firstQuiz?._id,
+        unlockedQuizzes: firstQuiz ? [firstQuiz._id] : [],
+        completedQuizzes: []
+      };
+      
+      progress.moduleProgress.push(firstModuleProgress);
+      needsSaving = true;
+      console.log('🔄 Created module progress for first instructor module');
+    }
+    
+    // If current module isn't set, set it to the first module
+    if (!progress.globalProgress.currentModule) {
+      progress.globalProgress.currentModule = firstInstructorModule._id;
+      needsSaving = true;
+      console.log('🔄 Set current module to first instructor module');
+    }
+    
+    if (needsSaving) {
+      await progress.save();
+      console.log('✅ Progress updated for student in section');
+    }
+    
+    return needsSaving;
+  } catch (error) {
+    console.error('❌ Error ensuring student module access:', error);
+    return false;
+  }
+}
+
+// Add this route to repair student access when they're added to a section
+router.post("/repair-section-access", protectRoute, async (req, res) => {
+  try {
+    const userId = req.body.userId || req.user.id;
+    
+    // Get the user
+    const User = await import("../models/Users.js").then(module => module.default);
+    const user = await User.findById(userId).select('section privilege');
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Get progress
+    const progress = await Progress.findOne({ user: userId });
+    if (!progress) {
+      return res.status(404).json({ message: "Progress not found" });
+    }
+    
+    // Repair the access
+    const updated = await ensureStudentModuleAccess(user, progress);
+    
+    res.json({
+      success: true,
+      message: updated ? "Student module access repaired" : "No updates needed",
+      user: {
+        id: user._id,
+        section: user.section,
+        privilege: user.privilege
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error repairing section access:", error);
+    res.status(500).json({ message: "Failed to repair access", error: error.message });
   }
 });
 

@@ -52,15 +52,15 @@ export default function Home() {
   const INFO_PANEL_HEIGHT = isMobile ? 150 : 180;
   const PROFILE_PANEL_HEIGHT = isMobile ? 180 : 200;
 
-  const infoPanelAnimatedTop = scrollY.interpolate({
-    inputRange: [0, 1],
-    outputRange: [height * 0.60, height * 0.60 + 1],
+  const infoPanelTranslateY = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, 10], 
     extrapolate: 'clamp',
   });
 
-  const profilePanelAnimatedTop = scrollY.interpolate({
-    inputRange: [0, 1],
-    outputRange: [80, 80],
+  const profilePanelTranslateY = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, 10],
     extrapolate: 'clamp',
   });
 
@@ -450,21 +450,24 @@ export default function Home() {
         </AnimatedScrollView>
       )}
 
+      {/* Info Panel */}
       {selectedModule && (
         <Animated.View
           style={[
             styles.infoPanel,
-            { top: infoPanelAnimatedTop },
             {
               width: width * 0.9,
               left: width * 0.05,
+              bottom: 20, // Use bottom instead of top
             },
-            Platform.OS === 'web' && {
+            Platform.OS === 'web' ? {
               maxWidth: 500,
               width: 500,
               left: '50%',
               transform: [{ translateX: -250 }],
               borderRadius: 18,
+            } : {
+              transform: [{ translateY: infoPanelTranslateY }],
             }
           ]}
         >
@@ -479,15 +482,19 @@ export default function Home() {
         </Animated.View>
       )}
 
+      {/* Profile Panel */}
       {!loading && (
         <Animated.View
           style={[
             styles.userProfilePanel,
-            { top: profilePanelAnimatedTop },
             {
               display: isMobile ? 'none' : 'flex',
               width: isMobile ? width * 0.4 : 220,
               left: isMobile ? 8 : 16,
+              top: 80, // Fixed position
+            },
+            Platform.OS === 'web' ? {} : {
+              transform: [{ translateY: profilePanelTranslateY }],
             }
           ]}
         >

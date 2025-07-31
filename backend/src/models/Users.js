@@ -111,6 +111,81 @@ userSchema.statics.updateSchema = async function(newSectionName) {
   }
 };
 
+// Add this to your User model
+userSchema.post('save', async function(doc) {
+  // If section was changed and user is a student
+  if (doc.isModified('section') && doc.privilege === 'student' && doc.section !== 'no_section') {
+    try {
+      // Import Progress model using dynamic import to avoid circular references
+      const Progress = await import("../models/Progress.js").then(module => module.default);
+      const Section = await import("../models/Section.js").then(module => module.default);
+      const Module = await import("../models/Module.js").then(module => module.default);
+      const Quiz = await import("../models/Quiz.js").then(module => module.default);
+      
+      let progress = await Progress.findOne({ user: doc._id });
+      
+      if (!progress) {
+        // Create new progress record
+        console.log(`Creating progress for user ${doc._id} in section ${doc.section}`);
+        
+        // Get instructor from section
+        const section = await Section.findOne({ sectionCode: doc.section })
+          .populate('instructor');
+          
+        if (!section || !section.instructor) {
+          console.log('Section or instructor not found');
+          return;
+        }
+        
+        // Get first module
+        const firstModule = await Module.findOne({ 
+          createdBy: section.instructor._id,
+          order: 1
+        });
+        
+        if (!firstModule) {
+          console.log('No modules found for instructor');
+          return;
+        }
+        
+        // Get first quiz
+        const firstQuiz = await Quiz.findOne({
+          module: firstModule._id,
+          order: 1
+        });
+        
+        // Create progress
+        progress = new Progress({
+          user: doc._id,
+          globalProgress: {
+            currentModule: firstModule._id,
+            unlockedModules: [firstModule._id],
+            completedModules: []
+          },
+          moduleProgress: [{
+            module: firstModule._id,
+            status: 'unlocked',
+            currentQuiz: firstQuiz?._id,
+            unlockedQuizzes: firstQuiz ? [firstQuiz._id] : [],
+            completedQuizzes: []
+          }]
+        });
+        
+        await progress.save();
+      } else {
+        // Update existing progress
+        const User = await import("../models/Users.js").then(module => module.default);
+        const user = await User.findById(doc._id).select('section privilege');
+        
+        // Ensure student has access to instructor's modules
+        await ensureStudentModuleAccess(user, progress);
+      }
+    } catch (error) {
+      console.error('Error updating progress after section change:', error);
+    }
+  }
+});
+
 const User = mongoose.model("User", userSchema);
 //mongoose converts User to user
 
