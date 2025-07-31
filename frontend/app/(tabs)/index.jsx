@@ -24,11 +24,7 @@ const AnimatedScrollView = Animated.ScrollView;
 
 export default function Home() {
   const { user, token, checkAuth, logout } = useAuthStore();
-<<<<<<< HEAD
-  const isinstructor = user?.privilege === 'instructor' || user?.privilege === 'admin';
-=======
   const isInstructor = user?.privilege === 'instructor' || user?.privilege === 'admin';
->>>>>>> layouts
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -206,10 +202,7 @@ export default function Home() {
   };
 
   useEffect(() => {
-<<<<<<< HEAD
 
-=======
->>>>>>> layouts
     if (user?.privilege === 'admin') {
       router.replace('/(tabs)/users');
     }
@@ -244,13 +237,8 @@ export default function Home() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Cyber Quest Map</Text>
-<<<<<<< HEAD
-        {isinstructor && (
-          <TouchableOpacity 
-=======
         {isInstructor && (
           <TouchableOpacity
->>>>>>> layouts
             style={styles.instructorButton}
             onPress={() => router.push('/(tabs)/create')}>
             <Ionicons name="add-circle" size={24} color={COLORS.primary} />
@@ -330,70 +318,6 @@ export default function Home() {
               <Image source={require('../../assets/images/character1.png')} style={[styles.playerImage, { width: PLAYER_SIZE * 0.875, height: PLAYER_SIZE * 0.875, borderRadius: (PLAYER_SIZE * 0.875) / 2 }]} />
             )}
           </Animated.View>
-<<<<<<< HEAD
-          
-          {/* Module Locations */}
-          {modules.map((module, index) => (
-            <TouchableOpacity
-              key={module._id}
-              style={[
-                styles.moduleNode,
-                selectedModule?._id === module._id && styles.selectedNode,
-                !module.isUnlocked && styles.lockedNode,
-                {
-                  left: Platform.OS === 'web' 
-                    ? (index % 3) * 200 + (Dimensions.get('window').width / 2 - 300) 
-                    : (index % 3) * (Dimensions.get('window').width / 3) - 10,
-                  top: Math.floor(index / 3) * 180,
-                }
-              ]}
-              onPress={() => module.isUnlocked ? movePlayerToModule(module, index) : null}
-              disabled={!module.isUnlocked}
-            >
-              {/* Lock overlay for locked modules */}
-              {!module.isUnlocked && (
-                <View style={styles.lockOverlay}>
-                  <Ionicons name="lock-closed" size={30} color="#ffffff" />
-                </View>
-              )}
-              
-              <Image 
-                source={{ uri: module.image }} 
-                style={[
-                  styles.moduleImage,
-                  !module.isUnlocked && styles.lockedImage
-                ]} 
-              />
-              <Text style={[
-                styles.moduleName,
-                !module.isUnlocked && styles.lockedText
-              ]}>
-                {module.title}
-              </Text>
-              <Text style={styles.moduleLevel}>Level {index + 1}</Text>
-              
-              {/* Progress indicator */}
-              {module.isCompleted && (
-                <View style={styles.completedBadge}>
-                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                </View>
-              )}
-              
-              {module.isCurrent && !module.isCompleted && (
-                <View style={styles.currentBadge}>
-                  <Ionicons name="play-circle" size={20} color="#FF9800" />
-                </View>
-              )}
-              
-              {/* instructor Options Button */}
-              {isinstructor && (
-                <View style={styles.instructorOptionsContainer}>
-                  <TouchableOpacity
-                    style={styles.optionsButton}
-                    onPress={(e) => {
-                      e.stopPropagation(); 
-                      setMenuVisible(menuVisible === module._id ? null : module._id);
-=======
 
           {/* Module Nodes */}
           {modules.map((module, index) => {
@@ -433,7 +357,6 @@ export default function Home() {
                       height: MODULE_SIZE * 0.6,
                       borderRadius: (MODULE_SIZE * 0.6) / 2,
                       opacity: module.isUnlocked ? 1 : 0.4,
->>>>>>> layouts
                     }}
                   />
 
@@ -587,136 +510,6 @@ export default function Home() {
                   </Text>
                 </View>
               )}
-<<<<<<< HEAD
-            </TouchableOpacity>
-          ))}
-                    
-                    {selectedModule && (
-                    <View
-                      style={[
-                        styles.infoPanel,
-                        Platform.OS === 'web' && {
-                          left: '50%',
-                          right: 'auto',
-                          transform: [{ translateX: -250 }],
-                          width: 500,
-                          marginBottom: 20,
-                          borderRadius: 18,
-                          alignSelf: 'center',
-                        }
-                      ]}
-                    >
-                      <Text style={styles.infoTitle}>{selectedModule.title}</Text>
-                      <Text style={styles.infoDescription}>{selectedModule.description}</Text>
-                      <TouchableOpacity 
-                        style={styles.startButton}
-                        onPress={() => navigateToModule(selectedModule._id)}
-                      >
-                        <Text style={styles.startButtonText}>Begin Quest</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                    
-                    {/* Pagination Controls */}
-                    
-                  </ScrollView>
-                )}
-                
-                {/* User Profile Panel */}
-                {!loading && (
-                  <View style={styles.userProfilePanel}>
-                    <View style={styles.userProfileHeader}>
-                      <Text style={styles.userProfileTitle}>Profile</Text>
-                    </View>
-                    
-                    <View style={styles.userProfileContent}>
-                      {/* User Avatar */}
-                      <View style={styles.avatarContainer}>
-                        {(user?.profileImage && !profileImageError) ? (
-                          <Image 
-                            source={{ uri: getCompatibleImageUrl(user?.profileImage) }} 
-                            style={styles.userAvatar}
-                            onError={() => setProfileImageError(true)}
-                          />
-                        ) : (
-                          <View style={styles.userAvatarFallback}>
-                            <Text style={styles.avatarLetterText}>
-                              {user?.username?.charAt(0).toUpperCase() || '?'}
-                            </Text>
-                          </View>
-                        )}
-                        
-                        {/* User Role Badge */}
-                        <View style={styles.roleBadge}>
-                          <Ionicons 
-                            name={
-                              user?.privilege === 'instructor' ? 'shield' : 
-                              user?.privilege === 'admin' ? 'star' : 
-                              'person'
-                            } 
-                            size={12} 
-                            color="#fff" 
-                          />
-                        </View>
-                      </View>
-                      
-                      {/* User Info */}
-                      <View style={styles.userInfoBox}>
-                        <Text style={styles.usernameText}>{user?.username || 'Unknown Hero'}</Text>
-                        
-                        <View style={styles.infoRow}>
-                          <Ionicons 
-                            name="ribbon-outline" 
-                            size={16} 
-                            color={COLORS.primary} 
-                          />
-                          <Text style={styles.infoText}>
-                            {user?.privilege === 'instructor' ? 'Instructor' : 
-                             user?.privilege === 'admin' ? 'Admin' : 
-                             'Student'}
-                          </Text>
-                        </View>
-                        
-                        <View style={styles.infoRow}>
-                          <Ionicons 
-                            name={user?.section === 'no_section' ? 'school-outline' : 'school'} 
-                            size={16} 
-                            color={user?.section === 'no_section' ? '#aaa' : '#4CAF50'}
-                          />
-                          <Text style={[
-                            styles.infoText,
-                            user?.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
-                          ]}>
-                            {user?.section === 'no_section' ? 'No Class Assigned' : user?.section}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    
-                    {/* Stats Section */}
-                    <View style={styles.statsContainer}>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statValue}>
-                          {modules?.filter(m => m.isCompleted)?.length || 0}
-                        </Text>
-                        <Text style={styles.statLabel}>Completed</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statValue}>
-                          {modules?.filter(m => m.isUnlocked && !m.isCompleted)?.length || 0}
-                        </Text>
-                        <Text style={styles.statLabel}>Available</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statValue}>
-                          {modules?.filter(m => !m.isUnlocked)?.length || 0}
-                        </Text>
-                        <Text style={styles.statLabel}>Locked</Text>
-                      </View>
-                    </View>
-                  </View>
-                )}
-=======
 
               <View style={styles.roleBadge}>
                 <Ionicons
@@ -728,7 +521,6 @@ export default function Home() {
                   size={12}
                   color="#fff"
                 />
->>>>>>> layouts
               </View>
             </View>
 
@@ -942,21 +734,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-<<<<<<< HEAD
-  loadMoreButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  loadMoreText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-=======
->>>>>>> layouts
   instructorOptionsContainer: {
     position: 'absolute',
     zIndex: 30,
@@ -1019,75 +796,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 32,
     lineHeight: 24,
   },
-<<<<<<< HEAD
-userProfilePanel: {
-  position: 'absolute',
-  top: 70,
-  left: 16,
-  width: 220,
-  backgroundColor: 'rgba(10, 25, 41, 0.9)',
-  borderRadius: 12,
-  padding: 12,
-  zIndex: 10,
-  borderWidth: 1,
-  borderColor: '#1976d2',
-  shadowColor: '#1976d2',
-  shadowOffset: { width: 0, height: 0 },
-  shadowOpacity: 0.5,
-  shadowRadius: 10,
-  elevation: 5,
-  ...Platform.select({
-    web: {
-      // Keep position absolute but adjust display for web
-      display: 'flex',
-    },
-    default: {
-      // For mobile, hide on small screens
-      display: Dimensions.get('window').width < 600 ? 'none' : 'flex',
-    },
-  }),
-},
-
-userProfileHeader: {
-  borderBottomWidth: 1,
-  borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  paddingBottom: 8,
-  marginBottom: 12,
-},
-userProfileTitle: {
-  color: '#cfb645ff',
-  fontSize: 16,
-  fontWeight: 'bold',
-  textShadowColor: 'rgba(0, 0, 0, 0.5)',
-  textShadowOffset: { width: 1, height: 1 },
-  textShadowRadius: 2,
-},
-userProfileContent: {
-  flexDirection: 'row',
-  marginBottom: 12,
-},
-avatarContainer: {
-  position: 'relative',
-  marginRight: 12,
-},
-userAvatar: {
-  width: 60,
-  height: 60,
-  borderRadius: 30,
-  borderWidth: 2,
-  borderColor: COLORS.primary,
-},
-userAvatarFallback: {
-  width: 60,
-  height: 60,
-  borderRadius: 30,
-  backgroundColor: '#1976d2',
-  justifyContent: 'center',
-  alignItems: 'center',
-  borderWidth: 2,
-  borderColor: '#1976d2',
-},
-=======
   userProfilePanel: {
     position: 'absolute',
     backgroundColor: 'rgba(10, 25, 41, 0.9)',
@@ -1141,7 +849,6 @@ userAvatarFallback: {
     borderWidth: 2,
     borderColor: '#1976d2',
   },
->>>>>>> layouts
   avatarLetterText: {
     color: '#ffffff',
     fontSize: 24,
