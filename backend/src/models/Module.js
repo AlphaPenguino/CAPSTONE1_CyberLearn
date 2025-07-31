@@ -27,8 +27,8 @@ const moduleSchema = new mongoose.Schema({
     },
     order: {
         type: Number,
-        required: true,
-        unique: true
+        required: true
+        // Removed unique constraint
     },
     isLocked: {
         type: Boolean,
@@ -46,6 +46,9 @@ const moduleSchema = new mongoose.Schema({
         required: true
     }
 }, { timestamps: true });
+
+// Create a compound index for order+createdBy
+moduleSchema.index({ createdBy: 1, order: 1 }, { unique: true });
 
 moduleSchema.pre("save", function(next) {
     // Ensure totalQuizzes is always set to the length of the quizzes array
