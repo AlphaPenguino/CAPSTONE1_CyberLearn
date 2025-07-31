@@ -34,35 +34,38 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        {user?.profileImage && !imageError ? (
-          <Image
-            source={{ uri: getCompatibleImageUrl(user.profileImage) }}
-            style={styles.profileImage}
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <Ionicons name="person-circle-outline" size={64} color={COLORS.primary} />
-        )}
-        <Text style={styles.title}>{user?.username || 'Guest'}</Text>
-      </View>
+      {/* Main content container with max-width and centering */}
+      <View style={styles.mainContent}>
+        <View style={styles.header}>
+          {user?.profileImage && !imageError ? (
+            <Image
+              source={{ uri: getCompatibleImageUrl(user.profileImage) }}
+              style={styles.profileImage}
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <Ionicons name="person-circle-outline" size={64} color={COLORS.primary} />
+          )}
+          <Text style={styles.title}>{user?.username || 'Guest'}</Text>
+        </View>
 
-      <View style={styles.itemsContainer}>
-        <DrawerItem
-          title="Profile"
-          icon="person-outline"
-          onPress={() => router.push('/(tabs)/profile')}
-        />
-        <DrawerItem
-          title="Settings"
-          icon="settings-outline"
-          onPress={() => router.push('/(tabs)/settings')}
-        />
-        <DrawerItem
-          title="Logout"
-          icon="log-out-outline"
-          onPress={handleLogout}
-        />
+        <View style={styles.itemsContainer}>
+          <DrawerItem
+            title="Profile"
+            icon="person-outline"
+            onPress={() => router.push('/(tabs)/profile')}
+          />
+          <DrawerItem
+            title="Settings"
+            icon="settings-outline"
+            onPress={() => router.push('/(tabs)/settings')}
+          />
+          <DrawerItem
+            title="Logout"
+            icon="log-out-outline"
+            onPress={handleLogout}
+          />
+        </View>
       </View>
     </View>
   );
@@ -72,7 +75,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.cardBackground,
-    padding: 24,
+    // Removed padding from here, moved to mainContent
+  },
+  mainContent: {
+    flex: 1, // Allows the content to take up available vertical space
+    width: '100%', // Takes full width of its parent initially
+    maxWidth: 600, // Limit the maximum width for larger screens (adjust as needed)
+    alignSelf: 'center', // Center the content horizontally
+    padding: 24, // Apply padding here for consistent spacing within the constrained area
   },
   header: {
     flexDirection: 'row',

@@ -6,6 +6,20 @@ import { useAuthStore } from '@/store/authStore';
 import COLORS from '@/constants/custom-colors';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 
+// Helper function to get a numerical order for roles
+const getRoleOrder = (role) => {
+  switch (role?.toLowerCase()) {
+    case 'student':
+      return 1;
+    case 'instructor':
+      return 2;
+    case 'admin':
+      return 3;
+    default:
+      return 4; // For any other roles
+  }
+};
+
 export default function UsersScreen() {
   const { token } = useAuthStore();
   const [users, setUsers] = useState([]);
@@ -21,6 +35,7 @@ export default function UsersScreen() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [imageErrors, setImageErrors] = useState({});
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'student', 'instructor', 'admin'
 
   // Function to handle image URLs for different platforms
   const getCompatibleImageUrl = (url) => {
@@ -61,7 +76,21 @@ export default function UsersScreen() {
       
       // Use data.users instead of data directly
       if (data.success && data.users) {
-        setUsers(data.users);
+        // Sort the users by role, then by username
+        const sortedUsers = data.users.sort((a, b) => {
+          const roleA = getRoleOrder(a.role || a.privilege);
+          const roleB = getRoleOrder(b.role || b.privilege);
+          
+          // Primary sort by role order
+          if (roleA !== roleB) {
+            return roleA - roleB;
+          }
+          
+          // Secondary sort by username alphabetically
+          return a.username.localeCompare(b.username);
+        });
+        
+        setUsers(sortedUsers);
         // Reset image errors when new users are loaded
         setImageErrors({});
       } else {
@@ -122,45 +151,45 @@ export default function UsersScreen() {
   };
 
   // Delete user
- const handleDeleteUser = async (userId, username) => {
-  showAlert(
-    'Confirm Delete',
-    `Are you sure you want to delete ${username}? This action cannot be undone.`,
-    [
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setLoading(true);
-            const response = await fetch(`${API_URL}/users/${userId}`, {
-              method: 'DELETE',
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-
-            if (!response.ok) {
-              throw new Error('Failed to delete user');
-            }
-
-            // Remove user from list
-            setUsers(users.filter(user => user._id !== userId));
-            showAlert('Success', 'User deleted successfully');
-          } catch (err) {
-            showAlert('Error', err.message);
-          } finally {
-            setLoading(false);
-          }
+  const handleDeleteUser = async (userId, username) => {
+    showAlert(
+      'Confirm Delete',
+      `Are you sure you want to delete ${username}? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
         },
-      },
-    ]
-  );
-};
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await fetch(`${API_URL}/users/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
+              });
+
+              if (!response.ok) {
+                throw new Error('Failed to delete user');
+              }
+
+              // Remove user from list
+              setUsers(users.filter(user => user._id !== userId));
+              showAlert('Success', 'User deleted successfully');
+            } catch (err) {
+              showAlert('Error', err.message);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Mark image as having error
   const handleImageError = (userId) => {
@@ -170,13 +199,20 @@ export default function UsersScreen() {
     }));
   };
 
-  // Filter users based on search query
-  const filteredUsers = searchQuery
-    ? users.filter(user => 
-        user.username?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.email?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : users;
+  // Filter users based on search query AND active filter
+  const filteredUsers = users
+    .filter(user => {
+      const userRole = (user.role || user.privilege)?.toLowerCase();
+      // Check if the user's role matches the active filter, or if the filter is 'all'
+      const roleMatchesFilter = activeFilter === 'all' || userRole === activeFilter;
+
+      // Check if the user matches the search query
+      const searchMatchesUser = user.username?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        user.email?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      return roleMatchesFilter && searchMatchesUser;
+    });
+
 
   // Get role-specific properties
   const getRoleColor = (role) => {
@@ -281,43 +317,67 @@ export default function UsersScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search users..."
-          placeholderTextColor={COLORS.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery ? (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      {/* Main content container with max-width and centering */}
+      <View style={styles.mainContent}>
+        {/* Filter Buttons */}
+        <View style={styles.filterContainer}>
+          {['all', 'student', 'instructor', 'admin'].map(filter => (
+            <TouchableOpacity
+              key={filter}
+              style={[
+                styles.filterButton,
+                activeFilter === filter && styles.filterButtonActive
+              ]}
+              onPress={() => setActiveFilter(filter)}
+            >
+              <Text style={[
+                styles.filterButtonText,
+                activeFilter === filter && styles.filterButtonTextActive
+              ]}>
+                {filter.charAt(0).toUpperCase() + filter.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      {/* User List */}
-      <FlatList
-        data={filteredUsers}
-        renderItem={renderItem}
-        keyExtractor={(item) => item._id}
-        contentContainerStyle={styles.listContainer}
-        refreshing={refreshing}
-        onRefresh={() => {
-          setRefreshing(true);
-          fetchUsers();
-        }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="account-search" size={60} color={COLORS.textSecondary} />
-            <Text style={styles.emptyText}>
-              {searchQuery ? 'No users match your search' : 'No users found'}
-            </Text>
-          </View>
-        }
-      />
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search users..."
+            placeholderTextColor={COLORS.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* User List */}
+        <FlatList
+          data={filteredUsers}
+          renderItem={renderItem}
+          keyExtractor={(item) => item._id}
+          contentContainerStyle={styles.listContainer}
+          refreshing={refreshing}
+          onRefresh={() => {
+            setRefreshing(true);
+            fetchUsers();
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="account-search" size={60} color={COLORS.textSecondary} />
+              <Text style={styles.emptyText}>
+                {searchQuery || activeFilter !== 'all' ? 'No users match your criteria' : 'No users found'}
+              </Text>
+            </View>
+          }
+        />
+      </View>
 
       {/* Add User Modal */}
       <Modal
@@ -409,6 +469,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  mainContent: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 800, // Max width for content on wider screens
+    alignSelf: 'center', // Center the container horizontally
+    paddingHorizontal: 16, // Add padding here for consistent spacing
+  },
   centered: {
     flex: 1,
     justifyContent: 'center',
@@ -469,7 +536,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.cardBackground,
-    margin: 16,
+    marginBottom: 10,
+    marginTop: 16,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
@@ -482,8 +550,34 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 16,
   },
+  filterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    backgroundColor: COLORS.cardBackground,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  filterButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterButtonText: {
+    color: COLORS.textSecondary,
+    fontWeight: 'bold',
+  },
+  filterButtonTextActive: {
+    color: '#FFF',
+  },
   listContainer: {
-    padding: 16,
+    paddingBottom: 16,
   },
   userCard: {
     flexDirection: 'row',
