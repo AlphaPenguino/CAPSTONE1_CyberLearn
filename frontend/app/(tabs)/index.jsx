@@ -442,17 +442,48 @@ export default function Home() {
                 
                 {/* User Profile Panel */}
                 {!loading && (
-                  <View style={styles.userProfilePanel}>
+                  <View
+                    style={[
+                      styles.userProfilePanel,
+                      Platform.OS === 'web'
+                        ? {
+                            position: 'absolute',
+                            top: 70,
+                            left: 16,
+                            width: 260,
+                            zIndex: 10,
+                          }
+                        : {
+                            position: 'relative',
+                            margin: 16,
+                            alignSelf: 'stretch',
+                          },
+                    ]}
+                  >
+                    {/* Fantasy background overlay */}
+                    <Image
+                      source={require('../../assets/backgrounds/Battleground4.png')}
+                      style={styles.userProfileBackground}
+                      resizeMode="cover"
+                    />
                     <View style={styles.userProfileHeader}>
-                      <Text style={styles.userProfileTitle}>Profile</Text>
+                      <Text style={styles.userProfileTitle}>{'Profile'}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={styles.levelBadge}>
+                          <Text style={styles.levelBadgeText}>
+                            Lv. {user?.level || 1}
+                          </Text>
+                        </View>
+                        {/* Sparkle/star icon next to level badge */}
+                        <Ionicons name="star" size={18} color="#FFD700" style={styles.sparkleIcon} />
+                      </View>
                     </View>
-                    
                     <View style={styles.userProfileContent}>
                       {/* User Avatar */}
                       <View style={styles.avatarContainer}>
                         {(user?.profileImage && !profileImageError) ? (
-                          <Image 
-                            source={{ uri: getCompatibleImageUrl(user?.profileImage) }} 
+                          <Image
+                            source={{ uri: getCompatibleImageUrl(user?.profileImage) }}
                             style={styles.userAvatar}
                             onError={() => setProfileImageError(true)}
                           />
@@ -463,42 +494,44 @@ export default function Home() {
                             </Text>
                           </View>
                         )}
-                        
                         {/* User Role Badge */}
                         <View style={styles.roleBadge}>
-                          <Ionicons 
+                          <Ionicons
                             name={
-                              user?.privilege === 'instructor' ? 'shield' : 
-                              user?.privilege === 'admin' ? 'star' : 
+                              user?.privilege === 'instructor' ? 'school' :
+                              user?.privilege === 'admin' ? 'star' :
                               'person'
-                            } 
-                            size={12} 
-                            color="#fff" 
+                            }
+                            size={14}
+                            color="#222"
                           />
+                          <Text style={styles.roleBadgeText}>
+                            {user?.privilege === 'instructor' ? 'Instructor' :
+                             user?.privilege === 'admin' ? 'Admin' :
+                             'Student'}
+                          </Text>
                         </View>
                       </View>
-                      
                       {/* User Info */}
                       <View style={styles.userInfoBox}>
                         <Text style={styles.usernameText}>{user?.username || 'Unknown Hero'}</Text>
-                        
                         <View style={styles.infoRow}>
-                          <Ionicons 
-                            name="ribbon-outline" 
-                            size={16} 
-                            color={COLORS.primary} 
+                          <Ionicons
+                            name="ribbon-outline"
+                            size={16}
+                            color="#FFD700"
                           />
                           <Text style={styles.infoText}>
-                            {user?.privilege === 'instructor' ? 'Instructor' : 
-                             user?.privilege === 'admin' ? 'Admin' : 
+                            {user?.privilege === 'instructor' ? 'Instructor' :
+                             user?.privilege === 'admin' ? 'Admin' :
                              'Student'}
                           </Text>
                         </View>
                         
                         <View style={styles.infoRow}>
-                          <Ionicons 
-                            name={user?.section === 'no_section' ? 'school-outline' : 'school'} 
-                            size={16} 
+                          <Ionicons
+                            name={user?.section === 'no_section' ? 'school-outline' : 'school'}
+                            size={16}
                             color={user?.section === 'no_section' ? '#aaa' : '#4CAF50'}
                           />
                           <Text style={[
@@ -510,22 +543,32 @@ export default function Home() {
                         </View>
                       </View>
                     </View>
-                    
+                    {/* XP Bar with icon */}
+                    <View style={[styles.infoRow, { marginBottom: 0, marginTop: 4 }]}> 
+      <Ionicons name="flame" size={16} color="#FFD700" style={styles.xpIcon} />
+      <View style={[styles.xpBarBackground, { flex: 1 }]}> 
+        <View style={[styles.xpBarFill, { width: `${user?.xpPercent || 0}%` }]} />
+      </View>
+      <Text style={styles.xpText}>{user?.xpPercent || 0}%</Text>
+    </View>
                     {/* Stats Section */}
                     <View style={styles.statsContainer}>
                       <View style={styles.statItem}>
+                        <Ionicons name="checkmark-circle" size={16} color="#FFD700" />
                         <Text style={styles.statValue}>
                           {modules?.filter(m => m.isCompleted)?.length || 0}
                         </Text>
                         <Text style={styles.statLabel}>Completed</Text>
                       </View>
                       <View style={styles.statItem}>
+                        <Ionicons name="trophy" size={16} color="#FFD700" />
                         <Text style={styles.statValue}>
                           {modules?.filter(m => m.isUnlocked && !m.isCompleted)?.length || 0}
                         </Text>
                         <Text style={styles.statLabel}>Available</Text>
                       </View>
                       <View style={styles.statItem}>
+                        <Ionicons name="lock-closed" size={16} color="#FFD700" />
                         <Text style={styles.statValue}>
                           {modules?.filter(m => !m.isUnlocked)?.length || 0}
                         </Text>
@@ -539,6 +582,7 @@ export default function Home() {
           }
 
 const styles = StyleSheet.create({
+  
   container: {
     flex: 1,
     backgroundColor: '#0a1929',
@@ -856,127 +900,218 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 userProfilePanel: {
-  position: 'absolute',
-  top: 70,
-  left: 16,
-  width: 220,
-  backgroundColor: 'rgba(10, 25, 41, 0.9)',
-  borderRadius: 12,
-  padding: 12,
-  zIndex: 10,
-  borderWidth: 1,
-  borderColor: '#1976d2',
-  shadowColor: '#1976d2',
+  backgroundColor: 'rgba(10, 25, 41, 0.95)',
+  borderRadius: 16,
+  padding: 16,
+  borderWidth: 2,
+  borderColor: '#FFD700',
+  shadowColor: '#FFD700',
   shadowOffset: { width: 0, height: 0 },
-  shadowOpacity: 0.5,
-  shadowRadius: 10,
-  elevation: 5,
-  ...Platform.select({
-    web: {
-      // Keep position absolute but adjust display for web
-      display: 'flex',
-    },
-    default: {
-      // For mobile, hide on small screens
-      display: Dimensions.get('window').width < 600 ? 'none' : 'flex',
-    },
-  }),
+  shadowOpacity: 0.7,
+  shadowRadius: 16,
+  elevation: 8,
+  overflow: 'hidden',
 },
-
+userProfileBackground: {
+  ...StyleSheet.absoluteFillObject,
+  opacity: 0.18,
+  zIndex: -1,
+},
+sparkleIcon: {
+  marginLeft: 4,
+  marginTop: -2,
+},
+xpIcon: {
+  marginRight: 4,
+  marginTop: 1,
+},
 userProfileHeader: {
   borderBottomWidth: 1,
-  borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  borderBottomColor: 'rgba(255, 215, 0, 0.2)',
   paddingBottom: 8,
   marginBottom: 12,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
 },
 userProfileTitle: {
-  color: '#cfb645ff',
-  fontSize: 16,
+  color: '#FFD700',
+  fontSize: 15, // reduced from 18
   fontWeight: 'bold',
-  textShadowColor: 'rgba(0, 0, 0, 0.5)',
+  fontFamily: 'PixeloidSans-Bold',
+  textShadowColor: '#000',
   textShadowOffset: { width: 1, height: 1 },
   textShadowRadius: 2,
+  lineHeight: 18, // add lineHeight for better spacing
+},
+levelBadge: {
+  backgroundColor: '#222',
+  borderRadius: 12,
+  minWidth: 48,
+  minHeight: 28,
+  paddingHorizontal: 14,
+  paddingVertical: 4,
+  borderWidth: 2,
+  borderColor: '#FFD700',
+  marginLeft: 8,
+  justifyContent: 'center',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+},
+levelBadgeText: {
+  color: '#FFD700',
+  fontWeight: 'bold',
+  fontSize: 13, // reduced from 15
+  fontFamily: 'PixeloidSans-Bold',
+  textAlign: 'center',
+  includeFontPadding: false,
+  textAlignVertical: 'center',
+  lineHeight: 16, // add lineHeight
 },
 userProfileContent: {
   flexDirection: 'row',
   marginBottom: 12,
+  alignItems: 'flex-start',
+  flexWrap: 'wrap',
 },
 avatarContainer: {
   position: 'relative',
   marginRight: 12,
+  minWidth: 64,
+  minHeight: 64,
+  justifyContent: 'center',
+  alignItems: 'center',
 },
 userAvatar: {
-  width: 60,
-  height: 60,
-  borderRadius: 30,
-  borderWidth: 2,
-  borderColor: COLORS.primary,
+  width: 64,
+  height: 64,
+  borderRadius: 32,
+  borderWidth: 3,
+  borderColor: '#FFD700',
+  backgroundColor: '#222',
+  marginBottom: 8,
 },
 userAvatarFallback: {
-  width: 60,
-  height: 60,
-  borderRadius: 30,
+  width: 64,
+  height: 64,
+  borderRadius: 32,
   backgroundColor: '#1976d2',
   justifyContent: 'center',
   alignItems: 'center',
-  borderWidth: 2,
-  borderColor: '#1976d2',
+  borderWidth: 3,
+  borderColor: '#FFD700',
+  marginBottom: 8,
 },
-  avatarLetterText: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  roleBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: 'rgba(0, 150, 255, 0.7)',
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  userInfoBox: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  usernameText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  infoText: {
-    color: '#cccccc',
-    marginLeft: 4,
-    fontSize: 14,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#ffffff22',
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    color: '#cccccc',
-    fontSize: 12,
-  },
+avatarLetterText: {
+  color: '#fff',
+  fontSize: 28,
+  fontWeight: 'bold',
+  fontFamily: 'PixeloidSans-Bold',
+},
+roleBadge: {
+  position: 'absolute',
+  bottom: -8,
+  right: -8,
+  backgroundColor: '#FFD700',
+  borderRadius: 12,
+  paddingHorizontal: 7,
+  paddingVertical: 3,
+  flexDirection: 'row',
+  alignItems: 'center',
+  borderWidth: 2,
+  borderColor: '#fff',
+  shadowColor: '#FFD700',
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0.7,
+  shadowRadius: 6,
+  zIndex: 2,
+},
+roleBadgeText: {
+  color: '#222',
+  fontWeight: 'bold',
+  marginLeft: 4,
+  fontSize: 10, // reduced from 12
+  fontFamily: 'PixeloidSans-Bold',
+  lineHeight: 12, // add lineHeight
+},
+userInfoBox: {
+  flex: 1,
+  minWidth: 120,
+  justifyContent: 'center',
+  flexShrink: 1,
+},
+usernameText: {
+  color: '#FFD700',
+  fontSize: 15, // reduced from 18
+  fontWeight: 'bold',
+  fontFamily: 'PixeloidSans-Bold',
+  marginBottom: 4,
+  textShadowColor: '#000',
+  textShadowOffset: { width: 1, height: 1 },
+  textShadowRadius: 2,
+  lineHeight: 18, // add lineHeight
+  flexShrink: 1, // allow shrinking
+},
+infoRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 4,
+},
+infoText: {
+  color: '#fff',
+  marginLeft: 4,
+  fontSize: 12, // reduced from 14
+  fontFamily: 'PixeloidSans-Bold',
+  lineHeight: 15, // add lineHeight
+  flexShrink: 1, // allow shrinking
+},
+xpBarBackground: {
+  height: 10,
+  backgroundColor: '#333',
+  borderRadius: 5,
+  overflow: 'hidden',
+  marginTop: 8,
+  marginBottom: 2,
+},
+xpBarFill: {
+  height: 10,
+  backgroundColor: '#FFD700',
+  borderRadius: 5,
+},
+xpText: {
+  fontSize: 10, // reduced from 11
+  color: '#FFD700',
+  fontFamily: 'PixeloidSans-Bold',
+  marginBottom: 4,
+  lineHeight: 12, // add lineHeight
+},
+statsContainer: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  paddingVertical: 8,
+  borderTopWidth: 1,
+  borderTopColor: '#FFD70044',
+},
+statItem: {
+  flex: 1,
+  alignItems: 'center',
+},
+statValue: {
+  color: '#FFD700',
+  fontSize: 16, // reduced from 20
+  fontWeight: 'bold',
+  fontFamily: 'PixeloidSans-Bold',
+  textShadowColor: '#000',
+  textShadowOffset: { width: 1, height: 1 },
+  textShadowRadius: 2,
+  lineHeight: 18, // add lineHeight
+},
+statLabel: {
+  color: '#fff',
+  fontSize: 10, // reduced from 12
+  fontFamily: 'PixeloidSans-Bold',
+  lineHeight: 12, // add lineHeight
+},
   
 });
