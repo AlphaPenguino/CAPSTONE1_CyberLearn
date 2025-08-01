@@ -34,7 +34,6 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Main content container with max-width and centering */}
       <View style={styles.mainContent}>
         <View style={styles.header}>
           {user?.profileImage && !imageError ? (
@@ -75,26 +74,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.cardBackground,
-    // Removed padding from here, moved to mainContent
   },
   mainContent: {
-    flex: 1, // Allows the content to take up available vertical space
-    width: '100%', // Takes full width of its parent initially
-    maxWidth: 600, // Limit the maximum width for larger screens (adjust as needed)
-    alignSelf: 'center', // Center the content horizontally
-    padding: 24, // Apply padding here for consistent spacing within the constrained area
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+    padding: 24,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    // MODIFIED: Changed to 'column' to stack items vertically
+    flexDirection: 'column',
+    alignItems: 'center', // Aligns items horizontally in the center
     marginBottom: 32,
     padding: 8,
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    marginLeft: 16,
+    // MODIFIED: Removed marginLeft to allow centering
+    // marginLeft: 16,
     color: COLORS.textPrimary,
+    marginTop: 10, // Added space between the image and the text
   },
   profileImage: {
     width: 80,

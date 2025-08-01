@@ -1,11 +1,13 @@
 // File: app/(tabs)/profile.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, ActivityIndicator, Alert, Platform, ScrollView } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import COLORS from '@/constants/custom-colors';
 import { useAuthStore } from '../../store/authStore';
 import { API_URL } from '@/constants/api';
+import { useRouter } from 'expo-router';
 
 const showAlert = (title, message, buttons = [{ text: 'OK' }]) => {
   if (Platform.OS === 'web') {
@@ -26,9 +28,12 @@ const showAlert = (title, message, buttons = [{ text: 'OK' }]) => {
   }
 };
 
-// Renamed component from ProfileScreen to Profile
 export default function Profile() {
   const { user, token, updateUser } = useAuthStore();
+  const router = useRouter();
+  
+  // <-- NEW: Added a state for username
+  const [username, setUsername] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -37,9 +42,13 @@ export default function Profile() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
+  
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (user) {
+      // <-- NEW: Initialize username state from the user object
+      setUsername(user.username || '');
       setFirstName(user.firstName || '');
       setLastName(user.lastName || '');
       setPhoneNumber(user.phoneNumber || '');
@@ -57,9 +66,42 @@ export default function Profile() {
     return url;
   };
 
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Permission Required', 'We need camera roll permissions to make this work!');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setProfileImageUri(result.assets[0].uri);
+      setImageError(false);
+    }
+  };
+
+  const handleWebImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImageUri(reader.result);
+        setImageError(false);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSaveProfile = async () => {
-    if (!firstName || !lastName) {
-      showAlert('Validation Error', 'First Name and Last Name are required.');
+    // <-- NEW: Validate username
+    if (!username || !firstName || !lastName) {
+      showAlert('Validation Error', 'Username, First Name, and Last Name are required.');
       return;
     }
 
@@ -72,6 +114,8 @@ export default function Profile() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
+          // <-- NEW: Include username in the request body
+          username,
           firstName,
           lastName,
           phoneNumber,
@@ -87,7 +131,10 @@ export default function Profile() {
       const updatedUserData = await response.json();
       updateUser(updatedUserData.user);
 
-      showAlert('Success', 'Profile updated successfully!');
+      showAlert('Success', 'Profile updated successfully!', [{
+        text: 'OK',
+        onPress: () => router.back(),
+      }]);
     } catch (error) {
       console.error('Error updating profile:', error);
       showAlert('Error', error.message);
@@ -153,25 +200,42 @@ export default function Profile() {
             ) : (
               <Ionicons name="person-circle-outline" size={100} color={COLORS.primary} />
             )}
-            <TouchableOpacity style={styles.changeImageButton} onPress={() => {
-              showAlert('Change Profile Picture', 'Image picker functionality would be here. For web, you can manually enter a URL in the field below.');
-            }}>
+            <TouchableOpacity 
+              style={styles.changeImageButton} 
+              onPress={() => {
+                if (Platform.OS === 'web') {
+                  fileInputRef.current?.click();
+                } else {
+                  pickImage();
+                }
+              }}
+            >
               <MaterialCommunityIcons name="camera-plus-outline" size={24} color="#FFF" />
               <Text style={styles.changeImageButtonText}>Change Photo</Text>
             </TouchableOpacity>
+
             {Platform.OS === 'web' && (
-              <TextInput
-                style={styles.input}
-                placeholder="Profile Image URL (for web demo)"
-                placeholderTextColor={COLORS.textSecondary}
-                value={profileImageUri}
-                onChangeText={setProfileImageUri}
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleWebImageSelect}
+                accept="image/*"
               />
             )}
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Personal Information</Text>
+            {/* <-- NEW: Add input for username --> */}
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              placeholderTextColor={COLORS.textSecondary}
+              value={username}
+              onChangeText={setUsername}
+            />
+            {/* END NEW --> */}
             <TextInput
               style={styles.input}
               placeholder="First Name"
