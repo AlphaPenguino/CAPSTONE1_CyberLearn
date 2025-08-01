@@ -567,12 +567,18 @@ export default function Home() {
                   top: 80,
                 }
               : {
-                  display: 'flex', // Show on mobile too
+                  display: 'flex',
                   width: width * 0.9,
                   left: width * 0.05,
-                  bottom: selectedModule ? 200 : 20, // Position above info panel if it exists
-                  top: undefined, // Remove top positioning
-                  maxHeight: height * 0.3, // Limit height on mobile
+                  bottom: selectedModule ? 230 : 30,
+                  top: undefined,
+                  borderRadius: 16,
+                  padding: 16,
+                  elevation: 10,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 5,
                   transform: [{ translateY: profilePanelTranslateY }],
                 }
           ]}
@@ -580,20 +586,37 @@ export default function Home() {
           {/* Mobile Header with Close button */}
           <View style={[
             styles.userProfileHeader, 
-            Platform.OS !== 'web' && { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }
+            Platform.OS !== 'web' && { 
+              flexDirection: 'row', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              paddingBottom: 12,
+              marginBottom: 16,
+            }
           ]}>
-            <Text style={styles.userProfileTitle}>Profile</Text>
+            <Text style={[
+              styles.userProfileTitle,
+              Platform.OS !== 'web' && { fontSize: 18 }
+            ]}>Your Profile</Text>
+            
             {Platform.OS !== 'web' && (
-              <TouchableOpacity onPress={() => setShowProfileOnMobile(false)}>
-                <Ionicons name="close" size={20} color={COLORS.primary} />
+              <TouchableOpacity 
+                onPress={() => setShowProfileOnMobile(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={22} color={COLORS.primary} />
               </TouchableOpacity>
             )}
           </View>
 
-          {/* Adjust content for mobile */}
+          {/* User Info Section */}
           <View style={[
             styles.userProfileContent,
-            Platform.OS !== 'web' && { flexDirection: 'row', alignItems: 'center' }
+            Platform.OS !== 'web' && { 
+              flexDirection: 'row', 
+              alignItems: 'center',
+              marginBottom: 16,
+            }
           ]}>
             <View style={[
               styles.avatarContainer,
@@ -604,32 +627,35 @@ export default function Home() {
                   source={{ uri: getCompatibleImageUrl(user?.profileImage) }}
                   style={[
                     styles.userAvatar,
-                    Platform.OS !== 'web' && { width: 50, height: 50, borderRadius: 25 }
+                    Platform.OS !== 'web' && { width: 60, height: 60, borderRadius: 30 }
                   ]}
                   onError={() => setProfileImageError(true)}
                 />
               ) : (
                 <View style={[
                   styles.userAvatarFallback,
-                  Platform.OS !== 'web' && { width: 50, height: 50, borderRadius: 25 }
+                  Platform.OS !== 'web' && { width: 60, height: 60, borderRadius: 30 }
                 ]}>
                   <Text style={[
                     styles.avatarLetterText,
-                    Platform.OS !== 'web' && { fontSize: 20 }
+                    Platform.OS !== 'web' && { fontSize: 24 }
                   ]}>
                     {user?.username?.charAt(0).toUpperCase() || '?'}
                   </Text>
                 </View>
               )}
 
-              <View style={styles.roleBadge}>
+              <View style={[
+                styles.roleBadge,
+                Platform.OS !== 'web' && { padding: 3 }
+              ]}>
                 <Ionicons
                   name={
                     user?.privilege === 'instructor' ? 'shield' :
                       user?.privilege === 'admin' ? 'star' :
                         'person'
                   }
-                  size={Platform.OS === 'web' ? 12 : 10}
+                  size={Platform.OS === 'web' ? 12 : 14}
                   color="#fff"
                 />
               </View>
@@ -638,7 +664,7 @@ export default function Home() {
             <View style={styles.userInfoBox}>
               <Text style={[
                 styles.usernameText,
-                Platform.OS !== 'web' && { fontSize: 14 }
+                Platform.OS !== 'web' && { fontSize: 16, marginBottom: 6 }
               ]}>
                 {user?.username || 'Unknown Hero'}
               </Text>
@@ -651,7 +677,7 @@ export default function Home() {
                 />
                 <Text style={[
                   styles.infoText, 
-                  Platform.OS !== 'web' && { fontSize: 12 }
+                  Platform.OS !== 'web' && { fontSize: 14 }
                 ]}>
                   {user?.privilege === 'instructor' ? 'Instructor' :
                     user?.privilege === 'admin' ? 'Admin' :
@@ -667,7 +693,7 @@ export default function Home() {
                 />
                 <Text style={[
                   styles.infoText,
-                  Platform.OS !== 'web' && { fontSize: 12 },
+                  Platform.OS !== 'web' && { fontSize: 14 },
                   user?.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
                 ]}>
                   {user?.section === 'no_section' ? 'No Class' : user?.section}
@@ -676,67 +702,130 @@ export default function Home() {
             </View>
           </View>
 
+          {/* Stats Container */}
           <View style={[
             styles.statsContainer,
-            Platform.OS !== 'web' && { paddingVertical: 4 }
+            Platform.OS !== 'web' && { 
+              paddingVertical: 12,
+              marginBottom: 8,
+              borderTopWidth: 1,
+              borderBottomWidth: 1,
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+            }
           ]}>
             <View style={styles.statItem}>
               <Text style={[
                 styles.statValue,
-                Platform.OS !== 'web' && { fontSize: 16 }
+                Platform.OS !== 'web' && { fontSize: 18 }
               ]}>
                 {modules?.filter(m => m.isCompleted)?.length || 0}
               </Text>
               <Text style={[
                 styles.statLabel,
-                Platform.OS !== 'web' && { fontSize: 10 }
-              ]}>Achievements</Text>
+                Platform.OS !== 'web' && { fontSize: 12 }
+              ]}>Completed</Text>
             </View>
+            
             <View style={styles.statItem}>
               <Text style={[
                 styles.statValue,
-                Platform.OS !== 'web' && { fontSize: 16 }
+                Platform.OS !== 'web' && { fontSize: 18 }
               ]}>
                 {modules?.filter(m => m.isUnlocked && !m.isCompleted)?.length || 0}
               </Text>
               <Text style={[
                 styles.statLabel,
-                Platform.OS !== 'web' && { fontSize: 10 }
+                Platform.OS !== 'web' && { fontSize: 12 }
               ]}>Available</Text>
             </View>
+            
             <View style={styles.statItem}>
               <Text style={[
                 styles.statValue,
-                Platform.OS !== 'web' && { fontSize: 16 }
+                Platform.OS !== 'web' && { fontSize: 18 }
               ]}>
                 {modules?.filter(m => !m.isUnlocked)?.length || 0}
               </Text>
               <Text style={[
                 styles.statLabel,
-                Platform.OS !== 'web' && { fontSize: 10 }
+                Platform.OS !== 'web' && { fontSize: 12 }
               ]}>Locked</Text>
             </View>
           </View>
 
-          <View style={styles.cookiesContainer}>
-  <View style={styles.cookiesIconContainer}>
-    <MaterialCommunityIcons name="cookie" size={Platform.OS === 'web' ? 20 : 16} color="#FFD700" />
-  </View>
-  <View style={styles.cookiesTextContainer}>
-    <Text style={styles.cookiesLabel}>Total Cookies</Text>
-    <Text style={styles.cookiesValue}>{totalXP}</Text>
-  </View>
-</View>
+          {/* Rewards Section */}
+          <View style={Platform.OS !== 'web' && styles.rewardsContainer}>
+            {/* Cookies */}
+            <View style={[
+              styles.cookiesContainer,
+              Platform.OS !== 'web' && { 
+                marginTop: 4, 
+                marginBottom: 8,
+                paddingVertical: 8,
+                backgroundColor: 'rgba(255, 215, 0, 0.05)',
+                borderRadius: 12,
+                paddingHorizontal: 12
+              }
+            ]}>
+              <View style={[
+                styles.cookiesIconContainer,
+                Platform.OS !== 'web' && {
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                }
+              ]}>
+                <MaterialCommunityIcons 
+                  name="cookie" 
+                  size={Platform.OS === 'web' ? 20 : 18} 
+                  color="#FFD700" 
+                />
+              </View>
+              <View style={styles.cookiesTextContainer}>
+                <Text style={styles.cookiesLabel}>Total Cookies</Text>
+                <Text style={[
+                  styles.cookiesValue,
+                  Platform.OS !== 'web' && { fontSize: 18 }
+                ]}>{totalXP}</Text>
+              </View>
+            </View>
 
-<View style={styles.cookiesContainer}>
-  <View style={styles.cookiesIconContainer}>
-    <MaterialCommunityIcons name="cake" size={Platform.OS === 'web' ? 20 : 16} color="#FF69B4" />
-  </View>
-  <View style={styles.cookiesTextContainer}>
-    <Text style={styles.cookiesLabel}>Total Cakes</Text>
-    <Text style={[styles.cookiesValue, { color: '#FF69B4' }]}>{totalCompletedQuizzes}</Text>
-  </View>
-</View>
+            {/* Cakes */}
+            <View style={[
+              styles.cookiesContainer,
+              Platform.OS !== 'web' && { 
+                marginBottom: 4,
+                paddingVertical: 8,
+                backgroundColor: 'rgba(255, 105, 180, 0.05)',
+                borderRadius: 12,
+                paddingHorizontal: 12
+              }
+            ]}>
+              <View style={[
+                styles.cookiesIconContainer,
+                Platform.OS !== 'web' && {
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: 'rgba(255, 105, 180, 0.2)'
+                }
+              ]}>
+                <MaterialCommunityIcons 
+                  name="cake" 
+                  size={Platform.OS === 'web' ? 20 : 18} 
+                  color="#FF69B4" 
+                />
+              </View>
+              <View style={styles.cookiesTextContainer}>
+                <Text style={styles.cookiesLabel}>Total Cakes</Text>
+                <Text style={[
+                  styles.cookiesValue,
+                  { color: '#FF69B4' },
+                  Platform.OS !== 'web' && { fontSize: 18 }
+                ]}>{totalCompletedQuizzes}</Text>
+              </View>
+            </View>
+          </View>
         </Animated.View>
       )}
     </View>
@@ -959,10 +1048,10 @@ const styles = StyleSheet.create({
   },
   userProfilePanel: {
     position: 'absolute',
-    backgroundColor: 'rgba(10, 25, 41, 0.9)',
+    backgroundColor: 'rgba(10, 25, 41, 0.95)', // Make slightly more opaque
     borderRadius: 12,
     padding: 12,
-    zIndex: 10,
+    zIndex: 50, // Increase z-index to ensure it's on top
     borderWidth: 1,
     borderColor: '#1976d2',
     shadowColor: '#1976d2',
@@ -970,6 +1059,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 10,
     elevation: 5,
+    paddingBottom: Platform.OS === 'web' ? 12 : 16, // Add extra padding at bottom for mobile
   },
   userProfilePanelMobile: {
     marginVertical: 10,
@@ -1134,5 +1224,10 @@ const styles = StyleSheet.create({
     color: '#FF69B4',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  rewardsContainer: {
+    width: '100%',  // Ensure it takes full width
+    paddingTop: 4,
+    paddingBottom: 8,
   },
 });
