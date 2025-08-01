@@ -428,6 +428,45 @@ router.delete("/:id", protectRoute, authorizeRole(['instructor', 'admin']), asyn
   }
 });
 
+/**
+ * @route   GET /api/users/leaderboards
+ * @desc    Get leaderboards data
+ * @access  Private
+ */
+router.get('/leaderboards', protectRoute, async (req, res) => {
+  try {
+    const { timeFrame = 'all', category = 'cookies' } = req.query;
+    
+    // Determine sorting field based on category
+    const sortField = category === 'cookies' 
+      ? 'gamification.totalXP' 
+      : 'gamification.completedQuizzes';
+    
+    // Get time range filter
+    let timeFilter = {};
+    if (timeFrame === 'weekly') {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      timeFilter = { updatedAt: { $gte: weekAgo } };
+    } else if (timeFrame === 'monthly') {
+      const monthAgo = new Date();
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      timeFilter = { updatedAt: { $gte: monthAgo } };
+    }
+    
+    // Get users sorted by the appropriate field
+    const users = await User.find(
+      { privilege: 'student', ...timeFilter },
+      'username profileImage gamification'
+    ).sort({ [sortField]: -1 }).limit(50);
+    
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching leaderboards:', error);
+    res.status(500).json({ message: 'Failed to fetch leaderboards' });
+  }
+});
+
 // Helper function to extract public_id from Cloudinary URL
 function extractPublicIdFromUrl(url) {
   try {

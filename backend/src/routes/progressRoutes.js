@@ -699,4 +699,105 @@ router.get("/module/:moduleId/status", protectRoute, async (req, res) => {
   }
 });
 
+// Get leaderboards data from progress
+router.get('/leaderboards', protectRoute, async (req, res) => {
+  try {
+    const { timeFrame = 'all', category = 'cookies' } = req.query;
+    
+    // Get time filter for MongoDB query
+    let timeFilter = {};
+    if (timeFrame === 'weekly') {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      timeFilter = { updatedAt: { $gte: weekAgo } };
+    } else if (timeFrame === 'monthly') {
+      const monthAgo = new Date();
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      timeFilter = { updatedAt: { $gte: monthAgo } };
+    }
+
+    // Aggregate progress data by user
+    const progressData = await Progress.aggregate([
+      { $match: timeFilter },
+      {
+        $lookup: {
+          from: 'users', 
+          localField: 'user',
+          foreignField: '_id',
+          as: 'userData'
+        }
+      },
+      { $unwind: '$userData' },
+      {
+        $project: {
+          userId: '$user',
+          username: '$userData.username',
+          profileImage: '$userData.profileImage',
+          section: '$userData.section', // Include section information
+          totalXP: { $sum: '$moduleProgress.totalXP' },
+          completedQuizzes: {
+            $sum: { 
+              $map: {
+                input: '$moduleProgress',
+                as: 'module',
+                in: { $size: { $ifNull: ['$$module.completedQuizzes', []] } }
+              }
+            }
+          }
+        }
+      },
+      {
+        $sort: category === 'cookies' 
+          ? { totalXP: -1 } 
+          : { completedQuizzes: -1 }
+      },
+      { $limit: 50 }
+    ]);
+    
+    res.json(progressData);
+    
+  } catch (error) {
+    console.error('Error fetching leaderboards:', error);
+    res.status(500).json({ message: 'Failed to fetch leaderboards data' });
+  }
+});
+
+// Get user stats for current user
+router.get('/stats', protectRoute, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    const progress = await Progress.findOne({ user: userId });
+    if (!progress) {
+      return res.json({ 
+        totalXP: 0, 
+        completedQuizzes: 0
+      });
+    }
+    
+    // Calculate total XP
+    const totalXP = progress.moduleProgress.reduce(
+      (sum, module) => sum + (module.totalXP || 0), 
+      0
+    );
+    
+    // Calculate completed quizzes
+    let completedQuizzes = 0;
+    progress.moduleProgress.forEach(module => {
+      if (module.completedQuizzes && Array.isArray(module.completedQuizzes)) {
+        completedQuizzes += module.completedQuizzes.length;
+      }
+    });
+    
+    res.json({ 
+      totalXP, 
+      completedQuizzes,
+    });
+    
+  } catch (error) {
+    console.error('Error fetching user stats:', error);
+    res.status(500).json({ message: 'Failed to fetch user statistics' });
+  }
+});
+
 export default router;

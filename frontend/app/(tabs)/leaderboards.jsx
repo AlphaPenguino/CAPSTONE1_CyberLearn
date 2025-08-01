@@ -21,29 +21,37 @@ import { useAuthStore } from '@/store/authStore';
 const { width } = Dimensions.get('window');
 
 export default function Leaderboards() {
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [timeFilter, setTimeFilter] = useState('all'); // 'all', 'monthly', 'weekly'
-  const [currentUser, setCurrentUser] = useState(null);
+  const [category, setCategory] = useState('cookies'); // 'cookies' or 'cakes'
+  const [currentUserRank, setCurrentUserRank] = useState(null);
+
+  // Add state for section filter
+  const [sectionFilter, setSectionFilter] = useState('all');
+  const [sections, setSections] = useState(['all']);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
 
-  // Fetch leaderboard data from API
+  // Fetch leaderboard data from Progress API
   const fetchLeaderboards = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Get leaderboard with appropriate time filter
-      const response = await fetch(`${API_URL}/users/leaderboards?timeFrame=${timeFilter}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Get leaderboard with appropriate time filter and category
+      const response = await fetch(
+        `${API_URL}/progress/leaderboards?timeFrame=${timeFilter}&category=${category}`, 
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
       
       if (!response.ok) {
         throw new Error('Failed to fetch leaderboard data');
@@ -52,18 +60,42 @@ export default function Leaderboards() {
       const data = await response.json();
       setLeaders(data);
       
-      // Get current user data for showing their rank
-      const userResponse = await fetch(`${API_URL}/users/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Extract unique sections
+      const uniqueSections = ['all', ...new Set(data.map(leader => leader.section || 'No Class'))];
+      setSections(uniqueSections);
       
-      if (userResponse.ok) {
-        const userData = await userResponse.json();
-        setCurrentUser(userData);
+      // Find current user in the leaderboard
+      const currentUserIndex = data.findIndex(
+        leader => leader.userId === user?._id || leader.username === user?.username
+      );
+      
+      if (currentUserIndex !== -1) {
+        setCurrentUserRank({
+          ...data[currentUserIndex],
+          rank: currentUserIndex + 1
+        });
+      } else {
+        // If user is not in the leaderboard, fetch their stats separately
+        const userProgressResponse = await fetch(`${API_URL}/progress/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (userProgressResponse.ok) {
+          const userStats = await userProgressResponse.json();
+          setCurrentUserRank({
+            ...userStats,
+            username: user?.username,
+            profileImage: user?.profileImage,
+            section: user?.section || 'No Class', // Add section information
+            rank: data.length + 1, // Below the last ranked user
+            userId: user?._id
+          });
+        }
       }
       
     } catch (err) {
       setError(err.message);
+      console.error('Leaderboard error:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -102,12 +134,12 @@ export default function Leaderboards() {
         }),
       ])
     ).start();
-  }, [timeFilter]);
+  }, [timeFilter, category]); 
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     fetchLeaderboards();
-  }, [timeFilter]);
+  }, [timeFilter, category]);
 
   // Get user rank badge color
   const getRankBadgeColor = (index) => {
@@ -119,20 +151,9 @@ export default function Leaderboards() {
     }
   };
 
-  // Find current user's rank
-  const findCurrentUserRank = () => {
-    if (!currentUser) return null;
-    
-    const userIndex = leaders.findIndex(leader => 
-      leader._id === currentUser._id || leader.username === currentUser.username
-    );
-    
-    if (userIndex === -1) return null;
-    
-    return {
-      ...leaders[userIndex],
-      rank: userIndex + 1
-    };
+  // Get metric color based on category
+  const getCategoryColor = () => {
+    return category === 'cookies' ? '#FFD700' : '#FF69B4';
   };
 
   // Loading animation
@@ -149,14 +170,21 @@ export default function Leaderboards() {
             }]
           }}
         >
-          <MaterialCommunityIcons name="trophy-award" size={60} color={COLORS.primary} />
+          <MaterialCommunityIcons 
+            name={category === 'cookies' ? "cookie" : "cake"} 
+            size={60} 
+            color={getCategoryColor()} 
+          />
         </Animated.View>
         <Text style={styles.loadingText}>Loading leaderboards...</Text>
       </View>
     );
   }
 
-  const userRankData = findCurrentUserRank();
+  // Filter the leaders based on section
+  const filteredLeaders = sectionFilter === 'all' 
+    ? leaders 
+    : leaders.filter(leader => (leader.section || 'No Class') === sectionFilter);
 
   return (
     <ScrollView
@@ -198,7 +226,11 @@ export default function Leaderboards() {
           
           <View style={styles.questTitleContainer}>
             <View style={styles.questTitleWrapper}>
-              <MaterialCommunityIcons name="trophy" size={32} color="#FFD700" />
+              <MaterialCommunityIcons 
+                name={category === 'cookies' ? "trophy" : "cake-variant"} 
+                size={32} 
+                color={getCategoryColor()} 
+              />
               <Text style={styles.questTitle}>Leaderboards</Text>
             </View>
             <Text style={styles.leaderboardSubtitle}>
@@ -229,8 +261,75 @@ export default function Leaderboards() {
           </TouchableOpacity>
         </View>
 
+        {/* Category Selector */}
+        <View style={styles.categoryContainer}>
+          <TouchableOpacity 
+            style={[styles.categoryTab, category === 'cookies' && styles.activeCategory]}
+            onPress={() => setCategory('cookies')}
+          >
+            <MaterialCommunityIcons 
+              name="cookie" 
+              size={22} 
+              color={category === 'cookies' ? '#FFD700' : COLORS.textSecondary} 
+            />
+            <Text style={[
+              styles.categoryText, 
+              category === 'cookies' && { color: '#FFD700' }
+            ]}>
+              Cookies (XP)
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.categoryTab, category === 'cakes' && styles.activeCategory]}
+            onPress={() => setCategory('cakes')}
+          >
+            <MaterialCommunityIcons 
+              name="cake" 
+              size={22} 
+              color={category === 'cakes' ? '#FF69B4' : COLORS.textSecondary} 
+            />
+            <Text style={[
+              styles.categoryText, 
+              category === 'cakes' && { color: '#FF69B4' }
+            ]}>
+              Cakes (Quizzes)
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Section Filter - Only show if there are multiple sections */}
+        {sections.length > 1 && (
+          <View style={styles.sectionFilterContainer}>
+            <Text style={styles.sectionFilterLabel}>Class Filter:</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.sectionFilterScroll}
+            >
+              {sections.map(section => (
+                <TouchableOpacity
+                  key={section}
+                  style={[
+                    styles.sectionFilterButton,
+                    sectionFilter === section && styles.activeSectionFilter
+                  ]}
+                  onPress={() => setSectionFilter(section)}
+                >
+                  <Text style={[
+                    styles.sectionFilterText,
+                    sectionFilter === section && styles.activeSectionFilterText
+                  ]}>
+                    {section === 'all' ? 'All Classes' : section}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Current User's Rank */}
-        {userRankData && (
+        {currentUserRank && (
           <Animated.View 
             style={[
               styles.currentUserCard,
@@ -240,29 +339,64 @@ export default function Leaderboards() {
                   inputRange: [0, 1],
                   outputRange: [20, 0]
                 })}]
-              }
+              },
+              category === 'cookies' 
+                ? { borderColor: '#FFD700', shadowColor: '#FFD700' } 
+                : { borderColor: '#FF69B4', shadowColor: '#FF69B4' }
             ]}
           >
-            <Text style={styles.yourRankText}>Your Rank</Text>
+            <Text style={[
+              styles.yourRankText,
+              category === 'cookies' ? { color: '#FFD700' } : { color: '#FF69B4' }
+            ]}>Your Rank</Text>
             <View style={styles.userRankContent}>
               <LinearGradient
-                colors={getRankBadgeColor(userRankData.rank - 1)}
+                colors={getRankBadgeColor(currentUserRank.rank - 1)}
                 style={styles.rankBadgeLarge}
               >
-                <Text style={styles.rankTextLarge}>{userRankData.rank}</Text>
+                <Text style={styles.rankTextLarge}>{currentUserRank.rank}</Text>
               </LinearGradient>
               <Image
                 source={
-                  userRankData.profileImage
-                    ? { uri: userRankData.profileImage }
+                  currentUserRank.profileImage
+                    ? { uri: currentUserRank.profileImage }
                     : require('../../assets/images/character1.png')
                 }
-                style={styles.avatarLarge}
+                style={[
+                  styles.avatarLarge,
+                  category === 'cookies' 
+                    ? { borderColor: '#FFD700' } 
+                    : { borderColor: '#FF69B4' }
+                ]}
               />
               <View style={styles.userInfoLarge}>
-                <Text style={styles.usernameLarge}>{userRankData.username}</Text>
-                <Text style={styles.scoreLarge}>{userRankData.gamification?.totalXP || 0} XP</Text>
-                <Text style={styles.level}>Level {userRankData.gamification?.level || 1}</Text>
+                <Text style={styles.usernameLarge}>{currentUserRank.username}</Text>
+                
+                {/* Add section info */}
+                <View style={styles.sectionRowLarge}>
+                  <Ionicons 
+                    name="school"
+                    size={16}
+                    color={currentUserRank.section === 'no_section' ? '#aaa' : '#4CAF50'}
+                  />
+                  <Text style={[
+                    styles.sectionTextLarge,
+                    currentUserRank.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
+                  ]}>
+                    {currentUserRank.section || 'No Class'}
+                  </Text>
+                </View>
+                
+                <Text style={[
+                  styles.scoreLarge, 
+                  category === 'cookies' ? { color: '#FFD700' } : { color: '#FF69B4' }
+                ]}>
+                  {category === 'cookies' 
+                    ? `${currentUserRank.totalXP || 0} Cookies` 
+                    : `${currentUserRank.completedQuizzes || 0} Cakes`
+                  }
+                </Text>
+                <Text style={styles.level}>Level {Math.floor((currentUserRank.totalXP || 0) / 100) + 1}</Text>
               </View>
             </View>
           </Animated.View>
@@ -271,8 +405,14 @@ export default function Leaderboards() {
         {/* Leaderboard List */}
         <View style={styles.leaderboardSection}>
           <View style={styles.sectionTitleContainer}>
-            <MaterialCommunityIcons name="crown" size={24} color="#FFD700" />
-            <Text style={styles.sectionTitle}>Top Warriors</Text>
+            <MaterialCommunityIcons 
+              name={category === 'cookies' ? "crown" : "cake-variant"} 
+              size={24} 
+              color={getCategoryColor()}
+            />
+            <Text style={styles.sectionTitle}>
+              Top {category === 'cookies' ? 'Cookie' : 'Cake'} Collectors
+            </Text>
             <Text style={styles.challengeCounter}>{leaders.length}</Text>
           </View>
           
@@ -287,20 +427,23 @@ export default function Leaderboards() {
                 <Text style={styles.retryButtonText}>Try Again</Text>
               </TouchableOpacity>
             </View>
-          ) : leaders.length === 0 ? (
+          ) : filteredLeaders.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialCommunityIcons name="trophy-broken" size={60} color={COLORS.textSecondary} />
               <Text style={styles.emptyStateText}>No rankings available yet!</Text>
             </View>
           ) : (
-            leaders.map((user, idx) => (
+            filteredLeaders.map((leader, idx) => (
               <View
-                key={user._id || idx}
+                key={leader._id || idx}
                 style={[
                   styles.leaderCard,
                   idx === 0 && styles.firstPlaceCard,
                   idx === 1 && styles.secondPlaceCard,
                   idx === 2 && styles.thirdPlaceCard,
+                  category === 'cakes' && idx === 0 && { borderColor: '#FF69B4', backgroundColor: 'rgba(255, 105, 180, 0.15)' },
+                  category === 'cakes' && idx === 1 && { borderColor: '#FF69B4', backgroundColor: 'rgba(255, 105, 180, 0.10)' },
+                  category === 'cakes' && idx === 2 && { borderColor: '#FF69B4', backgroundColor: 'rgba(255, 105, 180, 0.05)' }
                 ]}
               >
                 <LinearGradient
@@ -312,35 +455,87 @@ export default function Leaderboards() {
                 
                 <Image
                   source={
-                    user.profileImage
-                      ? { uri: user.profileImage }
+                    leader.profileImage
+                      ? { uri: leader.profileImage }
                       : require('../../assets/images/character1.png')
                   }
-                  style={styles.avatar}
+                  style={[
+                    styles.avatar,
+                    category === 'cookies' 
+                      ? { borderColor: '#FFD700' } 
+                      : { borderColor: '#FF69B4' }
+                  ]}
                 />
                 
                 <View style={styles.userInfo}>
                   <Text style={styles.username}>
-                    {user.username}
+                    {leader.username}
                     {idx === 0 && " 👑"}
                   </Text>
+                  
+                  {/* Add section info */}
+                  <View style={styles.sectionRow}>
+                    <Ionicons 
+                      name="school"
+                      size={14}
+                      color={leader.section === 'no_section' ? '#aaa' : '#4CAF50'}
+                    />
+                    <Text style={[
+                      styles.sectionText,
+                      leader.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
+                    ]}>
+                      {leader.section || 'No Class'}
+                    </Text>
+                  </View>
+                  
                   <View style={styles.userStats}>
                     <View style={styles.statItem}>
-                      <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
-                      <Text style={styles.statValue}>{user.gamification?.totalXP || 0} XP</Text>
+                      {category === 'cookies' ? (
+                        <>
+                          <MaterialCommunityIcons name="cookie" size={16} color="#FFD700" />
+                          <Text style={[
+                            styles.statValue, 
+                            { color: '#FFD700', fontWeight: 'bold' }
+                          ]}>
+                            {leader.totalXP || 0}
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <MaterialCommunityIcons name="cake" size={16} color="#FF69B4" />
+                          <Text style={[
+                            styles.statValue, 
+                            { color: '#FF69B4', fontWeight: 'bold' }
+                          ]}>
+                            {leader.completedQuizzes || 0}
+                          </Text>
+                        </>
+                      )}
                     </View>
                     <View style={styles.statItem}>
                       <MaterialCommunityIcons name="sword-cross" size={16} color={COLORS.primary} />
-                      <Text style={styles.statValue}>Lv. {user.gamification?.level || 1}</Text>
+                      <Text style={styles.statValue}>Lv. {Math.floor((leader.totalXP || 0) / 100) + 1}</Text>
                     </View>
                   </View>
                 </View>
                 
                 {idx <= 2 && (
                   <MaterialCommunityIcons 
-                    name={idx === 0 ? "medal" : idx === 1 ? "medal-outline" : "bookmark-outline"} 
+                    name={
+                      idx === 0 
+                        ? category === 'cookies' ? "medal" : "cake-layered" 
+                        : idx === 1 
+                          ? category === 'cookies' ? "medal-outline" : "cake-variant" 
+                          : category === 'cookies' ? "bookmark-outline" : "cupcake"
+                    } 
                     size={24} 
-                    color={idx === 0 ? "#FFD700" : idx === 1 ? "#C0C0C0" : "#CD7F32"} 
+                    color={
+                      idx === 0 
+                        ? category === 'cookies' ? "#FFD700" : "#FF69B4" 
+                        : idx === 1 
+                          ? category === 'cookies' ? "#C0C0C0" : "#FF8DC1" 
+                          : category === 'cookies' ? "#CD7F32" : "#FFC0CB"
+                    } 
                     style={styles.medalIcon}
                   />
                 )}
@@ -379,6 +574,7 @@ const styles = {
     overflow: 'hidden',
     marginBottom: 16,
     position: 'relative',
+    backgroundColor: 'rgba(10, 25, 41, 0.95)',
   },
   bannerGradient: {
     position: 'absolute',
@@ -387,11 +583,6 @@ const styles = {
     right: 0,
     height: '100%',
     zIndex: 1,
-  },
-  questImage: {
-    width: '100%',
-    height: '100%',
-    position: 'absolute',
   },
   questTitleContainer: {
     position: 'absolute',
@@ -445,6 +636,69 @@ const styles = {
   },
   activeFilterText: {
     color: '#ffffff',
+  },
+  // Add category selector styles
+  categoryContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    padding: 4,
+  },
+  categoryTab: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  activeCategory: {
+    backgroundColor: 'rgba(25, 118, 210, 0.2)',
+  },
+  categoryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginLeft: 6,
+  },
+  sectionFilterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    padding: 4,
+    
+  },
+  sectionFilterLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  sectionFilterScroll: {
+    paddingBottom: 4,
+  },
+  sectionFilterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 16,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  activeSectionFilter: {
+    backgroundColor: 'rgba(25, 118, 210, 0.2)',
+    borderColor: COLORS.primary,
+  },
+  sectionFilterText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  activeSectionFilterText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
   currentUserCard: {
     backgroundColor: COLORS.cardBackground,
@@ -647,6 +901,26 @@ const styles = {
     textShadowColor: COLORS.primaryDark,
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  sectionRowLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  sectionText: {
+    fontSize: 12,
+    color: '#9e9e9e',
+    marginLeft: 4,
+  },
+  sectionTextLarge: {
+    fontSize: 14,
+    color: '#9e9e9e',
+    marginLeft: 6,
   },
   userStats: {
     flexDirection: 'row',
