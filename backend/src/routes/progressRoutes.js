@@ -217,7 +217,26 @@ router.get("/modules", protectRoute, async (req, res) => {
         moduleObj.isCurrent = index === 0;
       }
       
-      return moduleObj;
+      // Add totalXP field
+      const moduleProgress = userProgress.moduleProgress.find(mp => mp.module.toString() === module._id.toString());
+      moduleObj.totalXP = moduleProgress ? moduleProgress.totalXP : 0;
+      
+      // In your progressRoutes.js file, make sure your endpoint includes completedQuizzes
+      const moduleWithProgress = {
+        _id: module._id,
+        title: module.title,
+        description: module.description,
+        image: module.image,
+        order: module.order,
+        isUnlocked: moduleObj.isUnlocked,
+        isCompleted: moduleObj.isCompleted,
+        isCurrent: moduleObj.isCurrent,
+        completionPercentage: moduleProgress ? moduleProgress.completionPercentage : 0,
+        totalXP: moduleProgress ? moduleProgress.totalXP : 0,
+        completedQuizzes: moduleProgress ? moduleProgress.completedQuizzes : [] // Include this
+      };
+      
+      return moduleWithProgress;
     });
     
     res.json(enhancedModules);
@@ -391,11 +410,11 @@ router.post("/quiz/:quizId/complete", protectRoute, async (req, res) => {
     
     console.log('✅ Quiz is unlocked, updating progress...');
     
-    // ✅ Update progress for students
-    await progress.completeQuiz(quizId, attemptData);
+    // Update progress for students and get XP information
+    const xpResult = await progress.completeQuiz(quizId, attemptData);
     await progress.save();
     
-    // ✅ Return detailed response
+    // Return detailed response with XP earned
     const hasPassed = (attemptData.score || 0) >= (quiz.passingScore || 70);
     
     res.json({
@@ -404,6 +423,10 @@ router.post("/quiz/:quizId/complete", protectRoute, async (req, res) => {
       passingScore: quiz.passingScore,
       passed: hasPassed,
       unlockedContent: hasPassed ? "Next quiz/module unlocked!" : "Complete this quiz to unlock next content",
+      xpEarned: xpResult.xpEarned,
+      totalModuleXP: xpResult.totalModuleXP,
+      questionsCount: quiz.questions.length,
+      xpPerQuestion: 10,
       isinstructor: false
     });
   } catch (error) {
@@ -666,7 +689,8 @@ router.get("/module/:moduleId/status", protectRoute, async (req, res) => {
       completionPercentage: moduleProgress.completionPercentage,
       completedQuizzes: completedQuizzes,
       totalQuizzes: quizzesInModule,
-      isCompleted: moduleProgress.status === 'completed'
+      isCompleted: moduleProgress.status === 'completed',
+      totalXP: moduleProgress.totalXP || 0
     });
     
   } catch (error) {

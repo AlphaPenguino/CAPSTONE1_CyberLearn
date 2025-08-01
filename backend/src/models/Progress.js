@@ -204,7 +204,14 @@ progressSchema.methods.completeQuiz = async function(quizId, attemptData) {
     const existingCompletionIndex = moduleProgress.completedQuizzes.findIndex(
       cq => cq.quiz.toString() === quizId.toString()
     );
-    
+
+    // Get the number of questions in the quiz
+    const questionCount = quiz.questions ? quiz.questions.length : 0;
+
+    // Calculate XP earned based on number of questions (10 XP per question)
+    const newXP = questionCount * 10;
+    let xpDifference = newXP;
+
     if (existingCompletionIndex === -1) {
       // First attempt
       moduleProgress.completedQuizzes.push({
@@ -216,13 +223,36 @@ progressSchema.methods.completeQuiz = async function(quizId, attemptData) {
         everPassed: hasPassed, // Track if ever passed
         completedAt: new Date()
       });
+      
+      // Add XP on first completion (only if passed)
+      if (hasPassed) {
+        moduleProgress.totalXP += newXP;
+        console.log(`🌟 First quiz completion - Adding ${newXP} XP (${questionCount} questions × 10), new total: ${moduleProgress.totalXP}`);
+      } else {
+        // No XP for failed attempts
+        xpDifference = 0;
+        console.log(`❌ Quiz failed - No XP awarded`);
+      }
     } else {
       // Update existing completion
       const existingCompletion = moduleProgress.completedQuizzes[existingCompletionIndex];
       existingCompletion.attempts += 1;
       existingCompletion.score = userScore;
       
-      // Update best score if this attempt is better
+      // Only award XP if:
+      // 1. This attempt passed AND
+      // 2. Previous attempts never passed
+      if (hasPassed && !existingCompletion.everPassed) {
+        moduleProgress.totalXP += newXP;
+        xpDifference = newXP;
+        console.log(`🌟 First passed attempt - Adding ${newXP} XP (${questionCount} questions × 10), new total: ${moduleProgress.totalXP}`);
+      } else {
+        // No XP for subsequent attempts or if already passed before
+        xpDifference = 0;
+        console.log(`ℹ️ No additional XP earned - ${existingCompletion.everPassed ? 'already passed before' : 'attempt failed'}`);
+      }
+      
+      // Update best score if improved
       if (userScore > existingCompletion.bestScore) {
         existingCompletion.bestScore = userScore;
       }
@@ -338,6 +368,12 @@ progressSchema.methods.completeQuiz = async function(quizId, attemptData) {
     
     console.log(`📈 Module completion: ${moduleProgress.completionPercentage}%`);
     console.log('✅ Quiz completion processed successfully');
+    
+    // Return XP information with the result
+    return {
+      xpEarned: xpDifference,
+      totalModuleXP: moduleProgress.totalXP
+    };
     
   } catch (error) {
     console.error('Error completing quiz:', error);

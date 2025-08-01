@@ -27,13 +27,15 @@ export default function ModuleDetail() {
   const { id } = useLocalSearchParams();
   const { token, user } = useAuthStore();
   const [module, setModule] = useState(null);
+  const [moduleXP, setModuleXP] = useState(0);
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userProgress, setUserProgress] = useState({
     completed: 0,
     total: 0,
-    percentage: 0
+    percentage: 0,
+    totalXP: 0
   });
   const router = useRouter();
   
@@ -114,6 +116,10 @@ export default function ModuleDetail() {
       const quizzesData = await quizzesRes.json();
       setQuizzes(quizzesData);
       
+      // Set default moduleXP based on quiz count
+      const defaultXP = 100 * (quizzesData.length || 1);
+      setModuleXP(defaultXP);
+      
       // Calculate real progress instead of random value
       const completedQuizzes = quizzesData.filter(quiz => quiz.isCompleted).length;
       const totalQuizzes = quizzesData.length;
@@ -130,14 +136,19 @@ export default function ModuleDetail() {
           setUserProgress({
             completed: progressData.completedQuizzes || completedQuizzes,
             total: totalQuizzes,
-            percentage: progressData.completionPercentage || percentage
+            percentage: progressData.completionPercentage || percentage,
+            totalXP: progressData.totalXP || 0
           });
+          
+          // Use actual XP instead of random moduleXP
+          setModuleXP(progressData.totalXP || moduleXP);
         } else {
           // Fallback to calculated progress if endpoint fails
           setUserProgress({
             completed: completedQuizzes,
             total: totalQuizzes,
-            percentage: percentage
+            percentage: percentage,
+            totalXP: defaultXP
           });
         }
       } catch (error) {
@@ -146,7 +157,8 @@ export default function ModuleDetail() {
         setUserProgress({
           completed: completedQuizzes,
           total: totalQuizzes,
-          percentage: percentage
+          percentage: percentage,
+          totalXP: defaultXP
         });
       }
       
@@ -167,7 +179,7 @@ export default function ModuleDetail() {
   };
   
   // Generate a random XP amount for this module
-  const moduleXP = 100 * (quizzes.length || 1);
+ 
   
   // Get difficulty color
   const getDifficultyColor = (difficulty) => {
@@ -367,7 +379,7 @@ const confirmDeleteQuiz = async (quizId) => {
           <View style={styles.rewardsContent}>
             <View style={styles.reward}>
               <MaterialCommunityIcons name="cookie" size={32} color="#FFD700" />
-              <Text style={styles.rewardValue}>{moduleXP}</Text>
+              <Text style={styles.rewardValue}> {quizzes.reduce((total, quiz) => total + (quiz.questions?.length || 0), 0) * 10}</Text>
               <Text style={styles.rewardLabel}>Cookies</Text>
             </View>
             <View style={styles.reward}>
@@ -377,8 +389,8 @@ const confirmDeleteQuiz = async (quizId) => {
             </View>
             <View style={styles.reward}>
               <MaterialCommunityIcons name="trophy" size={32} color="#FF9800" />
-              <Text style={styles.rewardValue}>{Math.round(moduleXP/100)}</Text>
-              <Text style={styles.rewardLabel}>Achievements</Text>
+              <Text style={styles.rewardValue}>1</Text>
+              <Text style={styles.rewardLabel}>Achievement</Text>
             </View>
           </View>
         </View>

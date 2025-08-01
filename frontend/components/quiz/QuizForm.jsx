@@ -54,7 +54,8 @@ const QuizForm = ({ token }) => {
   
   const fetchModules = async () => {
     try {
-      const response = await fetch(`${API_URL}/modules`, {
+      // Use the /modules/instructor endpoint instead of /modules
+      const response = await fetch(`${API_URL}/modules/instructor`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -66,6 +67,9 @@ const QuizForm = ({ token }) => {
       
       const data = await response.json();
       setModules(data.modules || []);
+      
+      // Add debug message to confirm only instructor's modules are fetched
+      console.log(`📚 Fetched ${data.modules?.length || 0} modules created by this instructor`);
     } catch (error) {
       console.error('Error fetching modules:', error);
       showAlert('Error', 'Failed to load modules. Please try again.');

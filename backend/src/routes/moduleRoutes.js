@@ -1,6 +1,7 @@
 import express from "express";
 import cloudinary from "../lib/cloudinary.js";
 import Module from "../models/Module.js";
+import Progress from "../models/Progress.js";
 import { protectRoute, authorizeRole } from "../middleware/auth.middleware.js";
 import mongoose from "mongoose";
 
@@ -188,6 +189,63 @@ router.get("/recent", protectRoute, authorizeRole(['instructor', 'student', 'adm
         console.error("Error fetching recent modules:", error);
         res.status(500).json({ message: "Internal server error" });
     }
+});
+
+// Get modules created by the authenticated instructor
+router.get("/instructor", protectRoute, authorizeRole(['instructor', 'admin']), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    console.log(`📚 Fetching modules created by instructor ID: ${userId}`);
+    
+    // Add error handling for invalid userId
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      console.error(`❌ Invalid user ID: ${userId}`);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID"
+      });
+    }
+    
+    // Get modules created by this instructor with proper error handling
+    try {
+      // Check if the field name is createdBy or creator
+      const moduleSchema = mongoose.model('Module').schema.obj;
+      const creatorField = moduleSchema.createdBy ? 'createdBy' : 
+                         moduleSchema.creator ? 'creator' : 'createdBy';
+      
+      console.log(`Using field "${creatorField}" to filter modules by instructor`);
+      
+      // Build query dynamically based on the field name
+      const query = {};
+      query[creatorField] = userId;
+      
+      const modules = await Module.find(query)
+        .sort({ order: 1, createdAt: 1 })
+        .select('title description category image order isActive');
+        
+      console.log(`📚 Found ${modules.length} modules created by instructor ${req.user.username}`);
+      
+      res.json({ 
+        success: true,
+        modules 
+      });
+    } catch (dbError) {
+      console.error(`❌ Database error: ${dbError.message}`);
+      return res.status(500).json({
+        success: false,
+        message: "Database error while fetching modules",
+        error: dbError.message
+      });
+    }
+  } catch (error) {
+    console.error(`❌ Error fetching instructor modules: ${error.message}`);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch instructor modules",
+      error: error.message
+    });
+  }
 });
 // Update the get single module endpoint
 router.get("/:id", protectRoute, authorizeRole(['instructor', 'student', 'admin']), async (req, res) => {
@@ -459,6 +517,8 @@ router.post("/repair-system", protectRoute, authorizeRole(['instructor', 'admin'
     });
   }
 });
+
+// Replace the broken /instructor route with this fixed version
 
 // Helper function to extract public_id from Cloudinary URL
 function extractPublicIdFromUrl(url) {

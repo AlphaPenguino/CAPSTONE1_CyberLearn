@@ -15,7 +15,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { useRouter } from 'expo-router';
 import { API_URL } from '../../constants/api';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import COLORS from '@/constants/custom-colors';
 import { useFocusEffect } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
@@ -31,7 +31,8 @@ export default function Home() {
   const [selectedModule, setSelectedModule] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showProfileOnMobile, setShowProfileOnMobile] = useState(false); // <-- New state variable
-
+  const [totalXP, setTotalXP] = useState(0);
+  const [totalCompletedQuizzes, setTotalCompletedQuizzes] = useState(0);
   const { width, height } = useWindowDimensions();
 
   const isMobile = Platform.OS !== 'web' && width < 768;
@@ -153,6 +154,20 @@ export default function Home() {
       }
       const data = await response.json();
       setModules(data);
+      
+      // Calculate total XP from all modules
+      const totalCookies = data.reduce((sum, module) => sum + (module.totalXP || 0), 0);
+      setTotalXP(totalCookies);
+      
+      // Calculate total completed quizzes
+      let completedQuizCount = 0;
+      data.forEach(module => {
+        // If module has completedQuizzes property, use it
+        if (module.completedQuizzes && Array.isArray(module.completedQuizzes)) {
+          completedQuizCount += module.completedQuizzes.length;
+        }
+      });
+      setTotalCompletedQuizzes(completedQuizCount);
 
       const firstUnlocked = data.find(m => m.isUnlocked);
       if (firstUnlocked && !selectedModule) {
@@ -675,7 +690,7 @@ export default function Home() {
               <Text style={[
                 styles.statLabel,
                 Platform.OS !== 'web' && { fontSize: 10 }
-              ]}>Completed</Text>
+              ]}>Achievements</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={[
@@ -702,6 +717,26 @@ export default function Home() {
               ]}>Locked</Text>
             </View>
           </View>
+
+          <View style={styles.cookiesContainer}>
+  <View style={styles.cookiesIconContainer}>
+    <MaterialCommunityIcons name="cookie" size={Platform.OS === 'web' ? 20 : 16} color="#FFD700" />
+  </View>
+  <View style={styles.cookiesTextContainer}>
+    <Text style={styles.cookiesLabel}>Total Cookies</Text>
+    <Text style={styles.cookiesValue}>{totalXP}</Text>
+  </View>
+</View>
+
+<View style={styles.cookiesContainer}>
+  <View style={styles.cookiesIconContainer}>
+    <MaterialCommunityIcons name="cake" size={Platform.OS === 'web' ? 20 : 16} color="#FF69B4" />
+  </View>
+  <View style={styles.cookiesTextContainer}>
+    <Text style={styles.cookiesLabel}>Total Cakes</Text>
+    <Text style={[styles.cookiesValue, { color: '#FF69B4' }]}>{totalCompletedQuizzes}</Text>
+  </View>
+</View>
         </Animated.View>
       )}
     </View>
@@ -1044,5 +1079,60 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.primary,
+  },
+  cookiesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  cookiesIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  cookiesTextContainer: {
+    justifyContent: 'center',
+  },
+  cookiesLabel: {
+    color: '#ffffff',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  cookiesValue: {
+    color: '#FFD700',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Add these styles if you want to customize the cake display
+  cakesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  cakesIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 105, 180, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  cakesTextContainer: {
+    justifyContent: 'center',
+  },
+  cakesLabel: {
+    color: '#ffffff',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  cakesValue: {
+    color: '#FF69B4',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
