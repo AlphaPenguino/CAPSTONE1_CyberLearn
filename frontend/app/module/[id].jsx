@@ -30,12 +30,18 @@ export default function ModuleDetail() {
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [userProgress, setUserProgress] = useState({
+    completed: 0,
+    total: 0,
+    percentage: 0
+  });
   const router = useRouter();
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
+  const progressAnimation = useRef(new Animated.Value(0)).current;
   
   useEffect(() => {
     fetchModuleDetails();
@@ -71,6 +77,15 @@ export default function ModuleDetail() {
     ).start();
   }, [id]);
   
+  useEffect(() => {
+    // Animate progress bar when percentage changes
+    Animated.timing(progressAnimation, {
+      toValue: userProgress.percentage,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start();
+  }, [userProgress.percentage]);
+  
   const fetchModuleDetails = async () => {
     try {
       setLoading(true);
@@ -99,6 +114,42 @@ export default function ModuleDetail() {
       const quizzesData = await quizzesRes.json();
       setQuizzes(quizzesData);
       
+      // Calculate real progress instead of random value
+      const completedQuizzes = quizzesData.filter(quiz => quiz.isCompleted).length;
+      const totalQuizzes = quizzesData.length;
+      const percentage = totalQuizzes > 0 ? Math.round((completedQuizzes / totalQuizzes) * 100) : 0;
+      
+      // Fetch module progress from backend (more accurate)
+      try {
+        const progressRes = await fetch(`${API_URL}/progress/module/${id}/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
+        if (progressRes.ok) {
+          const progressData = await progressRes.json();
+          setUserProgress({
+            completed: progressData.completedQuizzes || completedQuizzes,
+            total: totalQuizzes,
+            percentage: progressData.completionPercentage || percentage
+          });
+        } else {
+          // Fallback to calculated progress if endpoint fails
+          setUserProgress({
+            completed: completedQuizzes,
+            total: totalQuizzes,
+            percentage: percentage
+          });
+        }
+      } catch (error) {
+        console.log('Error fetching detailed progress:', error);
+        // Use calculated progress as fallback
+        setUserProgress({
+          completed: completedQuizzes,
+          total: totalQuizzes,
+          percentage: percentage
+        });
+      }
+      
     } catch (err) {
       console.error('Error:', err);
       setError(err.message);
@@ -113,13 +164,6 @@ export default function ModuleDetail() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     router.push(`/quiz/${quizId}`);
-  };
-  
-  // Calculate user progress
-  const userProgress = {
-    completed: Math.floor(Math.random() * quizzes.length), // Replace with actual user progress
-    total: quizzes.length,
-    percentage: quizzes.length > 0 ? Math.floor((Math.random() * quizzes.length) / quizzes.length * 100) : 0
   };
   
   // Generate a random XP amount for this module
@@ -284,7 +328,17 @@ const confirmDeleteQuiz = async (quizId) => {
           <View style={styles.questProgressContainer}>
             <Text style={styles.questProgressText}>{userProgress.percentage}% Complete</Text>
             <View style={styles.progressBarBackground}>
-              <View style={[styles.progressBar, {width: `${userProgress.percentage}%`}]} />
+              <Animated.View 
+                style={[
+                  styles.progressBar, 
+                  {
+                    width: progressAnimation.interpolate({
+                      inputRange: [0, 100],
+                      outputRange: ['0%', '100%']
+                    })
+                  }
+                ]} 
+              />
             </View>
           </View>
         </View>

@@ -621,4 +621,58 @@ router.post("/repair-section-access", protectRoute, async (req, res) => {
   }
 });
 
+// Get module status and completion percentage
+router.get("/module/:moduleId/status", protectRoute, async (req, res) => {
+  try {
+    const { moduleId } = req.params;
+    const userId = req.user.id;
+    
+    console.log(`📊 Fetching module status for moduleId: ${moduleId}, user: ${userId}`);
+    
+    // Get user progress
+    const progress = await Progress.findOne({ user: userId });
+    
+    if (!progress) {
+      return res.status(404).json({ 
+        message: "User progress not found"
+      });
+    }
+    
+    // Find module progress
+    const moduleProgress = progress.moduleProgress.find(
+      mp => mp.module.toString() === moduleId
+    );
+    
+    if (!moduleProgress) {
+      console.log(`⚠️ No module progress found for module ${moduleId}`);
+      return res.json({
+        status: 'not_started',
+        completionPercentage: 0,
+        completedQuizzes: 0
+      });
+    }
+    
+    // Get quiz counts
+    const Quiz = mongoose.model('Quiz');
+    const quizzesInModule = await Quiz.countDocuments({ module: moduleId });
+    
+    const completedQuizzes = moduleProgress.completedQuizzes.filter(
+      cq => cq.everPassed || cq.bestScore >= 70
+    ).length;
+    
+    // Return module status details
+    res.json({
+      status: moduleProgress.status,
+      completionPercentage: moduleProgress.completionPercentage,
+      completedQuizzes: completedQuizzes,
+      totalQuizzes: quizzesInModule,
+      isCompleted: moduleProgress.status === 'completed'
+    });
+    
+  } catch (error) {
+    console.error(`❌ Error fetching module status: ${error.message}`);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 export default router;
