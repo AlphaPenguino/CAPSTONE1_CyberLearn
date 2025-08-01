@@ -1,298 +1,156 @@
-// File: app/(tabs)/profile.jsx
-
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, ActivityIndicator, Alert, Platform, ScrollView } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView } from 'react-native';
+import { Ionicons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import COLORS from '@/constants/custom-colors';
 import { useAuthStore } from '../../store/authStore';
-import { API_URL } from '@/constants/api';
 import { useRouter } from 'expo-router';
+import { API_URL } from '@/constants/api';
 
-const showAlert = (title, message, buttons = [{ text: 'OK' }]) => {
-  if (Platform.OS === 'web') {
-    if (buttons.length <= 1) {
-      window.alert(`${title}\n${message}`);
-    } else {
-      const confirmed = window.confirm(`${title}\n${message}`);
-      if (confirmed) {
-        const confirmButton = buttons.find(button => button.style === 'destructive' || button.text === 'OK');
-        confirmButton?.onPress?.();
-      } else {
-        const cancelButton = buttons.find(button => button.style === 'cancel');
-        cancelButton?.onPress?.();
-      }
+// Helper function to handle image URLs for different platforms (copied for consistency)
+const getCompatibleImageUrl = (url) => {
+  if (!url) return null;
+  if (url.includes('dicebear') && url.includes('/svg')) {
+    if (Platform.OS === 'android') {
+      return url.replace('/svg', '/png');
     }
-  } else {
-    Alert.alert(title, message, buttons);
   }
+  return url;
 };
 
-export default function Profile() {
-  const { user, token, updateUser } = useAuthStore();
+// Component to display achievements
+const StatsDisplay = ({ totalXP, totalCompletedQuizzes }) => (
+  <View style={styles.statsContainer}>
+    <View style={styles.statItem}>
+      <Ionicons name="sparkles" size={24} color="#FFD700" />
+      <View style={{ marginLeft: 8 }}>
+        <Text style={styles.statValue}>{totalXP}</Text>
+        <Text style={styles.statLabel}>XP</Text>
+      </View>
+    </View>
+    <View style={styles.statItem}>
+      <Ionicons name="checkmark-done-circle-outline" size={24} color={COLORS.success} />
+      <View style={{ marginLeft: 8 }}>
+        <Text style={styles.statValue}>{totalCompletedQuizzes}</Text>
+        <Text style={styles.statLabel}>Quizzes</Text>
+      </View>
+    </View>
+  </View>
+);
+
+export default function ViewProfile() {
+  const { user, token } = useAuthStore();
   const router = useRouter();
-  
-  // <-- NEW: Added a state for username
-  const [username, setUsername] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [profileImageUri, setProfileImageUri] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
-  
-  const fileInputRef = useRef(null);
+  const [totalXP, setTotalXP] = useState(0);
+  const [totalCompletedQuizzes, setTotalCompletedQuizzes] = useState(0);
 
+  // Fallback for profile image if user object doesn't have it or there's an error
+  const profileImageSource = user?.profileImage && !imageError
+    ? { uri: getCompatibleImageUrl(user.profileImage) }
+    : null;
+
+  // Fetch achievements data
   useEffect(() => {
-    if (user) {
-      // <-- NEW: Initialize username state from the user object
-      setUsername(user.username || '');
-      setFirstName(user.firstName || '');
-      setLastName(user.lastName || '');
-      setPhoneNumber(user.phoneNumber || '');
-      setProfileImageUri(user.profileImage || '');
-    }
-  }, [user]);
+    const fetchAchievements = async () => {
+      try {
+        if (!token) return;
+        const response = await fetch(`${API_URL}/progress/modules`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
 
-  const getCompatibleImageUrl = (url) => {
-    if (!url) return null;
-    if (url.includes('dicebear') && url.includes('/svg')) {
-      if (Platform.OS === 'android') {
-        return url.replace('/svg', '/png');
+        const totalXPFromModules = data.reduce((sum, module) => sum + (module.totalXP || 0), 0);
+        setTotalXP(totalXPFromModules);
+
+        let completedQuizCount = 0;
+        data.forEach(module => {
+          if (module.completedQuizzes && Array.isArray(module.completedQuizzes)) {
+            completedQuizCount += module.completedQuizzes.length;
+          }
+        });
+        setTotalCompletedQuizzes(completedQuizCount);
+
+      } catch (error) {
+        console.error("Failed to fetch achievements:", error);
       }
-    }
-    return url;
-  };
+    };
+    fetchAchievements();
+  }, [token]);
 
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showAlert('Permission Required', 'We need camera roll permissions to make this work!');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setProfileImageUri(result.assets[0].uri);
-      setImageError(false);
-    }
-  };
-
-  const handleWebImageSelect = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileImageUri(reader.result);
-        setImageError(false);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    // <-- NEW: Validate username
-    if (!username || !firstName || !lastName) {
-      showAlert('Validation Error', 'Username, First Name, and Last Name are required.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/users/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          // <-- NEW: Include username in the request body
-          username,
-          firstName,
-          lastName,
-          phoneNumber,
-          profileImage: profileImageUri,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update profile.');
-      }
-
-      const updatedUserData = await response.json();
-      updateUser(updatedUserData.user);
-
-      showAlert('Success', 'Profile updated successfully!', [{
-        text: 'OK',
-        onPress: () => router.back(),
-      }]);
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      showAlert('Error', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChangePassword = async () => {
-    if (!newPassword || !confirmPassword) {
-      showAlert('Validation Error', 'Please enter both new password and confirm password.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      showAlert('Validation Error', 'New password and confirm password do not match.');
-      return;
-    }
-    if (newPassword.length < 6) {
-      showAlert('Validation Error', 'Password must be at least 6 characters long.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/users/change-password`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ newPassword }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to change password.');
-      }
-
-      showAlert('Success', 'Password changed successfully!');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (error) {
-      console.error('Error changing password:', error);
-      showAlert('Error', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Main content container with max-width and centering */}
         <View style={styles.mainContent}>
-          <Text style={styles.screenTitle}>Edit Profile</Text>
 
-          <View style={styles.profileImageContainer}>
-            {profileImageUri && !imageError ? (
+          {/* Profile header section */}
+          <View style={styles.header}>
+            <View style={styles.profileImageContainer}>
               <Image
-                source={{ uri: getCompatibleImageUrl(profileImageUri) }}
+                source={profileImageSource || require('../../assets/images/character1.png')}
                 style={styles.profileImage}
                 onError={() => setImageError(true)}
               />
-            ) : (
-              <Ionicons name="person-circle-outline" size={100} color={COLORS.primary} />
-            )}
-            <TouchableOpacity 
-              style={styles.changeImageButton} 
-              onPress={() => {
-                if (Platform.OS === 'web') {
-                  fileInputRef.current?.click();
-                } else {
-                  pickImage();
-                }
-              }}
-            >
-              <MaterialCommunityIcons name="camera-plus-outline" size={24} color="#FFF" />
-              <Text style={styles.changeImageButtonText}>Change Photo</Text>
-            </TouchableOpacity>
-
-            {Platform.OS === 'web' && (
-              <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                onChange={handleWebImageSelect}
-                accept="image/*"
-              />
-            )}
+            </View>
+            <Text style={styles.headerTitle}>Profile</Text>
           </View>
 
+          {/* Personal Information Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Personal Information</Text>
-            {/* <-- NEW: Add input for username --> */}
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor={COLORS.textSecondary}
-              value={username}
-              onChangeText={setUsername}
-            />
-            {/* END NEW --> */}
-            <TextInput
-              style={styles.input}
-              placeholder="First Name"
-              placeholderTextColor={COLORS.textSecondary}
-              value={firstName}
-              onChangeText={setFirstName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Last Name"
-              placeholderTextColor={COLORS.textSecondary}
-              value={lastName}
-              onChangeText={setLastName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Phone Number"
-              placeholderTextColor={COLORS.textSecondary}
-              keyboardType="phone-pad"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-            />
-            <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.saveButtonText}>Save Profile</Text>
-              )}
-            </TouchableOpacity>
+            <View style={styles.infoRow}>
+              <Ionicons name="mail-outline" size={20} color={COLORS.textPrimary} style={styles.infoIcon} />
+              <Text style={styles.infoLabel}>Email:</Text>
+              <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
+            </View>
+             <View style={styles.infoRow}>
+              <Ionicons name="person-outline" size={20} color={COLORS.textPrimary} style={styles.infoIcon} />
+              <Text style={styles.infoLabel}>Username:</Text>
+              <Text style={styles.infoValue}>{user?.username || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons name="person-outline" size={20} color={COLORS.textPrimary} style={styles.infoIcon} />
+              <Text style={styles.infoLabel}>First Name:</Text>
+              <Text style={styles.infoValue}>{user?.firstName || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons name="person-outline" size={20} color={COLORS.textPrimary} style={styles.infoIcon} />
+              <Text style={styles.infoLabel}>Last Name:</Text>
+              <Text style={styles.infoValue}>{user?.lastName || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons name="call-outline" size={20} color={COLORS.textPrimary} style={styles.infoIcon} />
+              <Text style={styles.infoLabel}>Phone:</Text>
+              <Text style={styles.infoValue}>{user?.phoneNumber || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons name="card-outline" size={20} color={COLORS.textPrimary} style={styles.infoIcon} />
+              <Text style={styles.infoLabel}>ID Number:</Text>
+              <Text style={styles.infoValue}>{user?.studentId || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="shield-account-outline" size={20} color={COLORS.textPrimary} style={styles.infoIcon} />
+              <Text style={styles.infoLabel}>Privilege:</Text>
+              <Text style={styles.infoValue}>{user?.privilege || 'N/A'}</Text>
+            </View>
           </View>
 
+          {/* EDIT PROFILE BUTTON */}
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => router.push('/profile/editprofile')}
+          >
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+            <Ionicons name="create-outline" size={20} color="#FFF" style={{ marginLeft: 10 }} />
+          </TouchableOpacity>
+
+          {/* Achievements Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account Security</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="New Password"
-              placeholderTextColor={COLORS.textSecondary}
-              secureTextEntry
-              value={newPassword}
-              onChangeText={setNewPassword}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm New Password"
-              placeholderTextColor={COLORS.textSecondary}
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
-            <TouchableOpacity style={styles.saveButton} onPress={handleChangePassword} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.saveButtonText}>Change Password</Text>
-              )}
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>Achievements</Text>
+            <StatsDisplay totalXP={totalXP} totalCompletedQuizzes={totalCompletedQuizzes} />
           </View>
+
         </View>
       </ScrollView>
     </View>
@@ -302,31 +160,28 @@ export default function Profile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: COLORS.background,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    padding: 20,
     alignItems: 'center',
   },
   mainContent: {
     width: '100%',
-    maxWidth: 600,
-    alignSelf: 'center',
-    padding: 24,
+    maxWidth: 700,
   },
-  screenTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: 30,
-    textAlign: 'center',
-  },
-  profileImageContainer: {
+  header: {
     alignItems: 'center',
     marginBottom: 30,
   },
-  profileImage: {
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginTop: 10,
+  },
+  profileImageContainer: {
     width: 120,
     height: 120,
     borderRadius: 60,
@@ -335,22 +190,26 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
     marginBottom: 15,
   },
-  changeImageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 25,
-    marginBottom: 10,
+  profileImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 60,
   },
-  changeImageButtonText: {
-    color: '#FFF',
-    marginLeft: 8,
+  profileInfo: {
+    alignItems: 'center',
+  },
+  name: {
+    fontSize: 24,
     fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginBottom: 5,
+  },
+  email: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
   },
   section: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
@@ -369,27 +228,66 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     paddingBottom: 10,
   },
-  input: {
-    backgroundColor: COLORS.inputBackground || COLORS.cardBackground,
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    color: COLORS.textPrimary,
-    fontSize: 16,
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  saveButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 8,
+  infoIcon: {
+    marginRight: 10,
+  },
+  infoLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    width: 90, // Fixed width for labels for alignment
+  },
+  infoValue: {
+    flex: 1, // Allows value to take remaining space
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
+  editButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 15,
+    borderRadius: 10,
+    marginTop: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  editButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  // Styles for the achievements section
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     marginTop: 10,
   },
-  saveButtonText: {
-    color: '#FFFFFF',
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    padding: 10,
+    borderRadius: 8,
+    width: '45%',
+  },
+  statValue: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
     fontWeight: 'bold',
-    fontSize: 16,
+  },
+  statLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
   },
 });
