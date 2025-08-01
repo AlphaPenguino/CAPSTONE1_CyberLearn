@@ -847,7 +847,7 @@ if (quizCompleted) {
   // Quiz start screen
   if (!quizStarted) {
     return (
-      <ScrollView style={[styles.container, { backgroundColor: '#0a1929' }]}>
+      <View style={[styles.fullScreenContainer]}>
         <Animated.View style={[styles.startContainer, { 
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
@@ -887,7 +887,7 @@ if (quizCompleted) {
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
-      </ScrollView>
+      </View>
     );
   }
 
@@ -914,5 +914,3 @@ if (quizCompleted) {
     />
   );
 }
-
-

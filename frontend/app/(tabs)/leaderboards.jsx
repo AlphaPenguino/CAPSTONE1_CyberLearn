@@ -9,7 +9,8 @@ import {
   RefreshControl,
   Animated,
   Platform,
-  Dimensions
+  Dimensions,
+  StyleSheet, // Added StyleSheet import
 } from 'react-native';
 import COLORS from '@/constants/custom-colors';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -340,9 +341,7 @@ export default function Leaderboards() {
                   outputRange: [20, 0]
                 })}]
               },
-              category === 'cookies' 
-                ? { borderColor: '#FFD700', shadowColor: '#FFD700' } 
-                : { borderColor: '#FF69B4', shadowColor: '#FF69B4' }
+              category === 'cookies' ? { borderColor: '#FFD700', shadowColor: '#FFD700' } : { borderColor: '#FF69B4', shadowColor: '#FF69B4' }
             ]}
           >
             <Text style={[
@@ -358,27 +357,18 @@ export default function Leaderboards() {
               </LinearGradient>
               <Image
                 source={
-                  currentUserRank.profileImage
-                    ? { uri: currentUserRank.profileImage }
-                    : require('../../assets/images/character1.png')
+                  currentUserRank.profileImage ? { uri: currentUserRank.profileImage } : require('../../assets/images/character1.png')
                 }
                 style={[
                   styles.avatarLarge,
-                  category === 'cookies' 
-                    ? { borderColor: '#FFD700' } 
-                    : { borderColor: '#FF69B4' }
+                  category === 'cookies' ? { borderColor: '#FFD700' } : { borderColor: '#FF69B4' }
                 ]}
               />
               <View style={styles.userInfoLarge}>
                 <Text style={styles.usernameLarge}>{currentUserRank.username}</Text>
-                
                 {/* Add section info */}
                 <View style={styles.sectionRowLarge}>
-                  <Ionicons 
-                    name="school"
-                    size={16}
-                    color={currentUserRank.section === 'no_section' ? '#aaa' : '#4CAF50'}
-                  />
+                  <Ionicons name="school" size={16} color={currentUserRank.section === 'no_section' ? '#aaa' : '#4CAF50'} />
                   <Text style={[
                     styles.sectionTextLarge,
                     currentUserRank.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
@@ -386,17 +376,16 @@ export default function Leaderboards() {
                     {currentUserRank.section || 'No Class'}
                   </Text>
                 </View>
-                
                 <Text style={[
-                  styles.scoreLarge, 
+                  styles.scoreLarge,
                   category === 'cookies' ? { color: '#FFD700' } : { color: '#FF69B4' }
                 ]}>
-                  {category === 'cookies' 
-                    ? `${currentUserRank.totalXP || 0} Cookies` 
-                    : `${currentUserRank.completedQuizzes || 0} Cakes`
-                  }
+                  {category === 'cookies' ? `${currentUserRank.totalXP || 0} Cookies` : `${currentUserRank.completedQuizzes || 0} Cakes` }
                 </Text>
-                <Text style={styles.level}>Level {Math.floor((currentUserRank.totalXP || 0) / 100) + 1}</Text>
+                {/* Updated Level Text Color */}
+                <Text style={[styles.level, { color: '#E1BEE7', fontWeight: 'bold' }]}>
+                  Level {Math.floor((currentUserRank.totalXP || 0) / 100) + 1}
+                </Text>
               </View>
             </View>
           </Animated.View>
@@ -405,9 +394,9 @@ export default function Leaderboards() {
         {/* Leaderboard List */}
         <View style={styles.leaderboardSection}>
           <View style={styles.sectionTitleContainer}>
-            <MaterialCommunityIcons 
-              name={category === 'cookies' ? "crown" : "cake-variant"} 
-              size={24} 
+            <MaterialCommunityIcons
+              name={category === 'cookies' ? "crown" : "cake-variant"}
+              size={24}
               color={getCategoryColor()}
             />
             <Text style={styles.sectionTitle}>
@@ -415,15 +404,11 @@ export default function Leaderboards() {
             </Text>
             <Text style={styles.challengeCounter}>{leaders.length}</Text>
           </View>
-          
           {error ? (
             <View style={styles.errorContainer}>
               <MaterialCommunityIcons name="alert-octagon" size={48} color={COLORS.error} />
               <Text style={styles.errorText}>Failed to load rankings: {error}</Text>
-              <TouchableOpacity 
-                style={styles.retryButton} 
-                onPress={fetchLeaderboards}
-              >
+              <TouchableOpacity style={styles.retryButton} onPress={fetchLeaderboards} >
                 <Text style={styles.retryButtonText}>Try Again</Text>
               </TouchableOpacity>
             </View>
@@ -452,34 +437,20 @@ export default function Leaderboards() {
                 >
                   <Text style={styles.rankText}>{idx + 1}</Text>
                 </LinearGradient>
-                
                 <Image
                   source={
-                    leader.profileImage
-                      ? { uri: leader.profileImage }
-                      : require('../../assets/images/character1.png')
+                    leader.profileImage ? { uri: leader.profileImage } : require('../../assets/images/character1.png')
                   }
                   style={[
                     styles.avatar,
-                    category === 'cookies' 
-                      ? { borderColor: '#FFD700' } 
-                      : { borderColor: '#FF69B4' }
+                    category === 'cookies' ? { borderColor: '#FFD700' } : { borderColor: '#FF69B4' }
                   ]}
                 />
-                
-                <View style={styles.userInfo}>
-                  <Text style={styles.username}>
-                    {leader.username}
-                    {idx === 0 && " 👑"}
-                  </Text>
-                  
+                <View style={styles.userInfoContainer}>
+                  <Text style={styles.username}>{leader.username}</Text>
                   {/* Add section info */}
                   <View style={styles.sectionRow}>
-                    <Ionicons 
-                      name="school"
-                      size={14}
-                      color={leader.section === 'no_section' ? '#aaa' : '#4CAF50'}
-                    />
+                    <Ionicons name="school" size={14} color={leader.section === 'no_section' ? '#aaa' : '#4CAF50'} />
                     <Text style={[
                       styles.sectionText,
                       leader.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
@@ -487,58 +458,10 @@ export default function Leaderboards() {
                       {leader.section || 'No Class'}
                     </Text>
                   </View>
-                  
-                  <View style={styles.userStats}>
-                    <View style={styles.statItem}>
-                      {category === 'cookies' ? (
-                        <>
-                          <MaterialCommunityIcons name="cookie" size={16} color="#FFD700" />
-                          <Text style={[
-                            styles.statValue, 
-                            { color: '#FFD700', fontWeight: 'bold' }
-                          ]}>
-                            {leader.totalXP || 0}
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <MaterialCommunityIcons name="cake" size={16} color="#FF69B4" />
-                          <Text style={[
-                            styles.statValue, 
-                            { color: '#FF69B4', fontWeight: 'bold' }
-                          ]}>
-                            {leader.completedQuizzes || 0}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                    <View style={styles.statItem}>
-                      <MaterialCommunityIcons name="sword-cross" size={16} color={COLORS.primary} />
-                      <Text style={styles.statValue}>Lv. {Math.floor((leader.totalXP || 0) / 100) + 1}</Text>
-                    </View>
-                  </View>
                 </View>
-                
-                {idx <= 2 && (
-                  <MaterialCommunityIcons 
-                    name={
-                      idx === 0 
-                        ? category === 'cookies' ? "medal" : "cake-layered" 
-                        : idx === 1 
-                          ? category === 'cookies' ? "medal-outline" : "cake-variant" 
-                          : category === 'cookies' ? "bookmark-outline" : "cupcake"
-                    } 
-                    size={24} 
-                    color={
-                      idx === 0 
-                        ? category === 'cookies' ? "#FFD700" : "#FF69B4" 
-                        : idx === 1 
-                          ? category === 'cookies' ? "#C0C0C0" : "#FF8DC1" 
-                          : category === 'cookies' ? "#CD7F32" : "#FFC0CB"
-                    } 
-                    style={styles.medalIcon}
-                  />
-                )}
+                <Text style={styles.score}>
+                  {category === 'cookies' ? `${leader.totalXP || 0} XP` : `${leader.completedQuizzes || 0} Cakes`}
+                </Text>
               </View>
             ))
           )}
@@ -548,14 +471,18 @@ export default function Leaderboards() {
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
+  // Main containers and layout
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
   contentContainer: {
-    paddingVertical: 8,
+    flexGrow: 1,
+    paddingHorizontal: 16,
   },
+  
+  // Loading and Error states
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -563,316 +490,341 @@ const styles = {
     backgroundColor: COLORS.background,
   },
   loadingText: {
-    marginTop: 16,
     color: COLORS.textPrimary,
-    fontSize: 18,
+    marginTop: 16,
+    fontSize: 16,
     fontWeight: 'bold',
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    marginTop: 20,
+  },
+  errorText: {
+    color: COLORS.textPrimary,
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    marginTop: 20,
+  },
+  emptyStateText: {
+    color: COLORS.textSecondary,
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+
+  // Banner
   questBanner: {
-    height: 180,
+    height: 120,
     borderRadius: 18,
     overflow: 'hidden',
-    marginBottom: 16,
-    position: 'relative',
-    backgroundColor: 'rgba(10, 25, 41, 0.95)',
+    marginBottom: 24, // Increased spacing
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primaryDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   bannerGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '100%',
-    zIndex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   questTitleContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     padding: 16,
-    zIndex: 2,
+    paddingTop: 16,
+    alignItems: 'center',
   },
   questTitleWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 4,
   },
   questTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#ffffff',
     marginLeft: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 2,
   },
   leaderboardSubtitle: {
-    fontSize: 18,
-    color: '#ffffff',
-    marginTop: 4,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 2,
+    textAlign: 'center',
   },
+
+  // Filters
   filterContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
-    padding: 4,
+    justifyContent: 'space-around',
+    marginBottom: 20,
   },
   filterButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8, // Changed from 20 to 8
+    backgroundColor: COLORS.backgroundLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   activeFilter: {
     backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   filterText: {
-    fontSize: 14,
-    fontWeight: '600',
     color: COLORS.textSecondary,
+    fontWeight: 'bold',
   },
   activeFilterText: {
-    color: '#ffffff',
+    color: '#fff',
   },
-  // Add category selector styles
+
+  // Category Selector
   categoryContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
+    justifyContent: 'space-between',
     backgroundColor: COLORS.cardBackground,
     borderRadius: 12,
-    padding: 4,
+    padding: 8,
+    marginBottom: 20,
   },
   categoryTab: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
   },
   activeCategory: {
-    backgroundColor: 'rgba(25, 118, 210, 0.2)',
+    backgroundColor: COLORS.background,
   },
   categoryText: {
-    fontSize: 14,
-    fontWeight: '600',
+    marginLeft: 8,
+    fontWeight: 'bold',
     color: COLORS.textSecondary,
-    marginLeft: 6,
   },
+
+  // Section Filter
   sectionFilterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
-    padding: 4,
-    
+    marginBottom: 20,
   },
   sectionFilterLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
     marginBottom: 8,
   },
   sectionFilterScroll: {
-    paddingBottom: 4,
+    paddingRight: 16,
   },
   sectionFilterButton: {
-    paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
-    marginRight: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: COLORS.backgroundLight,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: COLORS.border,
+    marginRight: 8,
   },
   activeSectionFilter: {
-    backgroundColor: 'rgba(25, 118, 210, 0.2)',
-    borderColor: COLORS.primary,
+    backgroundColor: COLORS.secondary,
+    borderColor: COLORS.secondary,
   },
   sectionFilterText: {
     color: COLORS.textSecondary,
-    fontSize: 14,
-  },
-  activeSectionFilterText: {
-    color: COLORS.primary,
     fontWeight: 'bold',
   },
+  activeSectionFilterText: {
+    color: '#fff',
+  },
+  
+  // Current User's Rank Card
   currentUserCard: {
     backgroundColor: COLORS.cardBackground,
     borderRadius: 18,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    shadowColor: COLORS.primary,
+    padding: 24, // Increased padding
+    borderWidth: 3,
+    marginBottom: 20,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowRadius: 5,
+    elevation: 5,
   },
   yourRankText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 8,
+    marginBottom: 16, // Increased spacing
     textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   userRankContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    // Removed justifyContent: 'center' to allow for left alignment
   },
   rankBadgeLarge: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
-    marginRight: 16,
-    shadowColor: COLORS.primaryDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
+    justifyContent: 'center',
+    marginRight: 20, // Increased margin
   },
   rankTextLarge: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 22,
+    fontSize: 24,
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
   avatarLarge: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 16,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.background,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginRight: 20, // Increased margin
+    borderWidth: 3,
   },
   userInfoLarge: {
-    flex: 1,
+    flex: 1, // Make it take up available space
+    justifyContent: 'center', // Center content vertically
   },
   usernameLarge: {
     fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
-    textShadowColor: COLORS.primaryDark,
+    textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+    marginBottom: 4, // Added spacing
+    textAlign: 'left', // Align text to the left
+  },
+  sectionRowLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8, // Increased spacing
+    marginTop: 4,
+    justifyContent: 'flex-start', // Align icon and text to the left
+  },
+  sectionTextLarge: {
+    color: '#4CAF50',
+    fontSize: 16,
+    marginLeft: 4, // Adjusted margin for centering
   },
   scoreLarge: {
     fontSize: 18,
-    color: COLORS.accent,
     fontWeight: 'bold',
-    marginTop: 2,
+    marginTop: 4, // Added spacing
+    textAlign: 'left',
   },
   level: {
     fontSize: 16,
-    color: COLORS.primaryLight,
-    fontWeight: 'bold',
-    marginTop: 2,
+    color: '#E1BEE7',
+    marginTop: 4,
+    textAlign: 'left',
   },
+
+  // Leaderboard List
   leaderboardSection: {
-    marginBottom: 16,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   sectionTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingBottom: 8,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
     marginLeft: 8,
-    marginRight: 8,
+    flex: 1,
   },
   challengeCounter: {
-    backgroundColor: COLORS.primary,
-    color: '#ffffff',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    color: COLORS.textSecondary,
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-  },
-  errorText: {
     fontSize: 16,
-    color: COLORS.error,
-    marginTop: 12,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#ffffff',
     fontWeight: 'bold',
+    color: COLORS.textSecondary,
   },
   leaderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 18,
-    marginVertical: 8,
-    padding: 16,
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    padding: 16, // Increased padding
+    marginBottom: 12,
     borderWidth: 2,
-    borderColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
+    borderColor: COLORS.background,
   },
   firstPlaceCard: {
-    borderColor: '#FFD700',
     backgroundColor: 'rgba(255, 215, 0, 0.15)',
-  },
-  secondPlaceCard: {
-    borderColor: '#C0C0C0',
-    backgroundColor: 'rgba(192, 192, 192, 0.12)',
-  },
-  thirdPlaceCard: {
-    borderColor: '#CD7F32',
-    backgroundColor: 'rgba(205, 127, 50, 0.10)',
-  },
-  rankBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    shadowColor: COLORS.primaryDark,
+    borderColor: '#FFD700',
+    shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 6,
+  },
+  secondPlaceCard: {
+    backgroundColor: 'rgba(192, 192, 192, 0.15)',
+    borderColor: '#C0C0C0',
+  },
+  thirdPlaceCard: {
+    backgroundColor: 'rgba(205, 127, 50, 0.15)',
+    borderColor: '#CD7F32',
+  },
+  rankBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 20, // Increased margin
   },
   rankText: {
     color: '#fff',
@@ -886,13 +838,14 @@ const styles = {
     width: 48,
     height: 48,
     borderRadius: 24,
-    marginRight: 16,
+    marginRight: 20, // Increased margin
     borderWidth: 2,
     borderColor: COLORS.primary,
     backgroundColor: COLORS.background,
   },
-  userInfo: {
-    flex: 1,
+  userInfoContainer: {
+    flex: 1, // Make it take up available space
+    justifyContent: 'center', // Center content vertically
   },
   username: {
     fontSize: 18,
@@ -901,43 +854,23 @@ const styles = {
     textShadowColor: COLORS.primaryDark,
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+    marginBottom: 2, // Added spacing
+    textAlign: 'left', // Align text to the left
   },
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  sectionRowLarge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4, // Increased spacing
+    justifyContent: 'flex-start', // Align icon and text to the left
   },
   sectionText: {
-    fontSize: 12,
-    color: '#9e9e9e',
-    marginLeft: 4,
-  },
-  sectionTextLarge: {
+    color: '#4CAF50',
     fontSize: 14,
-    color: '#9e9e9e',
-    marginLeft: 6,
+    marginLeft: 4, // Adjusted margin
   },
-  userStats: {
-    flexDirection: 'row',
-    marginTop: 4,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  statValue: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginLeft: 4,
+  score: {
+    fontSize: 16,
     fontWeight: 'bold',
+    color: COLORS.textPrimary,
   },
-  medalIcon: {
-    marginLeft: 8,
-  }
-};
+});
