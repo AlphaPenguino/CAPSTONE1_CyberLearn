@@ -1,6 +1,7 @@
 // styles/login.styles.js
-import { StyleSheet, Dimensions } from "react-native";
+import { StyleSheet, Dimensions, Platform } from "react-native";
 import COLORS from "../../constants/custom-colors";
+import { FONTS } from "../../constants/fonts";
 
 const { width } = Dimensions.get("window");
 const maxWidth = 500; // Maximum width for larger screens
@@ -21,13 +22,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
   },
-illustrationImage: {
-    width: width * 0.75,  // 75% of screen width
+  brandContainer: {
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  brandTitle: {
+    // Switched to generic bold sans-serif system font
+    fontFamily: Platform.select({
+      ios: "System",
+      android: "sans-serif",
+      default: "sans-serif",
+    }),
+    fontWeight: "700",
+    fontSize: 36,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+    letterSpacing: 1,
+  },
+  illustrationImage: {
+    width: width * 0.75, // 75% of screen width
     height: width * 0.75, // Makes it square
-    maxWidth: 300,        // Add this to limit desktop size
-    maxHeight: 300,       // Add this to limit desktop size
-    alignSelf: 'center',  // Ensure center alignment
-},
+    maxWidth: 300, // Add this to limit desktop size
+    maxHeight: 300, // Add this to limit desktop size
+    alignSelf: "center", // Ensure center alignment
+  },
   card: {
     backgroundColor: COLORS.cardBackground,
     borderRadius: 16,
@@ -54,7 +73,7 @@ illustrationImage: {
     color: COLORS.textPrimary,
     marginBottom: 8,
     textAlign: "center",
-    width: "100%",  
+    width: "100%",
   },
   subtitle: {
     fontSize: 16,
@@ -70,13 +89,14 @@ illustrationImage: {
   label: {
     fontSize: 14,
     marginBottom: 8,
-    color: COLORS.textPrimary,
+    // Updated to lighter blue per request (was COLORS.textPrimary)
+    color: COLORS.primaryDark,
     fontWeight: "500",
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.inputBackground,
+    backgroundColor: "#92eacc",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -88,7 +108,14 @@ illustrationImage: {
   input: {
     flex: 1,
     height: 48,
-    color: COLORS.textDark,
+    color: COLORS.textPrimary,
+    // Remove focus outline / highlight especially on web
+    ...Platform.select({
+      web: {
+        outlineWidth: 0,
+        outlineStyle: "none",
+      },
+    }),
   },
   eyeIcon: {
     padding: 8,
@@ -127,17 +154,16 @@ illustrationImage: {
 
   //added forgot password styles
   forgotPassword: {
-  alignSelf: 'flex-end',
-  marginTop: 8,
-  marginRight: 20,
+    alignSelf: "flex-end",
+    marginTop: 8,
+    marginRight: 20,
   },
   forgotPasswordText: {
     color: COLORS.primary,
     fontSize: 14,
-    fontWeight: '500',
-    textDecorationLine: 'underline',
+    fontWeight: "500",
+    textDecorationLine: "underline",
   },
-
 });
 
 export default styles;

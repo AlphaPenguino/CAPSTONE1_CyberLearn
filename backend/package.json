@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon src/index.js"
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "setup": "node src/scripts/setup-knowledge-relay.js",
+    "test:kr": "node src/scripts/test-knowledge-relay.js",
+    "setup:quiz-showdown": "node src/scripts/setup-quiz-showdown.js",
+    "test:quiz-showdown": "node src/scripts/test-quiz-showdown.js"
   },
   "keywords": [],
   "author": "",
@@ -11,16 +16,22 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "axios": "^1.11.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
-    "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
     "cron": "^4.3.1",
+    "csv-parser": "^3.2.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "form-data": "^4.0.4",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.0",
-    "socket.io": "^4.8.1"
+    "multer": "^2.0.2",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^7.0.6",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

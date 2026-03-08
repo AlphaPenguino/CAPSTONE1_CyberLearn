@@ -1,58 +1,74 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { ScrollView, View, Text, TouchableOpacity, Alert, TextInput, StyleSheet } from "react-native"
+import { useState } from "react";
+import {
+  ScrollView,
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  TextInput,
+  StyleSheet,
+} from "react-native";
 
-export default function GameLobby({ socket, gameData, playerData, isCreator, creatorPlayerName, onGameStart }) {
-  const [playerName, setPlayerName] = useState("")
-  const [gameId, setGameId] = useState("")
-  const [teamName, setTeamName] = useState("")
-  const [isJoined, setIsJoined] = useState(false)
+export default function GameLobby({
+  socket,
+  gameData,
+  playerData,
+  isCreator,
+  creatorPlayerName,
+  onGameStart,
+}) {
+  const [playerName, setPlayerName] = useState("");
+  const [gameId, setGameId] = useState("");
+  const [teamName, setTeamName] = useState("");
 
   const createGame = () => {
     if (!playerName.trim()) {
-      Alert.alert("Error", "Please enter your name")
-      return
+      Alert.alert("Error", "Please enter your name");
+      return;
     }
-    socket.emit("create-game", { playerName })
-  }
+    socket.emit("create-game", { playerName });
+  };
 
   const joinGame = () => {
     if (!playerName.trim() || !teamName.trim() || !gameId.trim()) {
-      Alert.alert("Error", "Please fill in all fields")
-      return
+      Alert.alert("Error", "Please fill in all fields");
+      return;
     }
-    socket.emit("join-game", { gameId: gameId.toUpperCase(), playerName, teamName })
-    setIsJoined(true)
-  }
+    socket.emit("join-game", {
+      gameId: gameId.toUpperCase(),
+      playerName,
+      teamName,
+    });
+  };
 
   const joinTeamAsCreator = (selectedTeamName) => {
     if (!creatorPlayerName.trim() || !selectedTeamName.trim()) {
-      Alert.alert("Error", "Please select a team")
-      return
+      Alert.alert("Error", "Please select a team");
+      return;
     }
     socket.emit("join-game", {
       gameId: gameData.id,
       playerName: creatorPlayerName,
       teamName: selectedTeamName,
-    })
-    setIsJoined(true)
-  }
+    });
+  };
 
   const startGame = () => {
     if (gameData && gameData.id) {
-      socket.emit("start-game", { gameId: gameData.id })
+      socket.emit("start-game", { gameId: gameData.id });
     }
-  }
+  };
 
   const getTeamColors = (index) => {
-    const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b"]
-    return colors[index % colors.length]
-  }
+    const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b"];
+    return colors[index % colors.length];
+  };
 
   if (gameData && gameData.status === "active") {
-    onGameStart()
-    return null
+    onGameStart();
+    return null;
   }
 
   // Show team selection for creator who hasn't joined yet
@@ -67,21 +83,33 @@ export default function GameLobby({ socket, gameData, playerData, isCreator, cre
         <View style={styles.section}>
           <View style={styles.gameInfo}>
             <Text style={styles.gameId}>Game ID: {gameData.id}</Text>
-            <Text style={styles.creatorInfo}>You created this game as: {creatorPlayerName}</Text>
+            <Text style={styles.creatorInfo}>
+              You created this game as: {creatorPlayerName}
+            </Text>
           </View>
 
           <Text style={styles.sectionTitle}>Join a Team to Play</Text>
 
           {gameData.teams.length > 0 ? (
             <>
-              <Text style={styles.instructionText}>Select an existing team:</Text>
+              <Text style={styles.instructionText}>
+                Select an existing team:
+              </Text>
               {gameData.teams.map((team, index) => (
                 <TouchableOpacity
                   key={team.name}
-                  style={[styles.teamSelectButton, { borderColor: getTeamColors(index) }]}
+                  style={[
+                    styles.teamSelectButton,
+                    { borderColor: getTeamColors(index) },
+                  ]}
                   onPress={() => joinTeamAsCreator(team.name)}
                 >
-                  <Text style={[styles.teamSelectText, { color: getTeamColors(index) }]}>
+                  <Text
+                    style={[
+                      styles.teamSelectText,
+                      { color: getTeamColors(index) },
+                    ]}
+                  >
                     Join {team.name} ({team.members.length}/5 members)
                   </Text>
                 </TouchableOpacity>
@@ -98,19 +126,22 @@ export default function GameLobby({ socket, gameData, playerData, isCreator, cre
             onChangeText={setTeamName}
             maxLength={15}
           />
-          <TouchableOpacity style={styles.createTeamButton} onPress={() => joinTeamAsCreator(teamName)}>
+          <TouchableOpacity
+            style={styles.createTeamButton}
+            onPress={() => joinTeamAsCreator(teamName)}
+          >
             <Text style={styles.buttonText}>Create & Join Team</Text>
           </TouchableOpacity>
 
           <View style={styles.creatorNoteContainer}>
             <Text style={styles.creatorNoteText}>
-              💡 As the creator, you can start the game once you join a team and there are at least 2 teams with
-              players.
+              💡 As the creator, you can start the game once you join a team and
+              there are at least 2 teams with players.
             </Text>
           </View>
         </View>
       </ScrollView>
-    )
+    );
   }
 
   return (
@@ -172,18 +203,34 @@ export default function GameLobby({ socket, gameData, playerData, isCreator, cre
             </Text>
           </View>
 
-          <Text style={styles.sectionTitle}>Teams ({gameData.teams.length}/4)</Text>
+          <Text style={styles.sectionTitle}>
+            Teams ({gameData.teams.length}/4)
+          </Text>
 
           {gameData.teams.map((team, index) => (
-            <View key={team.name} style={[styles.teamCard, { borderLeftColor: getTeamColors(index) }]}>
-              <Text style={[styles.teamName, { color: getTeamColors(index) }]}>{team.name}</Text>
+            <View
+              key={team.name}
+              style={[
+                styles.teamCard,
+                { borderLeftColor: getTeamColors(index) },
+              ]}
+            >
+              <Text style={[styles.teamName, { color: getTeamColors(index) }]}>
+                {team.name}
+              </Text>
               <Text style={styles.teamInfo}>
-                Members: {team.members.length}/5 | Help: {team.helpUsed}/{team.maxHelp}
+                Members: {team.members.length}/5 | Help: {team.helpUsed}/
+                {team.maxHelp}
               </Text>
               <View style={styles.membersList}>
                 {team.members.map((member) => (
                   <View key={member.id} style={styles.memberItem}>
-                    <Text style={[styles.memberName, member.isActive && styles.activeMember]}>
+                    <Text
+                      style={[
+                        styles.memberName,
+                        member.isActive && styles.activeMember,
+                      ]}
+                    >
                       {member.name}
                       {member.id === gameData.creator?.id && " 👑"}
                       {member.isActive ? " (Active)" : ""}
@@ -196,11 +243,21 @@ export default function GameLobby({ socket, gameData, playerData, isCreator, cre
 
           <View style={styles.gameRules}>
             <Text style={styles.rulesTitle}>Game Rules:</Text>
-            <Text style={styles.ruleText}>• Teams race to complete 5 questions</Text>
-            <Text style={styles.ruleText}>• Each member must answer at least 1 question</Text>
-            <Text style={styles.ruleText}>• 2 help requests per team allowed</Text>
+            <Text style={styles.ruleText}>
+              • Teams race to complete 5 questions
+            </Text>
+            <Text style={styles.ruleText}>
+              • Each member must answer at least 1 question
+            </Text>
+            <Text style={styles.ruleText}>
+              • 2 help requests per team allowed
+            </Text>
             <Text style={styles.ruleText}>• First team to finish wins!</Text>
-            {isCreator && <Text style={styles.creatorNote}>💡 As the creator, only you can start the game</Text>}
+            {isCreator && (
+              <Text style={styles.creatorNote}>
+                💡 As the creator, only you can start the game
+              </Text>
+            )}
           </View>
 
           {gameData.teams.length >= 2 && isCreator && playerData && (
@@ -211,19 +268,23 @@ export default function GameLobby({ socket, gameData, playerData, isCreator, cre
 
           {gameData.teams.length >= 2 && !isCreator && (
             <View style={styles.waitingMessage}>
-              <Text style={styles.waitingText}>Waiting for {gameData.creator?.name} to start the game...</Text>
+              <Text style={styles.waitingText}>
+                Waiting for {gameData.creator?.name} to start the game...
+              </Text>
             </View>
           )}
 
           {gameData.teams.length < 2 && (
             <View style={styles.waitingMessage}>
-              <Text style={styles.waitingText}>Need at least 2 teams to start the game</Text>
+              <Text style={styles.waitingText}>
+                Need at least 2 teams to start the game
+              </Text>
             </View>
           )}
         </View>
       )}
     </ScrollView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -432,4 +493,4 @@ const styles = StyleSheet.create({
     color: "#1d4ed8",
     lineHeight: 18,
   },
-})
+});

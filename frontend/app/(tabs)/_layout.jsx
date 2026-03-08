@@ -1,174 +1,305 @@
-import { View, TouchableOpacity, Platform } from 'react-native';
-import React, { useState, useEffect } from 'react';
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { IconButton } from 'react-native-paper';
-import COLORS from '@/constants/custom-colors';
-import CustomDrawer from '../../components/drawer/drawer';
-import { useAuthStore } from '../../store/authStore';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Platform,
+  View,
+  ActivityIndicator,
+  TouchableOpacity,
+} from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { Tabs, useRouter, usePathname } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import CustomDrawer from "../../components/drawer/drawer";
+import { useAuthStore } from "../../store/authStore";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabLayout() {
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const { user, token, checkAuth, logout } = useAuthStore();
-  const isInstructor = user?.privilege === 'instructor';
-  const isAdmin = user?.privilege === 'admin';
+  const [authReady, setAuthReady] = useState(false);
+  const { user, checkAuth } = useAuthStore();
+  const { colors } = useTheme();
+  const isInstructor = user?.privilege === "instructor";
+  const isAdmin = user?.privilege === "admin";
   const insets = useSafeAreaInsets();
-  
+  const router = useRouter();
+  const pathname = usePathname();
+  const lastNonCreateRef = useRef(null); // stores last path before entering /create
+
+  // Track the last route that is NOT the creator and is allowed for the user
   useEffect(() => {
-    checkAuth();
-    console.log("Is Admin:", isInstructor);
+    if (!pathname) return;
+    // Ignore create route itself
+    if (pathname.startsWith("/create")) return;
+    // If instructor (not admin) ignore admin dashboard so we don't bounce into access denied
+    if (!isAdmin && pathname.startsWith("/dashboard")) return;
+    lastNonCreateRef.current = pathname;
+  }, [pathname, isAdmin]);
+
+  const handleCreatorBack = () => {
+    // Prefer stored last non-create route
+    const target = lastNonCreateRef.current;
+    if (target) {
+      // Safety: prevent instructors from being sent to admin dashboard
+      if (!isAdmin && target.startsWith("/dashboard")) {
+        router.replace("/instructor");
+        return;
+      }
+      router.replace(target);
+      return;
+    }
+    // Fallback hierarchy
+    if (isInstructor && !isAdmin) {
+      router.replace("/instructor");
+      return;
+    }
+    if (router?.canGoBack?.()) {
+      try {
+        router.back();
+        return;
+      } catch {}
+    }
+    router.replace(isAdmin ? "/dashboard" : "/index");
+  };
+
+  useEffect(() => {
+    (async () => {
+      await checkAuth();
+      setAuthReady(true);
+    })();
+    console.log("Is Admin:", isAdmin);
     console.log("Platform:", Platform.OS);
-  }, []);
+  }, [checkAuth, isAdmin]);
+
+  if (!authReady) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <>
-      {Platform.OS !== 'web' && (
+      {Platform.OS !== "web" && (
         <CustomDrawer
           visible={drawerVisible}
           onDismiss={() => setDrawerVisible(false)}
         />
       )}
       <Tabs
+        initialRouteName={isAdmin ? "dashboard" : "index"}
         screenOptions={{
-          headerShown: Platform.OS !== 'web',
-          headerTitle: '',
-          tabBarPosition: Platform.OS === 'web' ? 'top' : 'bottom',
+          headerShown: Platform.OS !== "web",
+          headerTitle: "",
+          tabBarPosition: Platform.OS === "web" ? "top" : "bottom",
           tabBarStyle: {
-            backgroundColor: COLORS.background,
+            backgroundColor: "#0e5f55",
             borderTopWidth: 0,
             borderBottomWidth: 0,
             elevation: 0,
             shadowOpacity: 0,
-            height: Platform.OS === 'web' 
-              ? 56 
-              : Platform.OS === 'android' 
-                ? 65 + (insets.bottom > 0 ? insets.bottom : 12) 
+            height:
+              Platform.OS === "web"
+                ? 56
+                : Platform.OS === "android"
+                ? 65 + (insets.bottom > 0 ? insets.bottom : 12)
                 : 80,
-            paddingTop: Platform.OS === 'web' ? 0 : 8,
-            paddingBottom: Platform.OS === 'web' 
-              ? 0 
-              : Platform.OS === 'android' 
-                ? insets.bottom > 0 ? insets.bottom : 12 
+            paddingTop: Platform.OS === "web" ? 0 : 8,
+            paddingBottom:
+              Platform.OS === "web"
+                ? 0
+                : Platform.OS === "android"
+                ? insets.bottom > 0
+                  ? insets.bottom
+                  : 12
                 : 30,
-            position: 'relative',
-            top: Platform.OS === 'web' ? 0 : undefined,
-            bottom: Platform.OS === 'web' ? undefined : 0,
+            position: "relative",
+            top: Platform.OS === "web" ? 0 : undefined,
+            bottom: Platform.OS === "web" ? undefined : 0,
             left: 0,
             right: 0,
             safeAreaInsets: { bottom: 0 },
           },
           tabBarLabelStyle: {
-            paddingBottom: Platform.OS === 'android' ? 4 : 0,
+            paddingBottom: Platform.OS === "android" ? 4 : 0,
             fontSize: 12,
+            color: "#fcfde0",
           },
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.primaryLight,
           headerStyle: {
-            height: Platform.OS === 'android' ? 50 : 56,
-            backgroundColor: COLORS.background,
+            height: Platform.OS === "android" ? 50 : 56,
+            backgroundColor: colors.background,
             elevation: 0,
             shadowOpacity: 0,
             borderBottomWidth: 0,
           },
           headerTitleStyle: {
-            color: COLORS.black,
-            fontWeight: '600',
+            color: colors.text,
+            fontWeight: "600",
           },
         }}
       >
         <Tabs.Screen
-  name="index"
-  options={{
-    title: 'Home',
-    tabBarIcon: ({ color, size, focused }) => (
-      <Ionicons
-        name={focused ? "home" : "home-outline"}
-        size={size}
-        color={color}
-      />
-    ),
-    href: isAdmin ? null : undefined,
-    headerShown: !isAdmin,
-  }}
-/>
+          name="dashboard"
+          options={{
+            title: "Admin Tools",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "analytics" : "analytics-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+            href: isAdmin ? undefined : null,
+            // Remove blank header space on web
+            headerShown: Platform.OS !== "web" && isAdmin,
+          }}
+        />
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Home",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "home" : "home-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+            // Hide header on web to eliminate top gap
+            headerShown: Platform.OS !== "web",
+          }}
+        />
 
-<Tabs.Screen
-  name="game"
-  options={{
-    title: 'Arcade',
-    tabBarIcon: ({ color, size, focused }) => (
-      <Ionicons
-        name={focused ? "game-controller" : "game-controller-outline"}
-        size={size}
-        color={color}
-      />
-    ),
-    href: isAdmin ? null : undefined,
-    headerShown: !isAdmin,
-  }}
-/>
+        <Tabs.Screen
+          name="game"
+          options={{
+            title: "Arcade",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "game-controller" : "game-controller-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+            headerShown: Platform.OS !== "web",
+          }}
+        />
 
-<Tabs.Screen
-  name="create"
-  options={{
-    title: 'Create',
-    tabBarIcon: ({ color, size, focused }) => (
-      <Ionicons
-        name={focused ? "add-circle" : "add-circle-outline"}
-        size={size}
-        color={color}
-      />
-    ),
-    href: isInstructor ? undefined : null,
-    headerShown: isInstructor,
-  }} 
-/>
+        {/** Hidden create route: still accessible via instructor dashboard (tools > content creator) but removed from tab bar */}
+        <Tabs.Screen
+          name="create"
+          options={{
+            href: null, // hide from tab navigation
+            title: "Creator's Workshop",
+            headerShown: Platform.OS !== "web",
+            headerLeft: () => (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                onPress={handleCreatorBack}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 12,
+                  position: "absolute",
+                  left: 0,
+                }}
+              >
+                <Ionicons name="arrow-back" size={24} color={colors.text} />
+              </TouchableOpacity>
+            ),
+            headerTitleStyle: { fontSize: 16, fontWeight: "600" },
+          }}
+        />
 
-<Tabs.Screen
-  name="users"
-  options={{
-    title: 'Manage Users',
-    tabBarIcon: ({ color, size, focused }) => (
-      <Ionicons
-        name={focused ? "person" : "person-outline"}
-        size={size}
-        color={color}
-      />
-    ),
-    href: isAdmin ? undefined : null,
-    headerShown: isAdmin,
-  }} 
-/>
+        <Tabs.Screen
+          name="instructor"
+          options={{
+            title: "Instructor Dashboard",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "school" : "school-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+            href: isInstructor || isAdmin ? undefined : null,
+            headerShown: Platform.OS !== "web" && (isInstructor || isAdmin),
+          }}
+        />
 
-<Tabs.Screen 
-  name="leaderboards" 
-  options={{
-    title: 'Leaderboards',
-    tabBarIcon: ({ color, size, focused }) => (
-      <Ionicons 
-        name={focused ? "trophy" : "trophy-outline"} 
-        size={size} 
-        color={color} 
-      />
-    ),
-    href: isAdmin ? null : undefined,
-    headerShown: !isAdmin,
-  }} 
-/>
+        <Tabs.Screen
+          name="users"
+          options={{
+            title: "Manage Users",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "person" : "person-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+            // Hide from nav (accessible via dashboard links)
+            href: null,
+            headerShown: Platform.OS !== "web" && isAdmin,
+          }}
+        />
 
-<Tabs.Screen 
-  name="settings" 
-  options={{
-    title: 'Settings',
-    tabBarIcon: ({ color, size, focused }) => (
-      <Ionicons 
-        name={focused ? "settings" : "settings-outline"} 
-        size={size} 
-        color={color} 
-      />
-    ),
-  }} 
-/>
-        
+        <Tabs.Screen
+          name="logs"
+          options={{
+            title: "Audit Logs",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "document-text" : "document-text-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+            // Hide from nav (accessible via dashboard links)
+            href: null,
+            headerShown: Platform.OS !== "web" && isAdmin,
+          }}
+        />
+
+        <Tabs.Screen
+          name="leaderboards"
+          options={{
+            title: "Leaderboards",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "trophy" : "trophy-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+            // Hide from nav (accessible via arcade page) but ensure no access restrictions
+            href: null,
+            headerShown: false, // Changed to false to remove any potential header restrictions
+          }}
+        />
+
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: "Settings",
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons
+                name={focused ? "settings" : "settings-outline"}
+                size={size}
+                color={color}
+              />
+            ),
+            headerShown: Platform.OS !== "web",
+          }}
+        />
       </Tabs>
     </>
   );

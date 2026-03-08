@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digital Defenders Test (Fixed)</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h1>Digital Defenders Room Test (Fixed)</h1>
+
+    <div>
+      <h3>Player Setup</h3>
+      <input
+        type="text"
+        id="playerName"
+        placeholder="Player Name"
+        value="TestPlayer"
+      />
+    </div>
+
+    <div>
+      <h3>Room Actions</h3>
+      <button onclick="createRoom()">Create Room</button>
+      <br /><br />
+      <input
+        type="text"
+        id="roomCode"
+        placeholder="4-letter room code (e.g., ABCD)"
+        maxlength="4"
+        style="text-transform: uppercase"
+      />
+      <button onclick="joinRoom()">Join Room</button>
+    </div>
+
+    <div>
+      <h3>Status</h3>
+      <div id="status">Not connected</div>
+    </div>
+
+    <div>
+      <h3>Messages</h3>
+      <div
+        id="messages"
+        style="
+          border: 1px solid #ccc;
+          height: 300px;
+          overflow-y: scroll;
+          padding: 10px;
+        "
+      ></div>
+    </div>
+
+    <script>
+      let socket = null;
+      let playerName = "";
+      let currentRoom = null;
+
+      function log(message) {
+        const messages = document.getElementById("messages");
+        const div = document.createElement("div");
+        div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+        console.log(message);
+      }
+
+      function updateStatus(status) {
+        document.getElementById("status").textContent = status;
+      }
+
+      function connectSocket() {
+        if (socket && socket.connected) {
+          log("Already connected");
+          return;
+        }
+
+        socket = io("http://localhost:3000/digital-defenders", {
+          transports: ["websocket"],
+        });
+
+        socket.on("connect", () => {
+          log("Connected to Digital Defenders server");
+          updateStatus("Connected");
+        });
+
+        socket.on("disconnect", () => {
+          log("Disconnected from server");
+          updateStatus("Disconnected");
+        });
+
+        socket.on("connect_error", (error) => {
+          log("Connection error: " + error.message);
+          updateStatus("Connection error");
+        });
+
+        // Room events
+        socket.on("room-created", (data) => {
+          log(`Room created successfully! Room code: ${data.roomCode}`);
+          currentRoom = data.roomCode;
+          updateStatus(`In room: ${data.roomCode}`);
+        });
+
+        socket.on("room-joined", (data) => {
+          log(`Joined room successfully! Room code: ${data.roomCode}`);
+          currentRoom = data.roomCode;
+          updateStatus(`In room: ${data.roomCode}`);
+        });
+
+        socket.on("player-joined", (data) => {
+          log(`Player joined: ${data.playerName}`);
+        });
+
+        socket.on("error", (data) => {
+          log(`ERROR: ${data.message}`);
+          updateStatus("Error: " + data.message);
+        });
+      }
+
+      function createRoom() {
+        playerName = document.getElementById("playerName").value;
+        if (!playerName) {
+          alert("Please enter your name");
+          return;
+        }
+
+        if (!socket || !socket.connected) {
+          connectSocket();
+          // Wait a bit for connection before creating room
+          setTimeout(() => {
+            if (socket && socket.connected) {
+              doCreateRoom();
+            } else {
+              alert("Failed to connect to server");
+            }
+          }, 1000);
+        } else {
+          doCreateRoom();
+        }
+      }
+
+      function doCreateRoom() {
+        log(`Creating room for player: ${playerName}`);
+        socket.emit("create-room", { playerName });
+      }
+
+      function joinRoom() {
+        playerName = document.getElementById("playerName").value;
+        const roomCode = document
+          .getElementById("roomCode")
+          .value.toUpperCase();
+
+        if (!playerName || !roomCode) {
+          alert("Please enter your name and room code");
+          return;
+        }
+
+        // Validate room code format
+        if (!/^[A-Z]{4}$/.test(roomCode)) {
+          alert("Room code must be exactly 4 letters (A-Z only)");
+          return;
+        }
+
+        if (!socket || !socket.connected) {
+          connectSocket();
+          // Wait a bit for connection before joining room
+          setTimeout(() => {
+            if (socket && socket.connected) {
+              doJoinRoom(roomCode);
+            } else {
+              alert("Failed to connect to server");
+            }
+          }, 1000);
+        } else {
+          doJoinRoom(roomCode);
+        }
+      }
+
+      function doJoinRoom(roomCode) {
+        log(`Attempting to join room: ${roomCode} with player: ${playerName}`);
+        // Using the correct parameter name 'roomCode' instead of 'roomId'
+        socket.emit("join-room", { roomCode, playerName });
+      }
+
+      // Auto-transform room code input to uppercase
+      document
+        .getElementById("roomCode")
+        .addEventListener("input", function (e) {
+          e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, "");
+        });
+
+      // Connect on load
+      window.onload = function () {
+        log("Page loaded. Ready to test Digital Defenders.");
+      };
+    </script>
+  </body>
+</html>

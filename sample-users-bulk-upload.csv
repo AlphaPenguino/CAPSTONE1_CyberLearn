@@ -1,0 +1,11 @@
+username,email,password,role,fullName
+john.doe,john.doe@university.edu,SecurePass123,student,John Doe
+jane.smith,jane.smith@university.edu,MyPassword456,student,Jane Smith
+prof.johnson,prof.johnson@university.edu,TeacherPass789,instructor,Professor Johnson
+admin.user,admin@university.edu,AdminSecure999,admin,System Administrator
+alice.wong,alice.wong@university.edu,StudentPass111,student,Alice Wong
+bob.martin,bob.martin@university.edu,BobSecure222,student,Bob Martin
+dr.williams,dr.williams@university.edu,DrPassword333,instructor,Dr. Williams
+sarah.jones,sarah.jones@university.edu,SarahPass444,student,Sarah Jones
+mike.brown,mike.brown@university.edu,MikeSecure555,student,Mike Brown
+coord.davis,coord.davis@university.edu,CoordPass666,instructor,Coordinator Davis

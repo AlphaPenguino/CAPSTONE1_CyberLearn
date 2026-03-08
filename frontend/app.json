@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "CyberLearn",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,15 +9,23 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cyberlearn.frontend"
     },
     "android": {
+      "package": "com.cyberlearn.frontend",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/logo-branding/logo_only_transparent.png",
+        "backgroundColor": "#001F3F"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["INTERNET"]
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -27,12 +35,27 @@
     "plugins": [
       "expo-router",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you upload a profile picture.",
+          "cameraPermission": "The app accesses your camera to let you take a profile picture."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/logo-branding/logo_only_transparent.png",
+          "color": "#001F3F",
+          "defaultChannel": "game-completion"
         }
       ]
     ],
@@ -48,6 +71,12 @@
         "asset": "./assets/fonts/Pixeloid-Bold.ttf",
         "family": "PixeloidBold"
       }
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "90763b16-a124-4668-be5a-26126dc8d99c"
+      }
+    }
   }
 }

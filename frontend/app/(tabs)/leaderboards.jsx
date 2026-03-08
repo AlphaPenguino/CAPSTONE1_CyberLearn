@@ -1,943 +1,769 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  Image, 
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  Image,
   TouchableOpacity,
-  ActivityIndicator, 
+  ActivityIndicator,
   RefreshControl,
-  Animated,
   Platform,
-  Dimensions
-} from 'react-native';
-import COLORS from '@/constants/custom-colors';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { API_URL } from '../../constants/api';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useAuthStore } from '@/store/authStore';
-
-// Get screen dimensions
-const { width } = Dimensions.get('window');
+  StatusBar,
+  StyleSheet,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import COLORS from "@/constants/custom-colors";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useAuthStore } from "@/store/authStore";
+import { useTheme } from "../../contexts/ThemeContext";
+import { Picker } from "@react-native-picker/picker";
+import { API_URL } from "@/constants/api";
+import { router, useFocusEffect } from "expo-router";
 
 export default function Leaderboards() {
-  const { token, user } = useAuthStore();
+  const { user } = useAuthStore();
+  const { colors, isDarkMode } = useTheme();
   const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [timeFilter, setTimeFilter] = useState('all'); // 'all', 'monthly', 'weekly'
-  const [category, setCategory] = useState('cookies'); // 'cookies' or 'cakes'
+  const [selectedSection, setSelectedSection] = useState("all");
+  const [availableSections, setAvailableSections] = useState([]);
   const [currentUserRank, setCurrentUserRank] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const staleRefreshTimerRef = useRef(null);
 
-  // Add state for section filter
-  const [sectionFilter, setSectionFilter] = useState('all');
-  const [sections, setSections] = useState(['all']);
+  // Check if user is instructor
+  const isInstructor =
+    user?.privilege === "instructor" || user?.privilege === "admin";
 
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const bounceAnim = useRef(new Animated.Value(0)).current;
+  // Get image URL helper (handles localhost, relative paths, and Dicebear SVG on native)
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
 
-  // Fetch leaderboard data from Progress API
-  const fetchLeaderboards = async () => {
+    const apiBase = API_URL.replace("/api", "");
+
+    // If absolute URL
+    if (imagePath.startsWith("http")) {
+      try {
+        const url = new URL(imagePath);
+
+        // Convert Dicebear SVG to PNG on native (RN Image can't render remote SVG)
+        if (url.hostname.includes("api.dicebear.com")) {
+          if (Platform.OS !== "web" && url.pathname.endsWith("/svg")) {
+            url.pathname = url.pathname.replace(/\/svg$/, "/png");
+          }
+          return url.toString();
+        }
+
+        // Normalize localhost/127.0.0.1 to current API host (useful on mobile)
+        const isLocalHost = ["localhost", "127.0.0.1"].includes(url.hostname);
+        if (isLocalHost) {
+          const base = new URL(apiBase);
+          // Keep the path (e.g., /uploads/user-profiles/xxx.png), swap origin
+          return `${base.origin}${url.pathname}${url.search}`;
+        }
+
+        return imagePath;
+      } catch {
+        // Fall through to treat as relative
+      }
+    }
+
+    // If path starts with /uploads, join with API base
+    if (imagePath.startsWith("/uploads")) {
+      return `${apiBase}${imagePath}`;
+    }
+
+    // Otherwise assume it's a filename stored under user-profiles
+    return `${apiBase}/uploads/user-profiles/${imagePath}`;
+  };
+
+  // Fetch leaderboard data from backend
+  const fetchLeaderboards = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      // Get leaderboard with appropriate time filter and category
-      const response = await fetch(
-        `${API_URL}/progress/leaderboards?timeFrame=${timeFilter}&category=${category}`, 
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-      
+
+      const params = new URLSearchParams();
+      if (selectedSection !== "all") {
+        params.append("section", selectedSection);
+      }
+
+      console.log("Fetching leaderboard...");
+      console.log("API URL:", `${API_URL}/users/leaderboard?${params}`);
+
+      const response = await fetch(`${API_URL}/users/leaderboard?${params}`);
+
       if (!response.ok) {
-        throw new Error('Failed to fetch leaderboard data');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      setLeaders(data);
-      
-      // Extract unique sections
-      const uniqueSections = ['all', ...new Set(data.map(leader => leader.section || 'No Class'))];
-      setSections(uniqueSections);
-      
-      // Find current user in the leaderboard
-      const currentUserIndex = data.findIndex(
-        leader => leader.userId === user?._id || leader.username === user?.username
-      );
-      
-      if (currentUserIndex !== -1) {
-        setCurrentUserRank({
-          ...data[currentUserIndex],
-          rank: currentUserIndex + 1
-        });
+
+      if (data.success) {
+        setLeaders(data.data.rankings || []);
+        setAvailableSections(data.data.availableSections || []);
+        // Note: currentUserRank no longer available in public endpoint
+        setCurrentUserRank(null);
+        setLastUpdated(Date.now());
       } else {
-        // If user is not in the leaderboard, fetch their stats separately
-        const userProgressResponse = await fetch(`${API_URL}/progress/stats`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (userProgressResponse.ok) {
-          const userStats = await userProgressResponse.json();
-          setCurrentUserRank({
-            ...userStats,
-            username: user?.username,
-            profileImage: user?.profileImage,
-            section: user?.section || 'No Class', // Add section information
-            rank: data.length + 1, // Below the last ranked user
-            userId: user?._id
-          });
-        }
+        throw new Error(data.message || "Failed to fetch leaderboard");
       }
-      
     } catch (err) {
-      setError(err.message);
-      console.error('Leaderboard error:', err);
+      console.error("Leaderboards fetch error:", err);
+      setError(err.message || "Failed to load leaderboards");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [selectedSection]);
 
   useEffect(() => {
     fetchLeaderboards();
-    
-    // Start entrance animations
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      })
-    ]).start();
-    
-    // Start bounce animation for loading
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(bounceAnim, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(bounceAnim, {
-          toValue: 0,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, [timeFilter, category]); 
+  }, [fetchLeaderboards]);
+
+  // Refetch whenever screen regains focus (user navigates back after finishing a game)
+  useFocusEffect(
+    useCallback(() => {
+      // Only refetch if data might be stale (older than 5s) to avoid double fetch with mount effect
+      if (!lastUpdated || Date.now() - lastUpdated > 5000) {
+        fetchLeaderboards();
+      }
+      return () => {};
+    }, [fetchLeaderboards, lastUpdated])
+  );
+
+  // Background stale refresh every 30s while on this screen (cleared on blur/unmount)
+  useFocusEffect(
+    useCallback(() => {
+      staleRefreshTimerRef.current = setInterval(() => {
+        fetchLeaderboards();
+      }, 30000);
+      return () => {
+        if (staleRefreshTimerRef.current) {
+          clearInterval(staleRefreshTimerRef.current);
+          staleRefreshTimerRef.current = null;
+        }
+      };
+    }, [fetchLeaderboards])
+  );
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     fetchLeaderboards();
-  }, [timeFilter, category]);
+  }, [fetchLeaderboards]);
 
-  // Get user rank badge color
+  // Get rank badge colors
   const getRankBadgeColor = (index) => {
-    switch(index) {
-      case 0: return ['#FFD700', '#FFA000']; // Gold
-      case 1: return ['#C0C0C0', '#9E9E9E']; // Silver
-      case 2: return ['#CD7F32', '#8D6E63']; // Bronze
-      default: return [COLORS.primary, COLORS.primaryDark]; // Default
+    switch (index) {
+      case 0:
+        return isDarkMode ? COLORS.gold : "#FFD700";
+      case 1:
+        return isDarkMode ? "#E5E5E5" : "#C0C0C0";
+      case 2:
+        return isDarkMode ? "#DEB887" : "#CD7F32";
+      default:
+        return colors.primary;
     }
   };
 
-  // Get metric color based on category
-  const getCategoryColor = () => {
-    return category === 'cookies' ? '#FFD700' : '#FF69B4';
-  };
-
-  // Loading animation
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <Animated.View 
-          style={{
-            transform: [{
-              rotate: bounceAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['0deg', '360deg']
-              })
-            }]
-          }}
-        >
-          <MaterialCommunityIcons 
-            name={category === 'cookies' ? "cookie" : "cake"} 
-            size={60} 
-            color={getCategoryColor()} 
-          />
-        </Animated.View>
-        <Text style={styles.loadingText}>Loading leaderboards...</Text>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.text }]}>
+          Loading Leaderboards...
+        </Text>
       </View>
     );
   }
 
-  // Filter the leaders based on section
-  const filteredLeaders = sectionFilter === 'all' 
-    ? leaders 
-    : leaders.filter(leader => (leader.section || 'No Class') === sectionFilter);
-
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[
-        styles.contentContainer,
-        Platform.OS === 'web' && { alignItems: 'center' }
-      ]}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          colors={[COLORS.primary]}
-          tintColor={COLORS.primary}
-        />
-      }
-    >
-      <View
-        style={[
-          Platform.OS === 'web'
-            ? { width: 600, maxWidth: '100%', backgroundColor: COLORS.cardBackground, borderRadius: 18, padding: 16, marginTop: 16, marginBottom: 16 }
-            : {}
-        ]}
-      >
-        {/* Leaderboard Banner */}
-        <Animated.View 
-          style={[
-            styles.questBanner,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }]
-            }
-          ]}
-        >
-          <LinearGradient
-            colors={['rgba(0,0,0,0.7)', 'transparent']}
-            style={styles.bannerGradient}
+    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+      <StatusBar
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor={colors.background}
+      />
+
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: colors.surface }]}>
+        <View style={styles.headerContent}>
+          {/* Back Button */}
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/game")}
+            accessibilityRole="button"
+            accessibilityLabel="Go back to arcade"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.backButton}
+          >
+            <MaterialCommunityIcons
+              name="chevron-left"
+              size={28}
+              color={colors.text}
+            />
+          </TouchableOpacity>
+
+          <MaterialCommunityIcons
+            name="trophy"
+            size={28}
+            color={colors.primary}
           />
-          
-          <View style={styles.questTitleContainer}>
-            <View style={styles.questTitleWrapper}>
-              <MaterialCommunityIcons 
-                name={category === 'cookies' ? "trophy" : "cake-variant"} 
-                size={32} 
-                color={getCategoryColor()} 
-              />
-              <Text style={styles.questTitle}>Leaderboards</Text>
-            </View>
-            <Text style={styles.leaderboardSubtitle}>
-              {timeFilter === 'all' ? 'All Time' : timeFilter === 'monthly' ? 'Monthly' : 'Weekly'} Rankings
-            </Text>
-          </View>
-        </Animated.View>
-
-        {/* Filter Buttons */}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity 
-            style={[styles.filterButton, timeFilter === 'all' && styles.activeFilter]}
-            onPress={() => setTimeFilter('all')}
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Leaderboards
+          </Text>
+          <TouchableOpacity
+            onPress={handleRefresh}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh leaderboard"
+            style={styles.refreshButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={[styles.filterText, timeFilter === 'all' && styles.activeFilterText]}>All Time</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterButton, timeFilter === 'monthly' && styles.activeFilter]}
-            onPress={() => setTimeFilter('monthly')}
-          >
-            <Text style={[styles.filterText, timeFilter === 'monthly' && styles.activeFilterText]}>Monthly</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterButton, timeFilter === 'weekly' && styles.activeFilter]}
-            onPress={() => setTimeFilter('weekly')}
-          >
-            <Text style={[styles.filterText, timeFilter === 'weekly' && styles.activeFilterText]}>Weekly</Text>
+            <MaterialCommunityIcons
+              name="refresh"
+              size={22}
+              color={colors.text}
+              style={lastUpdated ? {} : { opacity: 0.7 }}
+            />
           </TouchableOpacity>
         </View>
 
-        {/* Category Selector */}
-        <View style={styles.categoryContainer}>
-          <TouchableOpacity 
-            style={[styles.categoryTab, category === 'cookies' && styles.activeCategory]}
-            onPress={() => setCategory('cookies')}
+        {/* Class Filter for Instructors */}
+        {isInstructor && availableSections.length > 0 && (
+          <View
+            style={[styles.filterContainer, { backgroundColor: colors.card }]}
           >
-            <MaterialCommunityIcons 
-              name="cookie" 
-              size={22} 
-              color={category === 'cookies' ? '#FFD700' : COLORS.textSecondary} 
+            <MaterialCommunityIcons
+              name="filter-variant"
+              size={20}
+              color={colors.text}
+              style={styles.filterIcon}
             />
-            <Text style={[
-              styles.categoryText, 
-              category === 'cookies' && { color: '#FFD700' }
-            ]}>
-              Cookies (XP)
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.categoryTab, category === 'cakes' && styles.activeCategory]}
-            onPress={() => setCategory('cakes')}
-          >
-            <MaterialCommunityIcons 
-              name="cake" 
-              size={22} 
-              color={category === 'cakes' ? '#FF69B4' : COLORS.textSecondary} 
-            />
-            <Text style={[
-              styles.categoryText, 
-              category === 'cakes' && { color: '#FF69B4' }
-            ]}>
-              Cakes (Quizzes)
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Section Filter - Only show if there are multiple sections */}
-        {sections.length > 1 && (
-          <View style={styles.sectionFilterContainer}>
-            <Text style={styles.sectionFilterLabel}>Class Filter:</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.sectionFilterScroll}
+            <Picker
+              selectedValue={selectedSection}
+              onValueChange={(itemValue) => setSelectedSection(itemValue)}
+              style={[styles.picker, { color: colors.text }]}
+              dropdownIconColor={colors.text}
+              mode="dropdown"
+              itemStyle={Platform.OS === "ios" ? styles.pickerItem : undefined}
             >
-              {sections.map(section => (
-                <TouchableOpacity
-                  key={section}
-                  style={[
-                    styles.sectionFilterButton,
-                    sectionFilter === section && styles.activeSectionFilter
-                  ]}
-                  onPress={() => setSectionFilter(section)}
-                >
-                  <Text style={[
-                    styles.sectionFilterText,
-                    sectionFilter === section && styles.activeSectionFilterText
-                  ]}>
-                    {section === 'all' ? 'All Classes' : section}
-                  </Text>
-                </TouchableOpacity>
+              <Picker.Item label="All Classes" value="all" />
+              {availableSections.map((section) => (
+                <Picker.Item key={section} label={section} value={section} />
               ))}
-            </ScrollView>
+            </Picker>
           </View>
         )}
+      </View>
 
-        {/* Current User's Rank */}
-        {currentUserRank && (
-          <Animated.View 
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+            progressBackgroundColor={colors.surface}
+          />
+        }
+      >
+        {/* Current User Rank Card - Only for Students */}
+        {currentUserRank && !isInstructor && (
+          <View
             style={[
-              styles.currentUserCard,
+              styles.userRankCard,
               {
-                opacity: fadeAnim,
-                transform: [{ translateY: fadeAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [20, 0]
-                })}]
+                backgroundColor: colors.card,
+                borderColor: colors.primary,
               },
-              category === 'cookies' 
-                ? { borderColor: '#FFD700', shadowColor: '#FFD700' } 
-                : { borderColor: '#FF69B4', shadowColor: '#FF69B4' }
             ]}
           >
-            <Text style={[
-              styles.yourRankText,
-              category === 'cookies' ? { color: '#FFD700' } : { color: '#FF69B4' }
-            ]}>Your Rank</Text>
+            <Text style={[styles.userRankTitle, { color: colors.primary }]}>
+              Your Ranking
+            </Text>
             <View style={styles.userRankContent}>
-              <LinearGradient
-                colors={getRankBadgeColor(currentUserRank.rank - 1)}
-                style={styles.rankBadgeLarge}
+              <View
+                style={[
+                  styles.rankBadge,
+                  {
+                    backgroundColor: getRankBadgeColor(
+                      currentUserRank.rank - 1
+                    ),
+                  },
+                ]}
               >
-                <Text style={styles.rankTextLarge}>{currentUserRank.rank}</Text>
-              </LinearGradient>
+                <Text style={styles.rankBadgeText}>
+                  #{currentUserRank.rank}
+                </Text>
+              </View>
               <Image
                 source={
                   currentUserRank.profileImage
-                    ? { uri: currentUserRank.profileImage }
-                    : require('../../assets/images/character1.png')
+                    ? { uri: getImageUrl(currentUserRank.profileImage) }
+                    : require("../../assets/images/character1.png")
                 }
-                style={[
-                  styles.avatarLarge,
-                  category === 'cookies' 
-                    ? { borderColor: '#FFD700' } 
-                    : { borderColor: '#FF69B4' }
-                ]}
+                style={styles.userAvatar}
               />
-              <View style={styles.userInfoLarge}>
-                <Text style={styles.usernameLarge}>{currentUserRank.username}</Text>
-                
-                {/* Add section info */}
-                <View style={styles.sectionRowLarge}>
-                  <Ionicons 
-                    name="school"
-                    size={16}
-                    color={currentUserRank.section === 'no_section' ? '#aaa' : '#4CAF50'}
-                  />
-                  <Text style={[
-                    styles.sectionTextLarge,
-                    currentUserRank.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
-                  ]}>
-                    {currentUserRank.section || 'No Class'}
-                  </Text>
-                </View>
-                
-                <Text style={[
-                  styles.scoreLarge, 
-                  category === 'cookies' ? { color: '#FFD700' } : { color: '#FF69B4' }
-                ]}>
-                  {category === 'cookies' 
-                    ? `${currentUserRank.totalXP || 0} Cookies` 
-                    : `${currentUserRank.completedQuizzes || 0} Cakes`
-                  }
+              <View style={styles.userInfo}>
+                <Text style={[styles.username, { color: colors.text }]}>
+                  {currentUserRank.username}
                 </Text>
-                <Text style={styles.level}>Level {Math.floor((currentUserRank.totalXP || 0) / 100) + 1}</Text>
+                <Text style={[styles.userXP, { color: colors.textSecondary }]}>
+                  {`${
+                    currentUserRank.combinedScore ||
+                    currentUserRank.totalXP ||
+                    0
+                  } XP`}
+                </Text>
+                {/* Level label removed as requested */}
+                {currentUserRank.maxLevelReached > 1 && (
+                  <Text style={[styles.userLevel, { color: colors.primary }]}>
+                    Max CQ Level: {currentUserRank.maxLevelReached}
+                  </Text>
+                )}
               </View>
             </View>
-          </Animated.View>
+          </View>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <View
+            style={[styles.errorContainer, { backgroundColor: colors.card }]}
+          >
+            <MaterialCommunityIcons
+              name="alert-circle"
+              size={48}
+              color={colors.error}
+            />
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              {error}
+            </Text>
+            <TouchableOpacity
+              style={[styles.retryButton, { backgroundColor: colors.primary }]}
+              onPress={fetchLeaderboards}
+            >
+              <MaterialCommunityIcons name="refresh" size={20} color="#fff" />
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Empty State */}
+        {!error && leaders.length === 0 && (
+          <View
+            style={[styles.emptyContainer, { backgroundColor: colors.card }]}
+          >
+            <MaterialCommunityIcons
+              name="trophy-broken"
+              size={64}
+              color={colors.textSecondary}
+            />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>
+              No Rankings Yet
+            </Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {selectedSection === "all"
+                ? "Complete quizzes to appear on the leaderboard"
+                : `No students found in ${selectedSection}`}
+            </Text>
+          </View>
         )}
 
         {/* Leaderboard List */}
-        <View style={styles.leaderboardSection}>
-          <View style={styles.sectionTitleContainer}>
-            <MaterialCommunityIcons 
-              name={category === 'cookies' ? "crown" : "cake-variant"} 
-              size={24} 
-              color={getCategoryColor()}
-            />
-            <Text style={styles.sectionTitle}>
-              Top {category === 'cookies' ? 'Cookie' : 'Cake'} Collectors
+        {!error && leaders.length > 0 && (
+          <View style={styles.leaderboardList}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Top Performers
+              {selectedSection !== "all" && (
+                <Text
+                  style={[
+                    styles.sectionSubtitle,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  {" "}
+                  in {selectedSection}
+                </Text>
+              )}
             </Text>
-            <Text style={styles.challengeCounter}>{leaders.length}</Text>
-          </View>
-          
-          {error ? (
-            <View style={styles.errorContainer}>
-              <MaterialCommunityIcons name="alert-octagon" size={48} color={COLORS.error} />
-              <Text style={styles.errorText}>Failed to load rankings: {error}</Text>
-              <TouchableOpacity 
-                style={styles.retryButton} 
-                onPress={fetchLeaderboards}
-              >
-                <Text style={styles.retryButtonText}>Try Again</Text>
-              </TouchableOpacity>
-            </View>
-          ) : filteredLeaders.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialCommunityIcons name="trophy-broken" size={60} color={COLORS.textSecondary} />
-              <Text style={styles.emptyStateText}>No rankings available yet!</Text>
-            </View>
-          ) : (
-            filteredLeaders.map((leader, idx) => (
+
+            {leaders.map((user, index) => (
               <View
-                key={leader._id || idx}
+                key={user._id}
                 style={[
                   styles.leaderCard,
-                  idx === 0 && styles.firstPlaceCard,
-                  idx === 1 && styles.secondPlaceCard,
-                  idx === 2 && styles.thirdPlaceCard,
-                  category === 'cakes' && idx === 0 && { borderColor: '#FF69B4', backgroundColor: 'rgba(255, 105, 180, 0.15)' },
-                  category === 'cakes' && idx === 1 && { borderColor: '#FF69B4', backgroundColor: 'rgba(255, 105, 180, 0.10)' },
-                  category === 'cakes' && idx === 2 && { borderColor: '#FF69B4', backgroundColor: 'rgba(255, 105, 180, 0.05)' }
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                  index < 3 && styles.topThreeCard,
                 ]}
               >
-                <LinearGradient
-                  colors={getRankBadgeColor(idx)}
-                  style={styles.rankBadge}
+                <View
+                  style={[
+                    styles.rankBadge,
+                    { backgroundColor: getRankBadgeColor(index) },
+                  ]}
                 >
-                  <Text style={styles.rankText}>{idx + 1}</Text>
-                </LinearGradient>
-                
+                  <Text style={styles.rankBadgeText}>#{index + 1}</Text>
+                </View>
+
                 <Image
                   source={
-                    leader.profileImage
-                      ? { uri: leader.profileImage }
-                      : require('../../assets/images/character1.png')
+                    user.profileImage
+                      ? { uri: getImageUrl(user.profileImage) }
+                      : require("../../assets/images/character1.png")
                   }
-                  style={[
-                    styles.avatar,
-                    category === 'cookies' 
-                      ? { borderColor: '#FFD700' } 
-                      : { borderColor: '#FF69B4' }
-                  ]}
+                  style={styles.avatar}
                 />
-                
-                <View style={styles.userInfo}>
-                  <Text style={styles.username}>
-                    {leader.username}
-                    {idx === 0 && " 👑"}
+
+                <View style={styles.userDetails}>
+                  <Text style={[styles.leaderUsername, { color: colors.text }]}>
+                    {user.username}
+                    {index === 0 && " 👑"}
                   </Text>
-                  
-                  {/* Add section info */}
-                  <View style={styles.sectionRow}>
-                    <Ionicons 
-                      name="school"
-                      size={14}
-                      color={leader.section === 'no_section' ? '#aaa' : '#4CAF50'}
-                    />
-                    <Text style={[
-                      styles.sectionText,
-                      leader.section === 'no_section' && { color: '#aaa', fontStyle: 'italic' }
-                    ]}>
-                      {leader.section || 'No Class'}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.userStats}>
+                  {/* Section label removed as requested */}
+                  <View style={styles.statsContainer}>
                     <View style={styles.statItem}>
-                      {category === 'cookies' ? (
-                        <>
-                          <MaterialCommunityIcons name="cookie" size={16} color="#FFD700" />
-                          <Text style={[
-                            styles.statValue, 
-                            { color: '#FFD700', fontWeight: 'bold' }
-                          ]}>
-                            {leader.totalXP || 0}
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <MaterialCommunityIcons name="cake" size={16} color="#FF69B4" />
-                          <Text style={[
-                            styles.statValue, 
-                            { color: '#FF69B4', fontWeight: 'bold' }
-                          ]}>
-                            {leader.completedQuizzes || 0}
-                          </Text>
-                        </>
-                      )}
+                      <MaterialCommunityIcons
+                        name="star"
+                        size={16}
+                        color={COLORS.gold}
+                      />
+                      <Text
+                        style={[
+                          styles.statText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {`${user.combinedScore || user.totalXP || 0} XP`}
+                      </Text>
                     </View>
-                    <View style={styles.statItem}>
-                      <MaterialCommunityIcons name="sword-cross" size={16} color={COLORS.primary} />
-                      <Text style={styles.statValue}>Lv. {Math.floor((leader.totalXP || 0) / 100) + 1}</Text>
-                    </View>
+                    {/* Level label removed as requested */}
                   </View>
+                  {user.maxLevelReached > 1 && (
+                    <View style={styles.cqLevelContainer}>
+                      <View style={styles.statItem}>
+                        <MaterialCommunityIcons
+                          name="trophy"
+                          size={16}
+                          color="#FF6B6B"
+                        />
+                        <Text
+                          style={[
+                            styles.statText,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          CQ Lv.{user.maxLevelReached}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
-                
-                {idx <= 2 && (
-                  <MaterialCommunityIcons 
-                    name={
-                      idx === 0 
-                        ? category === 'cookies' ? "medal" : "cake-layered" 
-                        : idx === 1 
-                          ? category === 'cookies' ? "medal-outline" : "cake-variant" 
-                          : category === 'cookies' ? "bookmark-outline" : "cupcake"
-                    } 
-                    size={24} 
-                    color={
-                      idx === 0 
-                        ? category === 'cookies' ? "#FFD700" : "#FF69B4" 
-                        : idx === 1 
-                          ? category === 'cookies' ? "#C0C0C0" : "#FF8DC1" 
-                          : category === 'cookies' ? "#CD7F32" : "#FFC0CB"
-                    } 
-                    style={styles.medalIcon}
+
+                {index < 3 && (
+                  <MaterialCommunityIcons
+                    name="medal"
+                    size={24}
+                    color={getRankBadgeColor(index)}
                   />
                 )}
               </View>
-            ))
-          )}
-        </View>
-      </View>
-    </ScrollView>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </LinearGradient>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  contentContainer: {
-    paddingVertical: 8,
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
+    justifyContent: "center",
+    alignItems: "center",
   },
   loadingText: {
     marginTop: 16,
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: "600",
   },
-  questBanner: {
-    height: 180,
-    borderRadius: 18,
-    overflow: 'hidden',
+  header: {
+    paddingTop: Platform.OS === "ios" ? 60 : 40,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+    ...(Platform.OS === "web" && {
+      alignItems: "center",
+    }),
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
     marginBottom: 16,
-    position: 'relative',
-    backgroundColor: 'rgba(10, 25, 41, 0.95)',
+    ...(Platform.OS === "web" && {
+      width: "100%",
+      maxWidth: 800,
+    }),
   },
-  bannerGradient: {
-    position: 'absolute',
-    top: 0,
+  backButton: {
+    position: "absolute",
     left: 0,
-    right: 0,
-    height: '100%',
-    zIndex: 1,
   },
-  questTitleContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    zIndex: 2,
-  },
-  questTitleWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  questTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#ffffff',
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
     marginLeft: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
   },
-  leaderboardSubtitle: {
-    fontSize: 18,
-    color: '#ffffff',
-    marginTop: 4,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+  refreshButton: {
+    position: "absolute",
+    right: 0,
+    padding: 4,
   },
   filterContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    backgroundColor: COLORS.cardBackground,
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 12,
-    padding: 4,
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  activeFilter: {
-    backgroundColor: COLORS.primary,
-  },
-  filterText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  activeFilterText: {
-    color: '#ffffff',
-  },
-  // Add category selector styles
-  categoryContainer: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
-    padding: 4,
-  },
-  categoryTab: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  activeCategory: {
-    backgroundColor: 'rgba(25, 118, 210, 0.2)',
-  },
-  categoryText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginLeft: 6,
-  },
-  sectionFilterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
-    padding: 4,
-    
-  },
-  sectionFilterLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  sectionFilterScroll: {
-    paddingBottom: 4,
-  },
-  sectionFilterButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
-    marginRight: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    minHeight: 50,
+    ...(Platform.OS === "web" && {
+      width: "100%",
+      maxWidth: 800,
+      overflow: "visible",
+    }),
   },
-  activeSectionFilter: {
-    backgroundColor: 'rgba(25, 118, 210, 0.2)',
-    borderColor: COLORS.primary,
+  filterIcon: {
+    marginRight: 8,
   },
-  sectionFilterText: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
+  picker: {
+    flex: 1,
+    height: 50,
+    ...(Platform.OS === "web" && {
+      cursor: "pointer",
+    }),
   },
-  activeSectionFilterText: {
-    color: COLORS.primary,
-    fontWeight: 'bold',
+  pickerItem: {
+    height: 120,
   },
-  currentUserCard: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 16,
+  scrollView: {
+    flex: 1,
+    ...(Platform.OS === "web" && {
+      alignSelf: "center",
+      width: "100%",
+      maxWidth: 800,
+    }),
+  },
+  scrollContent: {
+    padding: 20,
+    ...(Platform.OS === "web" && {
+      paddingHorizontal: 10,
+    }),
+  },
+  userRankCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
     borderWidth: 2,
-    borderColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 4,
+    ...(Platform.OS === "web" && {
+      maxWidth: 800,
+      width: "100%",
+    }),
   },
-  yourRankText: {
+  userRankTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 8,
-    textAlign: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 16,
   },
   userRankContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
-  rankBadgeLarge: {
+  rankBadge: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 16,
-    shadowColor: COLORS.primaryDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
   },
-  rankTextLarge: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 22,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+  rankBadgeText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
   },
-  avatarLarge: {
+  userAvatar: {
     width: 60,
     height: 60,
     borderRadius: 30,
     marginRight: 16,
     borderWidth: 2,
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.background,
-  },
-  userInfoLarge: {
-    flex: 1,
-  },
-  usernameLarge: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    textShadowColor: COLORS.primaryDark,
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  scoreLarge: {
-    fontSize: 18,
-    color: COLORS.accent,
-    fontWeight: 'bold',
-    marginTop: 2,
-  },
-  level: {
-    fontSize: 16,
-    color: COLORS.primaryLight,
-    fontWeight: 'bold',
-    marginTop: 2,
-  },
-  leaderboardSection: {
-    marginBottom: 16,
-  },
-  sectionTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginLeft: 8,
-    marginRight: 8,
-  },
-  challengeCounter: {
-    backgroundColor: COLORS.primary,
-    color: '#ffffff',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    color: COLORS.textSecondary,
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-  },
-  errorText: {
-    fontSize: 16,
-    color: COLORS.error,
-    marginTop: 12,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  leaderCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 18,
-    marginVertical: 8,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  firstPlaceCard: {
-    borderColor: '#FFD700',
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-  },
-  secondPlaceCard: {
-    borderColor: '#C0C0C0',
-    backgroundColor: 'rgba(192, 192, 192, 0.12)',
-  },
-  thirdPlaceCard: {
-    borderColor: '#CD7F32',
-    backgroundColor: 'rgba(205, 127, 50, 0.10)',
-  },
-  rankBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    shadowColor: COLORS.primaryDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
-  },
-  rankText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 18,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 16,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.background,
   },
   userInfo: {
     flex: 1,
   },
   username: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    textShadowColor: COLORS.primaryDark,
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    fontSize: 20,
+    fontWeight: "bold",
   },
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
+  userXP: {
+    fontSize: 16,
+    marginTop: 2,
   },
-  sectionRowLarge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  sectionText: {
-    fontSize: 12,
-    color: '#9e9e9e',
-    marginLeft: 4,
-  },
-  sectionTextLarge: {
+  userLevel: {
     fontSize: 14,
-    color: '#9e9e9e',
-    marginLeft: 6,
+    fontWeight: "600",
+    marginTop: 2,
   },
-  userStats: {
-    flexDirection: 'row',
+  errorContainer: {
+    padding: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    marginBottom: 20,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+    ...(Platform.OS === "web" && {
+      maxWidth: 600,
+      alignSelf: "center",
+      width: "100%",
+    }),
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: "center",
+    marginVertical: 16,
+  },
+  retryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  emptyContainer: {
+    padding: 40,
+    borderRadius: 16,
+    alignItems: "center",
+    marginBottom: 20,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+    ...(Platform.OS === "web" && {
+      maxWidth: 600,
+      alignSelf: "center",
+      width: "100%",
+    }),
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
+  },
+  leaderboardList: {
+    marginBottom: 20,
+    ...(Platform.OS === "web" && {
+      maxWidth: 800,
+      width: "100%",
+    }),
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  sectionSubtitle: {
+    fontSize: 16,
+    fontWeight: "normal",
+  },
+  leaderCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  topThreeCard: {
+    borderWidth: 2,
+    shadowOpacity: 0.15,
+    elevation: 4,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginHorizontal: 12,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+  userDetails: {
+    flex: 1,
+  },
+  leaderUsername: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  leaderSection: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  statsContainer: {
+    flexDirection: "row",
+    marginTop: 8,
+  },
+  cqLevelContainer: {
+    flexDirection: "row",
     marginTop: 4,
   },
   statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 16,
   },
-  statValue: {
+  statText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
     marginLeft: 4,
-    fontWeight: 'bold',
+    fontWeight: "500",
   },
-  medalIcon: {
-    marginLeft: 8,
-  }
-};
+});

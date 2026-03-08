@@ -1,125 +1,1048 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import COLORS from '@/constants/custom-colors';
-import { useAuthStore } from '../../store/authStore';
-import { useRouter } from 'expo-router';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  Image,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  StyleSheet,
+  useWindowDimensions,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuthStore } from "../../store/authStore";
+import { useSettings } from "../../contexts/SettingsContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useRouter } from "expo-router";
+import COLORS from "@/constants/custom-colors";
+import * as ImagePicker from "expo-image-picker";
+import {
+  API_URL,
+  constructProfileImageUrl,
+  addCacheBuster,
+} from "@/constants/api";
+import ChangePasswordModal from "../../components/ui/ChangePasswordModal";
 
-export default function SettingsScreen() {
+export default function Settings() {
+  const { width } = useWindowDimensions();
+  const isMobileWidth = width < 600; // applies to web & native
+  const { user, logout, updateUser } = useAuthStore();
+  const { settings, saveSettings, triggerHaptic } = useSettings();
+  const { isDarkMode, toggleTheme, colors } = useTheme();
   const router = useRouter();
-  const { user, logout } = useAuthStore();
-  const [imageError, setImageError] = useState(false);
+  const [profileImageError, setProfileImageError] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  // Force re-render / cache bust key for Image component
+  const [imageKey, setImageKey] = useState(Date.now());
+  // Track upload attempt to enable retry logic if file not immediately available on CDN/storage
+  const uploadRetryCountRef = useRef(0);
+  // Local temporary image URI (display immediately after picking, before remote URL propagates)
+  const [tempLocalImageUri, setTempLocalImageUri] = useState(null);
 
+  // When profileImageTimestamp changes, bump the imageKey so Image remounts and bypasses RN cache layer
+  useEffect(() => {
+    if (user?.profileImageTimestamp) {
+      setImageKey(user.profileImageTimestamp + Math.random());
+    }
+  }, [user?.profileImageTimestamp]);
+
+  // Use dark blue in light mode instead of the default yellow for settings accents
+  const highlightColor = isDarkMode ? colors.primary : "#1976d2";
+
+  // Helper function to get compatible image URL
   const getCompatibleImageUrl = (url) => {
     if (!url) return null;
-    if (url.includes('dicebear') && url.includes('/svg')) {
-      if (Platform.OS === 'android') {
-        return url.replace('/svg', '/png');
+
+    // First construct the full URL from filename if needed
+    let fullUrl = constructProfileImageUrl(url);
+
+    if (Platform.OS !== "web") {
+      try {
+        console.log("🧪 getCompatibleImageUrl input:", url);
+        console.log("🧪 getCompatibleImageUrl constructed:", fullUrl);
+      } catch {}
+    }
+
+    if (fullUrl && fullUrl.includes("dicebear") && fullUrl.includes("/svg")) {
+      if (Platform.OS === "android" || Platform.OS === "ios") {
+        fullUrl = fullUrl.replace("/svg", "/png");
       }
     }
-    return url;
+
+    // Add cache busting parameter to force refresh
+    // Use timestamp from user object if available, otherwise use current time
+    const timestamp = user?.profileImageTimestamp;
+    return addCacheBuster(fullUrl, timestamp);
   };
 
-  const DrawerItem = ({ title, icon, onPress }) => (
-    <TouchableOpacity style={styles.drawerItem} onPress={onPress}>
-      <Ionicons name={icon} size={24} color={COLORS.primary} />
-      <Text style={styles.drawerItemText}>{title}</Text>
-    </TouchableOpacity>
+  const prefetchImage = async (url) => {
+    if (!url) return;
+    try {
+      if (Platform.OS === "web") {
+        // Web prefetch using Image object
+        await new Promise((resolve, reject) => {
+          const img = new window.Image();
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = url;
+        });
+      } else {
+        await Image.prefetch(url);
+      }
+      console.log("🗂️ Prefetched new profile image:", url);
+    } catch (e) {
+      console.log(
+        "⚠️ Prefetch failed (will rely on standard load):",
+        e.message
+      );
+    }
+  };
+
+  const scheduleRetryIfNeeded = (baseUrl) => {
+    // If initial load fails right after upload, storage might be eventually consistent; retry a few times
+    if (uploadRetryCountRef.current >= 4) return; // max 4 retries
+    const attempt = ++uploadRetryCountRef.current;
+    setTimeout(async () => {
+      const retryUrl = addCacheBuster(baseUrl, Date.now());
+      console.log(`🔁 Retry prefetch attempt ${attempt} ->`, retryUrl);
+      await prefetchImage(retryUrl);
+      // Force re-render with fresh key each retry
+      setImageKey(Date.now() + attempt);
+    }, 800 * attempt); // progressive backoff
+  };
+
+  const handleProfilePictureUpload = async () => {
+    try {
+      console.log("🚀 Starting profile picture upload...");
+      triggerHaptic("light");
+
+      // Request permission to access media library
+      const permissionResult =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      console.log("📋 Permission result:", permissionResult);
+
+      if (permissionResult.granted === false) {
+        console.log("❌ Permission denied");
+        Alert.alert(
+          "Permission required",
+          "Please allow access to your photo library to upload a profile picture."
+        );
+        return;
+      }
+
+      console.log("✅ Permission granted, launching image picker...");
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: false,
+      });
+
+      console.log("📸 Image picker result:", {
+        canceled: result.canceled,
+        assetsLength: result.assets?.length || 0,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setIsUploadingImage(true);
+        const asset = result.assets[0];
+        // Show picked image immediately (local) while upload proceeds
+        setTempLocalImageUri(asset.uri);
+
+        console.log("📁 Selected asset details:", {
+          uri: asset.uri,
+          type: asset.type,
+          mimeType: asset.mimeType,
+          fileName: asset.fileName,
+          filename: asset.filename,
+          size: asset.fileSize,
+          width: asset.width,
+          height: asset.height,
+        });
+
+        // Create FormData for file upload
+        const formData = new FormData();
+
+        // For React Native, we need to handle the file object differently
+        // React Native requires a specific format for file uploads
+        if (Platform.OS === "web") {
+          // Web version - use File/Blob
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          const fileName =
+            asset.fileName || asset.filename || `profile_${Date.now()}.jpg`;
+          formData.append("profilePicture", blob, fileName);
+        } else {
+          // React Native version - use object with uri, type, name
+          // Fix for Android: ensure proper file extension and MIME type
+          const fileName =
+            asset.fileName || asset.filename || `profile_${Date.now()}.jpg`;
+
+          // Ensure the MIME type is properly set for Android
+          let mimeType = asset.mimeType || asset.type || "image/jpeg";
+
+          // Android fix: map common image types
+          if (mimeType === "image/jpg") {
+            mimeType = "image/jpeg";
+          }
+
+          const fileData = {
+            uri:
+              Platform.OS === "android"
+                ? asset.uri
+                : asset.uri.replace("file://", ""),
+            type: mimeType,
+            name: fileName,
+          };
+
+          console.log("📎 File data for upload:", fileData);
+          formData.append("profilePicture", fileData);
+        }
+
+        console.log("🌐 FormData created for platform:", Platform.OS);
+
+        // Get token from auth store
+        const { token } = useAuthStore.getState();
+
+        if (!token) {
+          throw new Error(
+            "No authentication token found. Please log in again."
+          );
+        }
+
+        console.log("🔑 Auth token available:", !!token);
+        console.log("📤 Upload to:", `${API_URL}/users/upload-profile-picture`);
+
+        // Upload to backend with proper headers for mobile
+        const uploadHeaders = {
+          Authorization: `Bearer ${token}`,
+        };
+
+        // For mobile, explicitly set Accept header
+        if (Platform.OS !== "web") {
+          uploadHeaders["Accept"] = "application/json";
+        }
+
+        // Upload to backend
+        const response = await fetch(
+          `${API_URL}/users/upload-profile-picture`,
+          {
+            method: "POST",
+            headers: uploadHeaders,
+            body: formData,
+          }
+        );
+
+        console.log("📥 Upload response status:", response.status);
+        console.log(
+          "📥 Upload response headers:",
+          Object.fromEntries(response.headers.entries())
+        );
+
+        let data;
+        try {
+          data = await response.json();
+          console.log("📥 Upload response data:", data);
+        } catch (parseError) {
+          console.error("❌ Failed to parse response as JSON:", parseError);
+          const responseText = await response.text();
+          console.log("📄 Raw response text:", responseText);
+          throw new Error(
+            `Server returned non-JSON response: ${response.status} ${response.statusText}`
+          );
+        }
+
+        if (response.ok && data.success) {
+          console.log("✅ Upload successful, updating user data");
+
+          // Merge with existing user to avoid losing fields (fullName, gamification, etc.)
+          const existingUser = useAuthStore.getState().user || {};
+
+          const mergedUser = {
+            ...existingUser,
+            ...data.user, // server now supplies fullName and other details
+            profileImage: data.user.profileImage,
+            profileImageTimestamp:
+              data.user.profileImageTimestamp || Date.now(),
+          };
+
+          // Generate a fresh timestamp to ensure cache busting even if backend returned same value
+          const freshTimestamp = Date.now();
+          const mergedWithFreshTs = {
+            ...mergedUser,
+            profileImageTimestamp: freshTimestamp,
+          };
+          updateUser(mergedWithFreshTs);
+          setProfileImageError(false);
+
+          // Force image component to remount immediately
+          setImageKey(Date.now());
+
+          // Attempt to prefetch the new image in background (non-blocking)
+          const constructed = constructProfileImageUrl(
+            mergedWithFreshTs.profileImage
+          );
+          const cacheBusted = addCacheBuster(
+            constructed,
+            mergedWithFreshTs.profileImageTimestamp
+          );
+
+          // Run prefetch in background without blocking
+          prefetchImage(cacheBusted).catch((err) => {
+            console.log(
+              "⚠️ Background prefetch failed, will retry:",
+              err.message
+            );
+          });
+
+          // Schedule a retry sequence in case the file isn't yet available (eventual consistency)
+          scheduleRetryIfNeeded(constructed);
+
+          Alert.alert("Success", "Profile picture updated successfully!");
+        } else {
+          console.error("❌ Upload failed:", data);
+          throw new Error(
+            data.message || `HTTP ${response.status}: Upload failed`
+          );
+        }
+      } else {
+        console.log("ℹ️ Image picker canceled or no image selected");
+      }
+    } catch (error) {
+      console.error("💥 Error uploading profile picture:", error);
+
+      // More specific error handling
+      let errorMessage = "Failed to upload profile picture. Please try again.";
+
+      if (error.message.includes("No authentication token")) {
+        errorMessage = "Please log in again to upload a profile picture.";
+      } else if (error.message.includes("Network request failed")) {
+        errorMessage =
+          "Network error. Please check your internet connection and try again.";
+      } else if (error.message.includes("HTTP 400")) {
+        errorMessage =
+          "Invalid file format or size. Please try a different image.";
+      } else if (error.message.includes("HTTP 401")) {
+        errorMessage = "Authentication error. Please log in again.";
+      } else if (error.message.includes("HTTP 413")) {
+        errorMessage =
+          "File too large. Please choose a smaller image (max 5MB).";
+      } else if (error.message.includes("HTTP 500")) {
+        errorMessage = "Server error. Please try again later.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      console.error("🚨 Final error message:", errorMessage);
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Manual refresh: user taps to attempt loading remote image & clear local placeholder
+  const handleManualImageRefresh = () => {
+    triggerHaptic("light");
+    if (user) {
+      const newTs = Date.now();
+      updateUser({ ...user, profileImageTimestamp: newTs });
+      setImageKey(newTs + Math.random());
+    }
+    // Clear local temp so remote will be attempted
+    setTempLocalImageUri(null);
+    const constructed = constructProfileImageUrl(user?.profileImage);
+    if (constructed) {
+      const cacheBusted = addCacheBuster(constructed, Date.now());
+      prefetchImage(cacheBusted).catch(() => {});
+    }
+  };
+
+  const handleLogout = () => {
+    const performLogout = async () => {
+      try {
+        // Optimistically clear user state to prevent intermediate renders using stale user data
+        useAuthStore.setState({ user: null, token: null });
+        await logout();
+        // Navigate directly to auth stack root; '/' may conflict with router base
+        router.replace("/(auth)");
+      } catch (e) {
+        console.error("Logout error:", e);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (confirm("Are you sure you want to logout?")) {
+        performLogout();
+      }
+    } else {
+      Alert.alert("Logout", "Are you sure you want to logout?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          onPress: () => {
+            performLogout();
+          },
+          style: "destructive",
+        },
+      ]);
+    }
+  };
+
+  const handleSettingToggle = async (setting, value) => {
+    triggerHaptic("light");
+    await saveSettings({ [setting]: value });
+  };
+
+  const SettingItem = ({
+    title,
+    subtitle,
+    value,
+    onToggle,
+    icon,
+    type = "switch",
+  }) => (
+    <View
+      style={[
+        styles.settingItem,
+        {
+          backgroundColor: isDarkMode
+            ? "rgba(219, 252, 219, 1)" // #5da65d with 0.5 opacity
+            : "rgba(219, 255, 219, 0.8)", // Same for light/dark mode
+          borderColor: isDarkMode
+            ? "rgba(93, 166, 93, 0.7)" // Slightly darker border for contrast
+            : "rgba(93, 166, 93, 0.7)",
+        },
+      ]}
+    >
+      {/* Existing content */}
+      <View style={styles.settingLeft}>
+        <Ionicons name={icon} size={24} color={highlightColor} />
+        <View style={styles.settingText}>
+          <Text style={[styles.settingTitle, { color: colors.text }]}>
+            {title}
+          </Text>
+          {subtitle && (
+            <Text
+              style={[styles.settingSubtitle, { color: colors.textSecondary }]}
+            >
+              {subtitle}
+            </Text>
+          )}
+        </View>
+      </View>
+      {type === "switch" && (
+        <Switch
+          value={value}
+          onValueChange={onToggle}
+          trackColor={{ false: "#767577", true: highlightColor }}
+          thumbColor={value ? "#ffffff" : "#f4f3f4"}
+        />
+      )}
+      {type === "chevron" && (
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={colors.textSecondary}
+        />
+      )}
+    </View>
   );
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/(auth)');
-  };
+  const ProfileSection = () => (
+    <View style={styles.section}>
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: isDarkMode ? "#383217ff" : "#1976d2" },
+        ]}
+      >
+        Profile
+      </Text>
+      <View
+        style={[
+          styles.profileContainer,
+          {
+            backgroundColor: isDarkMode
+              ? "rgba(219, 252, 219, 1)"
+              : "rgba(219, 255, 219, 0.8)",
+            borderColor: isDarkMode
+              ? "rgba(93, 166, 93, 0.7)"
+              : "rgba(93, 166, 93, 0.7)",
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.avatarContainer}
+          onPress={handleProfilePictureUpload}
+          disabled={isUploadingImage}
+        >
+          {(() => {
+            // Prefer local image if just picked
+            if (tempLocalImageUri) {
+              return (
+                <Image
+                  key={imageKey}
+                  source={{ uri: tempLocalImageUri }}
+                  style={styles.profileImage}
+                  onError={() => {
+                    console.log("⚠️ Local temp image failed to render");
+                  }}
+                />
+              );
+            }
+            if (user?.profileImage && !profileImageError) {
+              return (
+                <Image
+                  key={imageKey}
+                  source={{ uri: getCompatibleImageUrl(user.profileImage) }}
+                  style={styles.profileImage}
+                  onError={(error) => {
+                    console.log(
+                      "🖼️ Remote profile image load error:",
+                      error.nativeEvent
+                    );
+                    setProfileImageError(true);
+                    if (uploadRetryCountRef.current < 4) {
+                      const constructed = constructProfileImageUrl(
+                        user.profileImage
+                      );
+                      scheduleRetryIfNeeded(constructed);
+                    }
+                  }}
+                  onLoad={() => {
+                    console.log("✅ Remote profile image loaded");
+                    setProfileImageError(false);
+                  }}
+                />
+              );
+            }
+            return (
+              <View style={styles.profileImageFallback}>
+                <Text style={styles.profileImageText}>
+                  {user?.username?.charAt(0).toUpperCase() || "?"}
+                </Text>
+              </View>
+            );
+          })()}
 
-  return (
-    <View style={styles.container}>
-      {/* Main content container with max-width and centering */}
-      <View style={styles.mainContent}>
-        <View style={styles.header}>
-          {user?.profileImage && !imageError ? (
-            <Image
-              source={{ uri: getCompatibleImageUrl(user.profileImage) }}
-              style={styles.profileImage}
-              onError={() => setImageError(true)}
+          {/* Upload overlay */}
+          <View style={styles.uploadOverlay}>
+            {isUploadingImage ? (
+              <ActivityIndicator size={16} color="#fff" />
+            ) : (
+              <Ionicons name="camera" size={16} color="#fff" />
+            )}
+          </View>
+
+          <View style={styles.roleBadge}>
+            <Ionicons
+              name={
+                user?.privilege === "instructor"
+                  ? "shield"
+                  : user?.privilege === "admin"
+                  ? "star"
+                  : "person"
+              }
+              size={12}
+              color="#fff"
             />
-          ) : (
-            <Ionicons name="person-circle-outline" size={64} color={COLORS.primary} />
-          )}
-          <Text style={styles.title}>{user?.username || 'Guest'}</Text>
-        </View>
+          </View>
+        </TouchableOpacity>
+        <View style={styles.profileInfo}>
+          <Text style={[styles.profileName, { color: colors.text }]}>
+            {user?.username || "Unknown User"}
+          </Text>
 
-        <View style={styles.itemsContainer}>
-          <DrawerItem
-            title="Profile"
-            icon="person-outline"
-            onPress={() => router.push('/profile/profile')}
-          />
-          <DrawerItem
-            title="Settings"
-            icon="settings-outline"
-            onPress={() => router.push('/(tabs)/settings')}
-          />
-          <DrawerItem
-            title="Logout"
-            icon="log-out-outline"
-            onPress={handleLogout}
-          />
+          <View
+            style={[
+              styles.profileInfoSection,
+              {
+                backgroundColor: isDarkMode
+                  ? "rgba(185, 255, 185, 0.3)"
+                  : "rgba(210, 250, 210, 0.6)",
+              },
+            ]}
+          >
+            <Ionicons
+              name="person-outline"
+              size={16}
+              color={colors.textSecondary}
+            />
+            <Text style={[styles.profileFullName, { color: colors.text }]}>
+              {user?.fullName || "No name provided"}
+            </Text>
+          </View>
+
+          <View style={styles.profileInfoSection}>
+            <Ionicons
+              name="mail-outline"
+              size={16}
+              color={colors.textSecondary}
+            />
+            <Text
+              style={[styles.profileEmail, { color: colors.textSecondary }]}
+            >
+              {user?.email || "No email provided"}
+            </Text>
+          </View>
+
+          <View style={styles.profileInfoSection}>
+            <Ionicons
+              name={
+                user?.privilege === "instructor"
+                  ? "shield-outline"
+                  : user?.privilege === "admin"
+                  ? "star-outline"
+                  : "school-outline"
+              }
+              size={16}
+              color={highlightColor}
+            />
+            <Text style={[styles.profileRole, { color: highlightColor }]}>
+              {user?.privilege === "instructor"
+                ? "Instructor"
+                : user?.privilege === "admin"
+                ? "Administrator"
+                : "Student"}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.changePhotoButton,
+              {
+                backgroundColor: isDarkMode
+                  ? "rgba(139, 92, 246, 0.15)"
+                  : "rgba(25, 118, 210, 0.1)",
+              },
+            ]}
+            onPress={handleProfilePictureUpload}
+            disabled={isUploadingImage}
+          >
+            <Ionicons
+              name="camera-outline"
+              size={16}
+              color={colors.textSecondary}
+            />
+            <Text
+              style={[styles.changePhotoText, { color: colors.textSecondary }]}
+            >
+              {isUploadingImage ? "Uploading..." : "Change Photo"}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
   );
+
+  const SecuritySection = () => (
+    <View style={styles.section}>
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: isDarkMode ? "#383217ff" : "#1976d2" },
+        ]}
+      >
+        Security
+      </Text>
+
+      <TouchableOpacity
+        style={[
+          styles.settingItem,
+          {
+            backgroundColor: isDarkMode
+              ? "rgba(219, 252, 219, 1)"
+              : "rgba(219, 255, 219, 0.8)",
+            borderColor: isDarkMode
+              ? "rgba(93, 166, 93, 0.7)"
+              : "rgba(93, 166, 93, 0.7)",
+          },
+        ]}
+        onPress={() => setShowChangePassword(true)}
+      >
+        <View style={styles.settingLeft}>
+          <Ionicons name="key-outline" size={24} color={highlightColor} />
+          <View style={styles.settingText}>
+            <Text style={[styles.settingTitle, { color: colors.text }]}>
+              Change Password
+            </Text>
+            <Text
+              style={[styles.settingSubtitle, { color: colors.textSecondary }]}
+            >
+              Update your account password
+            </Text>
+          </View>
+        </View>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={colors.textSecondary}
+        />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const AppPreferencesSection = () => (
+    <View style={styles.section}>
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: isDarkMode ? "#383217ff" : "#1976d2" },
+        ]}
+      >
+        App Preferences
+      </Text>
+
+      {/* <SettingItem
+        title="Dark Mode"
+        subtitle="Use dark theme"
+        value={isDarkMode}
+        onToggle={toggleTheme}
+        icon="moon-outline"
+      /> */}
+
+      <SettingItem
+        title="Notifications"
+        subtitle="Receive push notifications"
+        value={settings.notifications}
+        onToggle={(value) => handleSettingToggle("notifications", value)}
+        icon="notifications-outline"
+      />
+    </View>
+  );
+
+  const AboutSection = () => (
+    <View style={styles.section}>
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: isDarkMode ? "#383217ff" : "#1976d2" },
+        ]}
+      >
+        About
+      </Text>
+
+      <View style={[styles.aboutItem, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.aboutLabel, { color: colors.text }]}>
+          App Version
+        </Text>
+        <Text style={[styles.aboutValue, { color: colors.textSecondary }]}>
+          1.0.0
+        </Text>
+      </View>
+
+      <View style={[styles.aboutItem, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.aboutLabel, { color: colors.text }]}>
+          Platform
+        </Text>
+        <Text style={[styles.aboutValue, { color: colors.textSecondary }]}>
+          {Platform.OS}
+        </Text>
+      </View>
+    </View>
+  );
+
+  return (
+    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View
+          style={[
+            styles.pageWrapper,
+            isMobileWidth && styles.pageWrapperMobile,
+          ]}
+        >
+          <View style={[styles.header, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>
+              ⚙️ Settings
+            </Text>
+          </View>
+          <ProfileSection />
+          <SecuritySection />
+          <AppPreferencesSection />
+          <AboutSection />
+          {/* Logout Button */}
+          <View style={styles.section}>
+            <View style={styles.logoutButtonContainer}>
+              <TouchableOpacity
+                style={styles.logoutButton}
+                onPress={handleLogout}
+              >
+                <Ionicons name="log-out-outline" size={24} color="#ffffff" />
+                <Text style={styles.logoutButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {/* Bottom Padding */}
+          <View style={styles.bottomPadding} />
+        </View>
+        {/* Change Password Modal */}
+        <ChangePasswordModal
+          visible={showChangePassword}
+          onClose={() => setShowChangePassword(false)}
+        />
+      </ScrollView>
+    </LinearGradient>
+  );
 }
 
 const styles = StyleSheet.create({
+  profileName: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 12,
+    color: "#FFFFFF", // Set to white
+  },
+  profileFullName: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginLeft: 8,
+    color: "#FFFFFF", // Set to white
+  },
+  profileEmail: {
+    fontSize: 14,
+    fontStyle: "italic",
+    marginLeft: 8,
+    color: "#FFFFFF", // Set to white
+  },
+  profileRole: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
+    color: "#FFFFFF", // Set to white
+  },
+  profileSection: {
+    fontSize: 14,
+    marginLeft: 8,
+    color: "#FFFFFF", // Set to white
+  },
+  changePhotoText: {
+    fontSize: 14,
+    marginLeft: 6,
+    fontWeight: "500",
+    color: "#FFFFFF", // Set to white
+  },
+
+  // Settings items text styles
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#FFFFFF", // Set to white
+  },
+  settingSubtitle: {
+    fontSize: 14,
+    marginTop: 2,
+    color: "rgba(255, 255, 255, 0.8)", // Set to slightly transparent white
+  },
+
+  // About section text styles
+  aboutLabel: {
+    fontSize: 16,
+    color: "#FFFFFF", // Set to white
+  },
+  aboutValue: {
+    fontSize: 16,
+    color: "#FFFFFF", // Set to white
+  },
   container: {
     flex: 1,
-    backgroundColor: COLORS.cardBackground,
-    // Removed padding from here, moved to mainContent
   },
-  mainContent: {
-    flex: 1, // Allows the content to take up available vertical space
-    width: '100%', // Takes full width of its parent initially
-    maxWidth: 600, // Limit the maximum width for larger screens (adjust as needed)
-    alignSelf: 'center', // Center the content horizontally
-    padding: 24, // Apply padding here for consistent spacing within the constrained area
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  pageWrapper: {
+    width: "100%",
+    maxWidth: 1200,
+    alignSelf: "center",
+    paddingHorizontal: 0, // remove horizontal space on larger screens
+    paddingBottom: 32,
+  },
+  pageWrapperMobile: {
+    paddingHorizontal: 12, // leave a little padding on mobile
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 32,
-    padding: 8,
+    padding: 20,
+    borderBottomWidth: 1,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginLeft: 16,
-    color: COLORS.textPrimary,
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "bold",
+    ...Platform.select({
+      web: {
+        textShadow: "0px 0px 10px rgba(0, 150, 255, 0.7)",
+      },
+      default: {
+        textShadowColor: "rgba(0, 150, 255, 0.7)",
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 10,
+      },
+    }),
+  },
+  section: {
+    marginTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 15,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  profileContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 20,
+    borderRadius: 15,
+    borderWidth: 1,
+  },
+  profileInfoSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+
+  changePhotoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+
+    borderRadius: 8,
+    marginTop: 6,
+    alignSelf: "flex-start",
+  },
+  avatarContainer: {
+    position: "relative",
+    marginRight: 15,
   },
   profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 80,
-    backgroundColor: COLORS.background,
-    borderWidth: 2,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 3,
     borderColor: COLORS.primary,
   },
-  itemsContainer: {
-    marginTop: 8,
+  profileImageFallback: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: COLORS.primary,
   },
-  drawerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    backgroundColor: COLORS.background,
-    elevation: 1,
+  profileImageText: {
+    color: "#ffffff",
+    fontSize: 28,
+    fontWeight: "bold",
   },
-  drawerItemText: {
-    marginLeft: 16,
+  uploadOverlay: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  roleBadge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: "rgba(0, 150, 255, 0.8)",
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+
+  settingItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  settingLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  settingText: {
+    marginLeft: 15,
+    flex: 1,
+  },
+
+  actionItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  aboutItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+
+  logoutButtonContainer: {
+    width: "100%",
+    alignItems: Platform.OS === "web" ? "center" : "stretch",
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#dc3545",
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 10,
+    ...(Platform.OS === "web"
+      ? {
+          width: 300,
+          maxWidth: "100%",
+        }
+      : {
+          width: "100%",
+        }),
+  },
+  logoutButtonText: {
+    color: "#ffffff",
     fontSize: 16,
-    color: COLORS.textPrimary,
-    fontWeight: '500',
+    fontWeight: "600",
+    marginLeft: 10,
+  },
+  bottomPadding: {
+    height: 100,
   },
 });

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quiz Showdown Test</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      .team {
+        display: inline-block;
+        width: 45%;
+        margin: 10px;
+        padding: 15px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        text-align: center;
+      }
+      .team-a {
+        border-color: #3498db;
+        background-color: #e3f2fd;
+      }
+      .team-b {
+        border-color: #e74c3c;
+        background-color: #ffebee;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 5px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .btn-primary {
+        background-color: #3498db;
+        color: white;
+      }
+      .btn-danger {
+        background-color: #e74c3c;
+        color: white;
+      }
+      .btn-success {
+        background-color: #27ae60;
+        color: white;
+      }
+      .btn-warning {
+        background-color: #f39c12;
+        color: white;
+      }
+      .question {
+        font-size: 18px;
+        font-weight: bold;
+        margin: 15px 0;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+      }
+      .options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin: 15px 0;
+      }
+      .option {
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 5px;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.3s;
+      }
+      .option:hover {
+        background-color: #e9ecef;
+      }
+      .logs {
+        background-color: #2c3e50;
+        color: #ecf0f1;
+        padding: 15px;
+        border-radius: 8px;
+        height: 200px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+      }
+      .score {
+        font-size: 24px;
+        font-weight: bold;
+        text-align: center;
+        margin: 10px 0;
+      }
+      .status {
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+      }
+      .status.waiting {
+        background-color: #f39c12;
+        color: white;
+      }
+      .status.countdown {
+        background-color: #e67e22;
+        color: white;
+      }
+      .status.buzzer-active {
+        background-color: #27ae60;
+        color: white;
+      }
+      .status.team-answering {
+        background-color: #8e44ad;
+        color: white;
+      }
+      .status.finished {
+        background-color: #34495e;
+        color: white;
+      }
+      input[type="text"] {
+        padding: 8px;
+        margin: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 150px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎯 Quiz Showdown Backend Test</h1>
+
+    <div class="container">
+      <h2>Connection & Room Management</h2>
+      <input
+        type="text"
+        id="playerName"
+        placeholder="Your Name"
+        value="TestPlayer"
+      />
+      <button class="btn-primary" onclick="createRoom()">Create Room</button>
+
+      <input type="text" id="roomId" placeholder="Room ID" />
+      <button class="btn-success" onclick="joinRoom()">Join Room</button>
+
+      <div style="margin-top: 10px">
+        <strong>Status:</strong>
+        <span id="connectionStatus">Disconnected</span> |
+        <strong>Room:</strong> <span id="currentRoom">None</span>
+      </div>
+    </div>
+
+    <div class="container" id="teamSection" style="display: none">
+      <h2>Team Selection</h2>
+      <div class="team team-a">
+        <h3>Team A</h3>
+        <div id="teamAMembers">No members</div>
+        <button class="btn-primary" onclick="joinTeam('Team A')">
+          Join Team A
+        </button>
+      </div>
+      <div class="team team-b">
+        <h3>Team B</h3>
+        <div id="teamBMembers">No members</div>
+        <button class="btn-danger" onclick="joinTeam('Team B')">
+          Join Team B
+        </button>
+      </div>
+
+      <div style="text-align: center; margin-top: 20px">
+        <button
+          class="btn-success"
+          onclick="startGame()"
+          id="startBtn"
+          style="display: none"
+        >
+          Start Game
+        </button>
+      </div>
+    </div>
+
+    <div class="container" id="gameSection" style="display: none">
+      <h2>Game Play</h2>
+      <div class="status" id="gameStatus">Waiting...</div>
+
+      <div class="score">
+        <span id="teamAScore">Team A: 0</span> |
+        <span id="teamBScore">Team B: 0</span>
+      </div>
+
+      <div class="question" id="currentQuestion">No question loaded</div>
+
+      <div class="options" id="questionOptions"></div>
+
+      <div style="text-align: center; margin: 20px 0">
+        <button
+          class="btn-warning"
+          onclick="buzzTeamA()"
+          id="buzzABtn"
+          disabled
+        >
+          🔔 Team A Buzz!
+        </button>
+        <button class="btn-danger" onclick="buzzTeamB()" id="buzzBBtn" disabled>
+          🔔 Team B Buzz!
+        </button>
+      </div>
+    </div>
+
+    <div class="container">
+      <h2>Connection Logs</h2>
+      <div class="logs" id="logs"></div>
+      <button class="btn-primary" onclick="clearLogs()">Clear Logs</button>
+    </div>
+
+    <script>
+      let socket;
+      let currentGameState = null;
+      let playerName = "";
+      let roomId = "";
+      let playerTeam = "";
+      let isCreator = false;
+
+      function log(message) {
+        const logs = document.getElementById("logs");
+        const timestamp = new Date().toLocaleTimeString();
+        logs.innerHTML += `[${timestamp}] ${message}\n`;
+        logs.scrollTop = logs.scrollHeight;
+      }
+
+      function clearLogs() {
+        document.getElementById("logs").innerHTML = "";
+      }
+
+      function connectSocket() {
+        if (socket) socket.disconnect();
+
+        socket = io("/quiz-showdown");
+
+        socket.on("connect", () => {
+          log("✅ Connected to Quiz Showdown server");
+          document.getElementById("connectionStatus").textContent = "Connected";
+        });
+
+        socket.on("disconnect", () => {
+          log("❌ Disconnected from server");
+          document.getElementById("connectionStatus").textContent =
+            "Disconnected";
+        });
+
+        // Room events
+        socket.on("room-created", (data) => {
+          log(`🏠 Room created: ${data.roomId}`);
+          roomId = data.roomId;
+          isCreator = data.isCreator;
+          document.getElementById("currentRoom").textContent = roomId;
+          document.getElementById("teamSection").style.display = "block";
+          if (isCreator) {
+            document.getElementById("startBtn").style.display = "inline-block";
+          }
+          updateGameState(data.game);
+        });
+
+        socket.on("room-joined", (data) => {
+          log(`🏠 Joined room: ${data.roomId}`);
+          roomId = data.roomId;
+          isCreator = data.isCreator;
+          document.getElementById("currentRoom").textContent = roomId;
+          document.getElementById("teamSection").style.display = "block";
+          if (isCreator) {
+            document.getElementById("startBtn").style.display = "inline-block";
+          }
+          updateGameState(data.game);
+        });
+
+        socket.on("team-updated", (data) => {
+          log(`👥 Team updated: ${data.playerName} joined ${data.teamName}`);
+          updateGameState(data.game);
+        });
+
+        socket.on("team-joined", (data) => {
+          log(`✅ You joined ${data.teamName}`);
+          playerTeam = data.teamName;
+          updateGameState(data.game);
+        });
+
+        // Game events
+        socket.on("game-started", (data) => {
+          log("🎮 Game started!");
+          document.getElementById("gameSection").style.display = "block";
+          updateGameState(data.game);
+        });
+
+        socket.on("buzzer-activated", (data) => {
+          log("🔔 Buzzer activated - you can buzz in now!");
+          enableBuzzers();
+          updateGameState(data.game);
+        });
+
+        socket.on("team-buzzed", (data) => {
+          log(`🔔 ${data.buzzedTeam} buzzed first!`);
+          disableBuzzers();
+          updateGameState(data.game);
+        });
+
+        socket.on("answer-submitted", (data) => {
+          log(
+            `📝 ${data.teamName} answered ${
+              data.correct ? "correctly" : "incorrectly"
+            }`
+          );
+          updateGameState(data.game);
+        });
+
+        socket.on("next-question", (data) => {
+          log("➡️ Moving to next question");
+          updateGameState(data.game);
+        });
+
+        socket.on("game-finished", (data) => {
+          log(`🏆 Game finished! Winner: ${data.winner}`);
+          log(
+            `Final scores - Team A: ${data.finalScores.teamA}, Team B: ${data.finalScores.teamB}`
+          );
+          updateGameState(data.game);
+        });
+
+        // Error events
+        socket.on("error", (data) => {
+          log(`❌ Error: ${data.message}`);
+        });
+
+        socket.on("buzz-failed", (data) => {
+          log(`❌ Buzz failed: ${data.message}`);
+        });
+      }
+
+      function updateGameState(game) {
+        currentGameState = game;
+
+        // Update team members
+        document.getElementById("teamAMembers").textContent =
+          game.teamA.members.map((m) => m.name).join(", ") || "No members";
+        document.getElementById("teamBMembers").textContent =
+          game.teamB.members.map((m) => m.name).join(", ") || "No members";
+
+        // Update scores
+        document.getElementById(
+          "teamAScore"
+        ).textContent = `Team A: ${game.teamA.score}`;
+        document.getElementById(
+          "teamBScore"
+        ).textContent = `Team B: ${game.teamB.score}`;
+
+        // Update game status
+        const statusElement = document.getElementById("gameStatus");
+        statusElement.textContent = game.status;
+        statusElement.className = `status ${game.status}`;
+
+        // Update question
+        if (game.currentQuestion) {
+          document.getElementById("currentQuestion").textContent = `Q${
+            game.currentQuestionIndex + 1
+          }: ${game.currentQuestion.question}`;
+
+          const optionsDiv = document.getElementById("questionOptions");
+          optionsDiv.innerHTML = "";
+          game.currentQuestion.options.forEach((option, index) => {
+            const optionDiv = document.createElement("div");
+            optionDiv.className = "option";
+            optionDiv.textContent = `${String.fromCharCode(
+              65 + index
+            )}. ${option}`;
+            optionDiv.onclick = () => submitAnswer(index);
+            optionsDiv.appendChild(optionDiv);
+          });
+        }
+      }
+
+      function enableBuzzers() {
+        document.getElementById("buzzABtn").disabled = false;
+        document.getElementById("buzzBBtn").disabled = false;
+      }
+
+      function disableBuzzers() {
+        document.getElementById("buzzABtn").disabled = true;
+        document.getElementById("buzzBBtn").disabled = true;
+      }
+
+      function createRoom() {
+        playerName = document.getElementById("playerName").value;
+        if (!playerName) {
+          alert("Please enter your name");
+          return;
+        }
+        connectSocket();
+        socket.emit("create-room", { playerName });
+      }
+
+      function joinRoom() {
+        playerName = document.getElementById("playerName").value;
+        roomId = document.getElementById("roomId").value;
+        if (!playerName || !roomId) {
+          alert("Please enter your name and room ID");
+          return;
+        }
+        connectSocket();
+        socket.emit("join-room", { roomId, playerName });
+      }
+
+      function joinTeam(teamName) {
+        if (!socket || !roomId) {
+          alert("Please create or join a room first");
+          return;
+        }
+        socket.emit("join-team", { roomId, teamName });
+      }
+
+      function startGame() {
+        if (!socket || !roomId) {
+          alert("Please create a room first");
+          return;
+        }
+        socket.emit("start-game", { roomId });
+      }
+
+      function buzzTeamA() {
+        if (playerTeam !== "Team A") {
+          alert("You are not on Team A");
+          return;
+        }
+        socket.emit("buzz", { roomId, teamName: "Team A" });
+      }
+
+      function buzzTeamB() {
+        if (playerTeam !== "Team B") {
+          alert("You are not on Team B");
+          return;
+        }
+        socket.emit("buzz", { roomId, teamName: "Team B" });
+      }
+
+      function submitAnswer(answerIndex) {
+        if (!playerTeam) {
+          alert("Please join a team first");
+          return;
+        }
+        if (
+          !currentGameState ||
+          currentGameState.answeringTeam !== playerTeam
+        ) {
+          alert("It is not your team's turn to answer");
+          return;
+        }
+        socket.emit("submit-answer", {
+          roomId,
+          teamName: playerTeam,
+          answerIndex,
+        });
+      }
+
+      log(
+        'Quiz Showdown test page loaded. Click "Create Room" or "Join Room" to start!'
+      );
+    </script>
+  </body>
+</html>

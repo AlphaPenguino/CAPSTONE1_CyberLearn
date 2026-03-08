@@ -1,0 +1,62 @@
+{
+  "title": "Sample Cyber Quest - Introduction to Cybersecurity",
+  "description": "This is a sample cyber quest demonstrating the JSON structure for importing quest data. You can modify this template to create your own quests.",
+  "difficulty": "medium",
+  "level": 1,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "text": "What does CPU stand for?",
+      "choices": [
+        "Central Processing Unit",
+        "Computer Power Unit",
+        "Control Program Unit",
+        "Central Program Utility"
+      ],
+      "correct_index": 0,
+      "hint": "It's the brain of the computer"
+    },
+    {
+      "type": "fillInBlanks",
+      "text": "Complete the sentence: HTML stands for ___ and CSS stands for ___",
+      "blanks": ["HyperText Markup Language", "Cascading Style Sheets"],
+      "hint": "Think about web development basics"
+    },
+    {
+      "type": "codeMissing",
+      "text": "Complete the Python print statement to display 'Hello World'",
+      "codeTemplate": "print(___)",
+      "correctAnswer": "\"Hello World\"",
+      "hint": "Use quotes for strings in Python"
+    },
+    {
+      "type": "codeOrdering",
+      "text": "Arrange these code lines in the correct order to create a simple Python function",
+      "codeBlocks": [
+        { "id": 1, "code": "def greet(name):", "position": 0 },
+        { "id": 2, "code": "    message = f'Hello, {name}!'", "position": 1 },
+        { "id": 3, "code": "    return message", "position": 2 }
+      ],
+      "hint": "Start with the function definition"
+    },
+    {
+      "type": "sorting",
+      "text": "Categorize the following items into 'Hardware' or 'Software'",
+      "categories": ["Hardware", "Software"],
+      "items": [
+        { "id": 1, "text": "Keyboard", "categoryId": 0 },
+        { "id": 2, "text": "Operating System", "categoryId": 1 },
+        { "id": 3, "text": "Monitor", "categoryId": 0 },
+        { "id": 4, "text": "Web Browser", "categoryId": 1 }
+      ],
+      "hint": "Hardware is physical, software is digital"
+    },
+    {
+      "type": "cipher",
+      "text": "Decode the scrambled word to find a common cybersecurity term",
+      "answer": "FIREWALL",
+      "scrambledHint": "EWFILLRA",
+      "hint": "It protects networks from unauthorized access"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,17 +12,14 @@ import {
   Platform,
   Modal,
   Alert,
-  Dimensions
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { API_URL } from '@/constants/api';
-import { useAuthStore } from '@/store/authStore';
-import COLORS from '@/constants/custom-colors';
-import Animated, { FadeIn } from 'react-native-reanimated';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { API_URL, constructProfileImageUrl } from "@/constants/api";
+import { useAuthStore } from "@/store/authStore";
+import COLORS from "@/constants/custom-colors";
 
-const { width } = Dimensions.get('window');
-const isWeb = Platform.OS === 'web';
+const isWeb = Platform.OS === "web";
 
 export default function ClassForm() {
   const { token, user } = useAuthStore();
@@ -30,26 +27,25 @@ export default function ClassForm() {
   const [students, setStudents] = useState([]);
   const [filteredStudents, setFilteredStudents] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [className, setClassName] = useState('');
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [className, setClassName] = useState("");
   const [classNameError, setClassNameError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [imageErrors, setImageErrors] = useState({});
   const [sections, setSections] = useState([]);
-  const [sectionSearchQuery, setSectionSearchQuery] = useState('');
+  const [sectionSearchQuery, setSectionSearchQuery] = useState("");
   const [fetchingSections, setFetchingSections] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState(null);
-  const [viewStudentsModalVisible, setViewStudentsModalVisible] = useState(false);
+  const [viewStudentsModalVisible, setViewStudentsModalVisible] =
+    useState(false);
   const [selectedSection, setSelectedSection] = useState(null);
   const [sectionStudents, setSectionStudents] = useState([]);
   const [loadingSectionStudents, setLoadingSectionStudents] = useState(false);
-  
-  const showAlert = (title, message, buttons = [{ text: 'OK' }]) => {
-    if (Platform.OS === 'web') {
+
+  const showAlert = (title, message, buttons = [{ text: "OK" }]) => {
+    if (Platform.OS === "web") {
       // For web, use the browser's built-in alert or a custom web dialog
       if (buttons.length <= 1) {
         // Simple alert
@@ -59,11 +55,15 @@ export default function ClassForm() {
         const confirmed = window.confirm(`${title}\n${message}`);
         if (confirmed) {
           // Find the non-cancel button and trigger its onPress
-          const confirmButton = buttons.find(button => button.style === 'destructive' || button.text === 'OK');
+          const confirmButton = buttons.find(
+            (button) => button.style === "destructive" || button.text === "OK"
+          );
           confirmButton?.onPress?.();
         } else {
           // Find the cancel button and trigger its onPress
-          const cancelButton = buttons.find(button => button.style === 'cancel');
+          const cancelButton = buttons.find(
+            (button) => button.style === "cancel"
+          );
           cancelButton?.onPress?.();
         }
       }
@@ -76,31 +76,34 @@ export default function ClassForm() {
   // Function to handle image URLs for different platforms
   const getCompatibleImageUrl = (url) => {
     if (!url) return null;
-    
+
+    // First construct the full URL from filename if needed
+    const fullUrl = constructProfileImageUrl(url);
+
     // Convert DiceBear SVGs to PNGs on Android
-    if (url.includes('dicebear') && url.includes('/svg')) {
-      if (Platform.OS === 'android') {
-        return url.replace('/svg', '/png');
+    if (fullUrl && fullUrl.includes("dicebear") && fullUrl.includes("/svg")) {
+      if (Platform.OS === "android") {
+        return fullUrl.replace("/svg", "/png");
       }
     }
-    return url;
+    return fullUrl;
   };
 
   // Fetch initial data on component mount
   useEffect(() => {
     fetchStudents();
     fetchSections();
-  }, []);
+  }, [fetchSections, fetchStudents]);
 
   // Filter students when search changes
   useEffect(() => {
-    if (searchQuery.trim() === '') {
+    if (searchQuery.trim() === "") {
       setFilteredStudents(students);
     } else {
       const searchLower = searchQuery.toLowerCase();
       const filtered = students.filter(
-        student => 
-          student.username.toLowerCase().includes(searchLower) || 
+        (student) =>
+          student.username.toLowerCase().includes(searchLower) ||
           student.email.toLowerCase().includes(searchLower)
       );
       setFilteredStudents(filtered);
@@ -110,42 +113,44 @@ export default function ClassForm() {
   // Filter sections when search changes
   const getFilteredSections = () => {
     if (!sections.length) return [];
-    if (sectionSearchQuery.trim() === '') {
+    if (sectionSearchQuery.trim() === "") {
       return sections;
     } else {
       const searchLower = sectionSearchQuery.toLowerCase();
-      return sections.filter(
-        section => section.name.toLowerCase().includes(searchLower)
+      return sections.filter((section) =>
+        section.name.toLowerCase().includes(searchLower)
       );
     }
   };
 
   // Mark image as having error
   const handleImageError = (userId) => {
-    setImageErrors(prev => ({
+    setImageErrors((prev) => ({
       ...prev,
-      [userId]: true
+      [userId]: true,
     }));
   };
 
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     setLoading(true);
-    setError(null);
-    
+
     try {
       // Use the dedicated endpoint for unassigned students
-      const response = await fetch(`${API_URL}/sections/unassigned-students?limit=100`, {
-        headers: {
-          Authorization: `Bearer ${token}`
+      const response = await fetch(
+        `${API_URL}/sections/unassigned-students?limit=100`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
-      });
-      
+      );
+
       if (!response.ok) {
-        throw new Error('Failed to fetch students');
+        throw new Error("Failed to fetch students");
       }
-      
+
       const data = await response.json();
-      
+
       // The API returns data.students
       if (data.success && Array.isArray(data.students)) {
         setStudents(data.students);
@@ -154,59 +159,60 @@ export default function ClassForm() {
         setStudents([]);
         setFilteredStudents([]);
       }
-      
+
       setImageErrors({}); // Reset image errors when new students are loaded
     } catch (err) {
-      setError(err.message || 'An error occurred while fetching students');
-      console.error('Error fetching students:', err);
+      console.error(
+        "Error fetching students:",
+        err.message || "An error occurred while fetching students"
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [token]);
 
-  const fetchSections = async () => {
-
-    if (user.privilege !== 'instructor' && user.privilege !== 'admin') {
-  console.error('User does not have permission to view sections');
-  return;
-}
+  const fetchSections = useCallback(async () => {
+    if (user.privilege !== "instructor" && user.privilege !== "admin") {
+      console.error("User does not have permission to view sections");
+      return;
+    }
     setFetchingSections(true);
-    
+
     try {
       const response = await fetch(`${API_URL}/sections`, {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to fetch classes');
+        throw new Error("Failed to fetch classes");
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success && Array.isArray(data.sections)) {
         setSections(data.sections);
       } else {
         setSections([]);
       }
     } catch (err) {
-      console.error('Error fetching sections:', err);
+      console.error("Error fetching sections:", err);
       // We don't set the main error state here to not disrupt student list
     } finally {
       setFetchingSections(false);
     }
-  };
+  }, [user.privilege, token]);
 
   const handleToggleStudent = (student) => {
-    setSelectedStudents(prevSelected => {
+    setSelectedStudents((prevSelected) => {
       // Check if student is already selected
-      const isSelected = prevSelected.some(s => s._id === student._id);
-      
+      const isSelected = prevSelected.some((s) => s._id === student._id);
+
       if (isSelected) {
         // Remove student from selected
-        return prevSelected.filter(s => s._id !== student._id);
+        return prevSelected.filter((s) => s._id !== student._id);
       } else {
         // Add student to selected
         return [...prevSelected, student];
@@ -216,22 +222,21 @@ export default function ClassForm() {
 
   const validateForm = () => {
     if (!className.trim()) {
-      setClassNameError('Class name is required');
+      setClassNameError("Class name is required");
       return false;
     }
-    
+
     if (className.trim().length < 3) {
-      setClassNameError('Class name must be at least 3 characters');
+      setClassNameError("Class name must be at least 3 characters");
       return false;
     }
-    
+
     if (selectedStudents.length === 0) {
-      showAlert('Validation Error', 'Select at least one student');
+      showAlert("Validation Error", "Select at least one student");
       return false;
     }
-    
+
     setClassNameError(null);
-    setError(null);
     return true;
   };
 
@@ -241,68 +246,76 @@ export default function ClassForm() {
     }
 
     setLoading(true);
-    setError(null);
-    setSuccess(null);
-    
+
     try {
       // First, create the new section in the backend with required fields
       const createSectionResponse = await fetch(`${API_URL}/sections`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: className,
           instructor: user._id, // Current user as instructor
           description: `Class for ${className}`,
           isActive: true,
-          createdBy: user._id // Track who created the section
-        })
+          createdBy: user._id, // Track who created the section
+        }),
         // No need to set sectionCode - it will be auto-generated
       });
-      
+
       if (!createSectionResponse.ok) {
         const errorData = await createSectionResponse.json();
-        throw new Error(errorData.message || 'Failed to create class');
+        throw new Error(errorData.message || "Failed to create class");
       }
-      
+
       const sectionData = await createSectionResponse.json();
       const sectionId = sectionData.section._id;
-      
+
       // Then update all selected students to assign them to the section
-      const studentIds = selectedStudents.map(s => s._id);
-      
-      const assignStudentsResponse = await fetch(`${API_URL}/sections/${sectionId}/students`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          studentIds,
-          instructorId: user._id // Include instructor ID in the PUT request
-        })
-      });
-      
+      const studentIds = selectedStudents.map((s) => s._id);
+
+      const assignStudentsResponse = await fetch(
+        `${API_URL}/sections/${sectionId}/students`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            studentIds,
+            instructorId: user._id, // Include instructor ID in the PUT request
+          }),
+        }
+      );
+
       if (!assignStudentsResponse.ok) {
         const errorData = await assignStudentsResponse.json();
-        throw new Error(errorData.message || 'Failed to assign students to class');
+        throw new Error(
+          errorData.message || "Failed to assign students to class"
+        );
       }
-      
+
       // Success - reset the form
-      showAlert('Success', `Class "${className}" created successfully with ${selectedStudents.length} students`);
-      setClassName('');
+      showAlert(
+        "Success",
+        `Class "${className}" created successfully with ${selectedStudents.length} students`
+      );
+      setClassName("");
       setSelectedStudents([]);
       setModalVisible(false);
-      
+
       // Refresh both lists
       fetchStudents();
       fetchSections();
-      
     } catch (err) {
-      showAlert('Error', err.message || 'An error occurred while creating the class');
-      console.error('Error creating class:', err);
+      showAlert(
+        "Error",
+        err.message || "An error occurred while creating the class"
+      );
+      console.error("Error creating class:", err);
     } finally {
       setLoading(false);
     }
@@ -312,97 +325,76 @@ export default function ClassForm() {
     setSectionToDelete(section);
     setDeleteModalVisible(true);
   };
-  
+
   const confirmDeleteSection = async () => {
     if (!sectionToDelete) return;
-    
+
     try {
-      const response = await fetch(`${API_URL}/sections/${sectionToDelete._id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`
+      const response = await fetch(
+        `${API_URL}/sections/${sectionToDelete._id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
-      });
-      
+      );
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to delete class');
+        throw new Error(errorData.message || "Failed to delete class");
       }
-      
+
       // Remove from local state and close modal
-      setSections(prev => prev.filter(s => s._id !== sectionToDelete._id));
+      setSections((prev) => prev.filter((s) => s._id !== sectionToDelete._id));
       setDeleteModalVisible(false);
       setSectionToDelete(null);
-      
-      showAlert('Success', `Class "${sectionToDelete.name}" was deleted successfully`);
-      
+
+      showAlert(
+        "Success",
+        `Class "${sectionToDelete.name}" was deleted successfully`
+      );
+
       // Refresh students list as some might now be unassigned
       fetchStudents();
-      
     } catch (err) {
-      showAlert('Error', err.message || 'An error occurred while deleting the class');
-      console.error('Error deleting section:', err);
-    }
-  };
-
-  const handleViewStudents = async (section) => {
-    setSelectedSection(section);
-    setLoadingSectionStudents(true);
-    
-    try {
-      const response = await fetch(`${API_URL}/sections/${section._id}/students`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch section students');
-      }
-      
-      const data = await response.json();
-      
-      if (data.success && Array.isArray(data.students)) {
-        setSectionStudents(data.students);
-      } else {
-        setSectionStudents([]);
-      }
-      
-      setViewStudentsModalVisible(true);
-    } catch (err) {
-      showAlert('Error', err.message || 'An error occurred while fetching students for this class');
-      console.error('Error fetching section students:', err);
-    } finally {
-      setLoadingSectionStudents(false);
+      showAlert(
+        "Error",
+        err.message || "An error occurred while deleting the class"
+      );
+      console.error("Error deleting section:", err);
     }
   };
 
   const fetchSectionStudents = async (sectionId) => {
     if (!sectionId) return;
-    
+
     setLoadingSectionStudents(true);
-    
+
     try {
-      const response = await fetch(`${API_URL}/sections/${sectionId}/students`, {
-        headers: {
-          Authorization: `Bearer ${token}`
+      const response = await fetch(
+        `${API_URL}/sections/${sectionId}/students`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
-      });
-      
+      );
+
       if (!response.ok) {
-        throw new Error('Failed to fetch students for this class');
+        throw new Error("Failed to fetch students for this class");
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success && Array.isArray(data.students)) {
         setSectionStudents(data.students);
       } else {
         setSectionStudents([]);
       }
     } catch (err) {
-      console.error('Error fetching section students:', err);
-      showAlert('Error', 'Failed to load students for this class');
+      console.error("Error fetching section students:", err);
+      showAlert("Error", "Failed to load students for this class");
     } finally {
       setLoadingSectionStudents(false);
     }
@@ -410,22 +402,26 @@ export default function ClassForm() {
 
   // Render student item for list
   const renderItem = ({ item }) => {
-    const isSelected = selectedStudents.some(s => s._id === item._id);
+    const isSelected = selectedStudents.some((s) => s._id === item._id);
     const userImage = item.profileImage || item.profilePicture;
     const hasImageError = imageErrors[item._id];
-    
+
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.userCard, isSelected && styles.userCardSelected]}
         onPress={() => handleToggleStudent(item)}
       >
         <View style={styles.userInfo}>
           {isSelected && (
             <View style={styles.selectedIndicator}>
-              <MaterialCommunityIcons name="check-circle" size={24} color={COLORS.primary} />
+              <MaterialCommunityIcons
+                name="check-circle"
+                size={24}
+                color={COLORS.primary}
+              />
             </View>
           )}
-          
+
           {userImage && !hasImageError ? (
             <Image
               source={{ uri: getCompatibleImageUrl(userImage) }}
@@ -435,58 +431,72 @@ export default function ClassForm() {
           ) : (
             <View style={styles.avatarFallback}>
               <Text style={styles.avatarText}>
-                {item.username?.charAt(0).toUpperCase() || 'S'}
+                {item.username?.charAt(0).toUpperCase() || "S"}
               </Text>
             </View>
           )}
-          
+
           <View style={styles.userDetails}>
             <Text style={styles.username}>{item.username}</Text>
             <Text style={styles.email}>{item.email}</Text>
           </View>
         </View>
-        
+
         {isSelected ? (
           <TouchableOpacity onPress={() => handleToggleStudent(item)}>
-            <MaterialCommunityIcons name="checkbox-marked-circle" size={28} color={COLORS.primary} />
+            <MaterialCommunityIcons
+              name="checkbox-marked-circle"
+              size={28}
+              color={COLORS.primary}
+            />
           </TouchableOpacity>
         ) : (
-          <MaterialCommunityIcons name="checkbox-blank-circle-outline" size={28} color={COLORS.textSecondary} />
+          <MaterialCommunityIcons
+            name="checkbox-blank-circle-outline"
+            size={28}
+            color={COLORS.textSecondary}
+          />
         )}
       </TouchableOpacity>
     );
   };
-  
+
   // Render section item for list
   const renderSectionItem = ({ item }) => {
     console.log("Rendering section:", item);
-    
+
     // Check if the item exists
     if (!item || !item._id) {
       console.error("Invalid section data:", item);
       return null;
     }
-    
+
     return (
       <View style={styles.sectionCard}>
         <View style={styles.sectionInfo}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionName}>{item.name || "Unnamed Class"}</Text>
+            <Text style={styles.sectionName}>
+              {item.name || "Unnamed Class"}
+            </Text>
             <Text style={styles.sectionStats}>
               {item.students?.length || 0} students
             </Text>
           </View>
-          
+
           <View style={styles.sectionDetails}>
-            <MaterialCommunityIcons name="account-tie" size={16} color={COLORS.textSecondary} />
+            <MaterialCommunityIcons
+              name="account-tie"
+              size={16}
+              color={COLORS.textSecondary}
+            />
             <Text style={styles.sectionInstructor}>
               {item.instructorName || "Unknown instructor"}
             </Text>
           </View>
         </View>
-        
+
         <View style={styles.sectionActions}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.sectionActionButton}
             onPress={() => {
               setSelectedSection(item);
@@ -496,8 +506,8 @@ export default function ClassForm() {
           >
             <Ionicons name="eye-outline" size={22} color={COLORS.textPrimary} />
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.sectionActionButton}
             onPress={() => handleDeleteSection(item)}
           >
@@ -507,7 +517,7 @@ export default function ClassForm() {
       </View>
     );
   };
-  
+
   // Loading state
   if (loading && !refreshing && !modalVisible) {
     return (
@@ -519,18 +529,18 @@ export default function ClassForm() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Manage Classes</Text>
       </View>
-      
+
       <View style={styles.contentContainer}>
         {/* Left side - Create Class */}
         <View style={styles.leftColumn}>
           <View style={styles.columnHeader}>
             <Text style={styles.columnTitle}>Create New Class</Text>
           </View>
-          
+
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
@@ -551,12 +561,17 @@ export default function ClassForm() {
                 <Text style={styles.errorText}>{classNameError}</Text>
               )}
             </View>
-            
+
             <View style={styles.formGroup}>
               <Text style={styles.label}>Unassigned Students</Text>
-              
+
               <View style={styles.searchContainer}>
-                <Ionicons name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
+                <Ionicons
+                  name="search"
+                  size={20}
+                  color={COLORS.textSecondary}
+                  style={styles.searchIcon}
+                />
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Search students..."
@@ -566,11 +581,15 @@ export default function ClassForm() {
                 />
               </View>
             </View>
-            
+
             <View style={styles.studentsListContainer}>
               {filteredStudents.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Ionicons name="people" size={40} color={COLORS.textSecondary} />
+                  <Ionicons
+                    name="people"
+                    size={40}
+                    color={COLORS.textSecondary}
+                  />
                   <Text style={styles.emptyText}>
                     No unassigned students found
                   </Text>
@@ -588,36 +607,47 @@ export default function ClassForm() {
                 />
               )}
             </View>
-            
+
             {selectedStudents.length > 0 && (
               <View style={styles.selectedSummary}>
                 <Text style={styles.selectedSummaryText}>
-                  {selectedStudents.length} student{selectedStudents.length !== 1 ? 's' : ''} selected
+                  {selectedStudents.length} student
+                  {selectedStudents.length !== 1 ? "s" : ""} selected
                 </Text>
               </View>
             )}
-            
+
             <TouchableOpacity
               style={[
                 styles.createClassButton,
-                (!selectedStudents.length || !className) && styles.createButtonDisabled
+                (!selectedStudents.length || !className) &&
+                  styles.createButtonDisabled,
               ]}
-              onPress={() => selectedStudents.length > 0 && className ? setModalVisible(true) : null}
+              onPress={() =>
+                selectedStudents.length > 0 && className
+                  ? setModalVisible(true)
+                  : null
+              }
               disabled={!selectedStudents.length || !className}
             >
               <Text style={styles.createClassButtonText}>Create Class</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
-        
+
         {/* Right side - Existing Classes */}
         <View style={styles.rightColumn}>
           <View style={styles.columnHeader}>
             <Text style={styles.columnTitle}>Existing Classes</Text>
           </View>
-          
+
           <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
+            <Ionicons
+              name="search"
+              size={20}
+              color={COLORS.textSecondary}
+              style={styles.searchIcon}
+            />
             <TextInput
               style={styles.searchInput}
               placeholder="Search classes..."
@@ -626,7 +656,7 @@ export default function ClassForm() {
               onChangeText={setSectionSearchQuery}
             />
           </View>
-          
+
           {fetchingSections ? (
             <View style={styles.centeredContent}>
               <ActivityIndicator size="large" color={COLORS.primary} />
@@ -640,30 +670,29 @@ export default function ClassForm() {
               contentContainerStyle={styles.sectionsListContent}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
-                  <MaterialCommunityIcons name="school-outline" size={40} color={COLORS.textSecondary} />
-                  <Text style={styles.emptyText}>
-                    No classes found
-                  </Text>
+                  <MaterialCommunityIcons
+                    name="school-outline"
+                    size={40}
+                    color={COLORS.textSecondary}
+                  />
+                  <Text style={styles.emptyText}>No classes found</Text>
                 </View>
               }
             />
           )}
         </View>
       </View>
-      
+
       {/* Modal for class creation confirmation */}
-      <Modal
-        visible={modalVisible}
-        transparent={true}
-        animationType="slide"
-      >
+      <Modal visible={modalVisible} transparent={true} animationType="slide">
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Confirm Class Creation</Text>
             <Text style={styles.modalMessage}>
-              Are you sure you want to create the class &quot;{className}&quot; with {selectedStudents.length} students?
+              Are you sure you want to create the class &quot;{className}&quot;
+              with {selectedStudents.length} students?
             </Text>
-            
+
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalButton}
@@ -671,7 +700,7 @@ export default function ClassForm() {
               >
                 <Text style={styles.modalButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm]}
                 onPress={handleCreateClass}
@@ -686,7 +715,7 @@ export default function ClassForm() {
           </View>
         </View>
       </Modal>
-      
+
       {/* Modal for class deletion confirmation */}
       <Modal
         visible={deleteModalVisible}
@@ -697,10 +726,11 @@ export default function ClassForm() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Delete Class</Text>
             <Text style={styles.modalMessage}>
-              Are you sure you want to delete the class &quot;{sectionToDelete?.name}&quot;?
-              This will unassign all students from this class.
+              Are you sure you want to delete the class &quot;
+              {sectionToDelete?.name}&quot;? This will unassign all students
+              from this class.
             </Text>
-            
+
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalButton}
@@ -711,7 +741,7 @@ export default function ClassForm() {
               >
                 <Text style={styles.modalButtonText}>Cancel</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={[styles.modalButton, styles.deleteButton]}
                 onPress={confirmDeleteSection}
@@ -722,7 +752,7 @@ export default function ClassForm() {
           </View>
         </View>
       </Modal>
-      
+
       {/* Modal for viewing students in a class */}
       <Modal
         visible={viewStudentsModalVisible}
@@ -745,7 +775,7 @@ export default function ClassForm() {
                 <Ionicons name="close" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
-            
+
             {loadingSectionStudents ? (
               <View style={styles.centeredContent}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
@@ -753,7 +783,11 @@ export default function ClassForm() {
               </View>
             ) : sectionStudents.length === 0 ? (
               <View style={styles.emptyState}>
-                <MaterialCommunityIcons name="account-group" size={40} color={COLORS.textSecondary} />
+                <MaterialCommunityIcons
+                  name="account-group"
+                  size={40}
+                  color={COLORS.textSecondary}
+                />
                 <Text style={styles.emptyText}>No students in this class</Text>
               </View>
             ) : (
@@ -764,18 +798,20 @@ export default function ClassForm() {
                   <View style={styles.sectionStudentCard}>
                     {item.profileImage ? (
                       <Image
-                        source={{ uri: getCompatibleImageUrl(item.profileImage) }}
+                        source={{
+                          uri: getCompatibleImageUrl(item.profileImage),
+                        }}
                         style={styles.studentAvatar}
                         onError={() => console.log("Error loading image")}
                       />
                     ) : (
                       <View style={styles.studentAvatarFallback}>
                         <Text style={styles.avatarText}>
-                          {item.username?.charAt(0).toUpperCase() || 'S'}
+                          {item.username?.charAt(0).toUpperCase() || "S"}
                         </Text>
                       </View>
                     )}
-                    
+
                     <View style={styles.studentInfo}>
                       <Text style={styles.studentName}>{item.username}</Text>
                       <Text style={styles.studentEmail}>{item.email}</Text>
@@ -785,7 +821,7 @@ export default function ClassForm() {
                 contentContainerStyle={styles.sectionStudentsList}
               />
             )}
-            
+
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => {
@@ -806,46 +842,46 @@ export default function ClassForm() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a192f',
+    backgroundColor: "#0a192f",
   },
   header: {
     paddingTop: 24,
     paddingBottom: 16,
-    backgroundColor: '#0a192f',
+    backgroundColor: "#0a192f",
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "#ffffff",
+    textAlign: "center",
   },
   contentContainer: {
     flex: 1,
-    flexDirection: isWeb ? 'row' : 'column',
+    flexDirection: isWeb ? "row" : "column",
   },
   leftColumn: {
     flex: isWeb ? 1 : undefined,
-    height: isWeb ? '100%' : '50%',
+    height: isWeb ? "100%" : "50%",
     borderRightWidth: isWeb ? 1 : 0,
-    borderRightColor: 'rgba(255, 255, 255, 0.1)',
+    borderRightColor: "rgba(255, 255, 255, 0.1)",
     borderBottomWidth: isWeb ? 0 : 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
   rightColumn: {
     flex: isWeb ? 1 : undefined,
-    height: isWeb ? '100%' : '50%',
+    height: isWeb ? "100%" : "50%",
   },
   columnHeader: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
   columnTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontWeight: "bold",
+    color: "#ffffff",
   },
   scrollContent: {
     padding: 16,
@@ -855,21 +891,21 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    color: '#aaaaaa',
+    color: "#aaaaaa",
     marginBottom: 8,
     fontSize: 14,
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 8,
     padding: 12,
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
   },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 8,
     padding: 8,
     margin: 16,
@@ -881,7 +917,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
     padding: 4,
   },
@@ -892,15 +928,15 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 40,
   },
   emptyText: {
-    color: '#666',
+    color: "#666",
     marginTop: 12,
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   studentsList: {
     flex: 1,
@@ -909,25 +945,25 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 12,
     borderRadius: 8,
     marginVertical: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
   userCardSelected: {
-    backgroundColor: 'rgba(28, 176, 246, 0.2)',
+    backgroundColor: "rgba(28, 176, 246, 0.2)",
     borderWidth: 1,
-    borderColor: 'rgba(28, 176, 246, 0.3)',
+    borderColor: "rgba(28, 176, 246, 0.3)",
   },
   userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   selectedIndicator: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     left: 8,
     zIndex: 1,
@@ -941,160 +977,160 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#1cb0f6',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#1cb0f6",
+    justifyContent: "center",
+    alignItems: "center",
   },
   avatarText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   userDetails: {
     marginLeft: 12,
     flex: 1,
   },
   username: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   email: {
-    color: '#aaaaaa',
+    color: "#aaaaaa",
     fontSize: 14,
   },
   sectionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 8,
     padding: 16,
     marginVertical: 8,
-    flexDirection: 'column',
+    flexDirection: "column",
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   sectionInfo: {
     flex: 1,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
   sectionName: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   sectionStats: {
-    color: '#aaaaaa',
+    color: "#aaaaaa",
     fontSize: 14,
   },
   sectionDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 4,
   },
   sectionInstructor: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 14,
     marginLeft: 4,
   },
   sectionActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     marginTop: 8,
   },
   sectionActionButton: {
     padding: 8,
     borderRadius: 8,
     marginLeft: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   modalContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     margin: 0,
     padding: 0,
   },
   modalContent: {
-    backgroundColor: '#0a192f',
+    backgroundColor: "#0a192f",
     borderRadius: 8,
     padding: 24,
-    width: '90%',
+    width: "90%",
     maxWidth: 400,
   },
   modalTitle: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 16,
   },
   modalMessage: {
-    color: '#aaaaaa',
+    color: "#aaaaaa",
     fontSize: 14,
     marginBottom: 24,
   },
   modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   modalButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginHorizontal: 4,
   },
   modalButtonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   modalButtonConfirm: {
     backgroundColor: COLORS.primary,
   },
   deleteButton: {
-    backgroundColor: '#ff4b4b',
+    backgroundColor: "#ff4b4b",
   },
   centered: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   loadingText: {
-    color: '#ffffff',
+    color: "#ffffff",
     marginTop: 12,
     fontSize: 16,
   },
   studentsModalContent: {
-    maxHeight: '80%',
-    width: '95%',
+    maxHeight: "80%",
+    width: "95%",
     maxWidth: 500,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
     marginBottom: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
   sectionStudentsList: {
     paddingVertical: 8,
-    width: '100%',
+    width: "100%",
   },
   sectionStudentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     marginVertical: 4,
     borderRadius: 8,
-    width: '100%',
+    width: "100%",
   },
   studentAvatar: {
     width: 40,
@@ -1107,35 +1143,34 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
   },
   studentInfo: {
     flex: 1,
   },
   studentName: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   studentEmail: {
-    color: '#aaaaaa',
+    color: "#aaaaaa",
     fontSize: 14,
   },
   closeButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 16,
-    width: '100%',
+    width: "100%",
   },
   closeButtonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
-

@@ -1,0 +1,65 @@
+[
+  {
+    "question": "What does HTTPS stand for?",
+    "options": [
+      "HyperText Transfer Protocol Standard",
+      "Hyperlink Transfer Protocol Secure",
+      "High Transfer Text Protocol Secure",
+      "HyperText Transfer Protocol Secure"
+    ],
+    "correctAnswer": 3,
+    "category": "Web Security",
+    "difficulty": "Easy",
+    "points": 1
+  },
+  {
+    "question": "Which of the following is a strong password?",
+    "options": ["password123", "P@55w0rd!", "qwerty", "12345678"],
+    "correctAnswer": 1,
+    "category": "Authentication",
+    "difficulty": "Medium",
+    "points": 2
+  },
+  {
+    "question": "What is phishing?",
+    "options": [
+      "A type of malware",
+      "A social engineering attack to trick users into revealing information",
+      "A firewall technique",
+      "An encryption algorithm"
+    ],
+    "correctAnswer": 1,
+    "category": "Social Engineering",
+    "difficulty": "Easy",
+    "points": 1
+  },
+  {
+    "question": "Which protocol is used to securely transfer files?",
+    "options": ["FTP", "SFTP", "HTTP", "SMTP"],
+    "correctAnswer": 1,
+    "category": "Networking",
+    "difficulty": "Medium",
+    "points": 2
+  },
+  {
+    "question": "In 2FA, what does the second factor typically refer to?",
+    "options": [
+      "Something you know",
+      "Something you have",
+      "Something you like",
+      "Something you read"
+    ],
+    "correctAnswer": 1,
+    "category": "Authentication",
+    "difficulty": "Medium",
+    "points": 2
+  },
+  {
+    "question": "Which HTTP header helps prevent clickjacking attacks?",
+    "options": ["X-Frame-Options", "Content-Type", "Accept-Encoding", "Server"],
+    "correctAnswer": 0,
+    "category": "Web Security",
+    "difficulty": "Hard",
+    "points": 3
+  }
+]

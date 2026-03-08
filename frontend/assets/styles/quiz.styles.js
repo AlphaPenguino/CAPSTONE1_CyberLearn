@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginVertical: 16,
-  }, 
+  },
   retryButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
@@ -55,60 +55,34 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
-    marginTop: 15, // Add this
-    marginBottom: 16,
+    marginVertical: 16,
   },
   quizDescription: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 24, // Add this to create space before info items
   },
   quizInfo: {
-    backgroundColor: '#ffffff', // Change to solid white for better contrast
-    width: '35%', // Slightly wider container
-    borderRadius: 16, // Increased border radius
-    padding: 32, // More padding
-    alignSelf: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
     marginBottom: 30,
-    alignItems: 'center',
-    gap: 24, // Increased gap between elements
-    marginTop: 80, // Reduced top margin
-    justifyContent: 'center',
-    paddingHorizontal: 48, // Reduced horizontal padding
-    // Add shadow for depth
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4, // Reduced bottom margin
-    width: '100%',
-    gap: 12, // Increased gap between icon and text
-    paddingVertical: 8, // Added vertical padding
-    paddingHorizontal: 16, // Added horizontal padding
-    backgroundColor: '#f8f9fa', // Light background for each item
-    borderRadius: 8, // Rounded corners
+    marginBottom: 12,
   },
   infoText: {
-    fontSize: 18, // Larger font size
-    color: '#2c3e50', // Darker text color
-    marginLeft: 8,
-    fontWeight: '600', // Slightly bolder
-    letterSpacing: 0.3, // Added letter spacing
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 12,
+    fontWeight: '500',
   },
   startButton: {
-    width: '30%',
     borderRadius: 12,
     overflow: 'hidden',
-    marginTop: 30,
-    alignSelf: 'center',
-    marginBottom: 20,
   },
   startButtonGradient: {
     flexDirection: 'row',
@@ -727,33 +701,6 @@ const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  xpContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 16,
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  xpText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFD700',
-    marginLeft: 8,
-  },
-  totalXpContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  totalXpText: {
-    fontSize: 14,
-    color: '#FFD700',
-    marginLeft: 4,
   },
 });
 

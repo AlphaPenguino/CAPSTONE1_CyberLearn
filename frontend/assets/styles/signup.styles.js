@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.inputBackground,
+    backgroundColor: "#92eacc",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,

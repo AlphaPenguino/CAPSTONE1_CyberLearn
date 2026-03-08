@@ -1,107 +1,169 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, TextInput, Modal, ActivityIndicator, Alert, Platform } from 'react-native'
-import React, { useState, useEffect } from 'react'
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { API_URL } from '@/constants/api';
-import { useAuthStore } from '@/store/authStore';
-import COLORS from '@/constants/custom-colors';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  Image,
+  TextInput,
+  Modal,
+  ActivityIndicator,
+  Alert,
+  Platform,
+} from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { API_URL, constructProfileImageUrl } from "@/constants/api";
+import { useAuthStore } from "@/store/authStore";
+import COLORS from "@/constants/custom-colors"; // role/accent mapping (static)
+import { useTheme } from "@/contexts/ThemeContext";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
-// Helper function to get a numerical order for roles
-const getRoleOrder = (role) => {
-  switch (role?.toLowerCase()) {
-    case 'student':
-      return 1;
-    case 'instructor':
-      return 2;
-    case 'admin':
-      return 3;
-    default:
-      return 4; // For any other roles
-  }
-};
-
-export default function UsersScreen() {
-  const { token } = useAuthStore();
+export default function UsersScreen({ hideHeader = false }) {
+  const { token, user } = useAuthStore();
+  const { colors } = useTheme();
+  const router = useRouter();
+  // Decide readable foreground color (black/white) based on background color luminance
+  const getReadableTextColor = (bg) => {
+    if (!bg) return "#000";
+    let hex = bg.trim();
+    if (hex.startsWith("rgb")) {
+      const parts = hex
+        .replace(/rgba?\(/, "")
+        .replace(/\)/, "")
+        .split(",")
+        .map((p) => parseFloat(p));
+      const [r, g, b] = parts;
+      const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return lum > 0.6 ? "#000" : "#FFF";
+    }
+    if (hex[0] === "#") hex = hex.slice(1);
+    if (hex.length === 3)
+      hex = hex
+        .split("")
+        .map((c) => c + c)
+        .join("");
+    if (hex.length !== 6) return "#000";
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.6 ? "#000" : "#FFF";
+  };
   const [users, setUsers] = useState([]);
+  // Full-screen loading only for initial load or explicit heavy operations
   const [loading, setLoading] = useState(true);
+  // Lightweight fetching flag so we can show a subtle indicator without unmounting the UI (prevents search box blur on web)
+  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [newUser, setNewUser] = useState({
-    username: '',
-    email: '',
-    password: '',
-    role: 'student', // Default role
+    username: "",
+    fullName: "",
+    email: "",
+    password: "",
+    role: "student", // Default role
+    section: "", // Added section field
   });
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [imageErrors, setImageErrors] = useState({});
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'student', 'instructor', 'admin'
+  const [roleFilter, setRoleFilter] = useState("all"); // all | student | instructor | admin
+  // NEW archived filter: active (default), archived, all
+  const [archivedFilter, setArchivedFilter] = useState("active");
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  // Student analytics modal state
+  const [analyticsModalVisible, setAnalyticsModalVisible] = useState(false);
+  const [studentAnalytics, setStudentAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  // Pagination state (server-side)
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_LIMIT = 10; // limit to 10 users per page
+  // NOTE: We request descending createdAt so newly created users show on page 1.
+
+  // Theme-aware styles (must be defined before any early returns that use them)
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Function to handle image URLs for different platforms
   const getCompatibleImageUrl = (url) => {
     if (!url) return null;
-    
+
+    // First construct the full URL from filename if needed
+    const fullUrl = constructProfileImageUrl(url);
+
     // Convert DiceBear SVGs to PNGs on Android
-    if (url.includes('dicebear') && url.includes('/svg')) {
-      if (Platform.OS === 'android') {
-        return url.replace('/svg', '/png');
+    if (fullUrl && fullUrl.includes("dicebear") && fullUrl.includes("/svg")) {
+      if (Platform.OS === "android") {
+        return fullUrl.replace("/svg", "/png");
       }
     }
-    return url;
+    return fullUrl;
   };
 
-  // Fetch users on component mount
+  // Fetch users on component mount -> now with explicit page 1
   useEffect(() => {
-    fetchUsers();
+    // Initial load with full-screen loader
+    fetchUsers(1, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch users from API
-  const fetchUsers = async () => {
-    try {
-      console.log(`Attempting to fetch users from: ${API_URL}/users`);
-      
-      setLoading(true);
-      const response = await fetch(`${API_URL}/users`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+  // Refetch on search / role changes (reset to page 1)
+  useEffect(() => {
+    // Subsequent search / filter changes should NOT trigger full-screen loader (keeps input focus on web)
+    fetchUsers(1, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, roleFilter, archivedFilter]);
 
+  // Fetch users from API (server pagination + filtering)
+  // Fetch users from API (optionally show full-screen loader). We avoid full-screen loader after initial load to keep search input focus.
+  const fetchUsers = async (
+    targetPage = page,
+    showFullScreenLoader = users.length === 0
+  ) => {
+    try {
+      if (showFullScreenLoader) {
+        setLoading(true);
+      }
+      setFetching(true);
+      const params = new URLSearchParams();
+      params.set("page", targetPage.toString());
+      params.set("limit", PAGE_LIMIT.toString());
+      params.set("sort", "createdAt");
+      params.set("direction", "desc"); // newest first
+      if (searchQuery) params.set("search", searchQuery);
+      if (roleFilter !== "all") params.set("role", roleFilter);
+      // archived filter handling
+      if (archivedFilter === "archived") params.set("archived", "true");
+      else if (archivedFilter === "active") params.set("archived", "false");
+      const url = `${API_URL}/users?${params.toString()}`;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch users');
+        throw new Error(errorData.message || "Failed to fetch users");
       }
-
       const data = await response.json();
-      
-      // Use data.users instead of data directly
       if (data.success && data.users) {
-        // Sort the users by role, then by username
-        const sortedUsers = data.users.sort((a, b) => {
-          const roleA = getRoleOrder(a.role || a.privilege);
-          const roleB = getRoleOrder(b.role || b.privilege);
-          
-          // Primary sort by role order
-          if (roleA !== roleB) {
-            return roleA - roleB;
-          }
-          
-          // Secondary sort by username alphabetically
-          return a.username.localeCompare(b.username);
-        });
-        
-        setUsers(sortedUsers);
-        // Reset image errors when new users are loaded
+        setUsers(data.users);
+        setPage(data.pagination?.currentPage || targetPage);
+        setTotalPages(data.pagination?.totalPages || 1);
         setImageErrors({});
+        setError(null);
       } else {
-        throw new Error(data.message || 'Failed to get users');
+        throw new Error(data.message || "Failed to get users");
       }
-      
-      setError(null);
     } catch (err) {
       console.error("Error fetching users:", err);
       setError(err.message);
     } finally {
+      setFetching(false);
       setLoading(false);
       setRefreshing(false);
     }
@@ -110,78 +172,94 @@ export default function UsersScreen() {
   // Add new user
   const handleAddUser = async () => {
     // Validate input
-    if (!newUser.username || !newUser.email || !newUser.password) {
-      Alert.alert('Validation Error', 'Please fill all required fields');
+    if (
+      !newUser.username ||
+      !newUser.fullName ||
+      !newUser.email ||
+      !newUser.password
+    ) {
+      Alert.alert("Validation Error", "Please fill all required fields");
       return;
     }
 
     try {
       setLoading(true);
       const response = await fetch(`${API_URL}/users`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(newUser)
+        body: JSON.stringify(newUser),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create user');
+        throw new Error(errorData.message || "Failed to create user");
       }
 
       // Clear form and close modal
       setNewUser({
-        username: '',
-        email: '',
-        password: '',
-        role: 'student',
+        username: "",
+        fullName: "",
+        email: "",
+        password: "",
+        role: "student",
+        section: "", // Clear the section field too
       });
       setModalVisible(false);
-      
+
       // Refresh user list
-      fetchUsers();
-      Alert.alert('Success', 'User created successfully');
+      fetchUsers(1); // ensure new user appears at top
+      Alert.alert("Success", "User created successfully");
     } catch (err) {
-      showAlert('Error', err.message);
+      showAlert("Error", err.message);
     } finally {
       setLoading(false);
     }
   };
 
   // Delete user
-  const handleDeleteUser = async (userId, username) => {
+  const handleDeleteUser = async (userId, displayName) => {
     showAlert(
-      'Confirm Delete',
-      `Are you sure you want to delete ${username}? This action cannot be undone.`,
+      "Confirm Delete",
+      `Are you sure you want to delete ${displayName}? This action cannot be undone.`,
       [
         {
-          text: 'Cancel',
-          style: 'cancel',
+          text: "Cancel",
+          style: "cancel",
         },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Delete",
+          style: "destructive",
           onPress: async () => {
             try {
               setLoading(true);
               const response = await fetch(`${API_URL}/users/${userId}`, {
-                method: 'DELETE',
+                method: "DELETE",
                 headers: {
-                  'Authorization': `Bearer ${token}`
-                }
+                  Authorization: `Bearer ${token}`,
+                },
               });
 
               if (!response.ok) {
-                throw new Error('Failed to delete user');
+                throw new Error("Failed to delete user");
               }
 
-              // Remove user from list
-              setUsers(users.filter(user => user._id !== userId));
-              showAlert('Success', 'User deleted successfully');
+              const data = await response.json();
+              if (data.archived && !data.hardDeleted) {
+                setUsers(
+                  users.map((u) =>
+                    u._id === userId ? { ...u, isArchived: true } : u
+                  )
+                );
+                showAlert("Archived", "User archived successfully");
+              } else {
+                setUsers(users.filter((user) => user._id !== userId));
+                showAlert("Success", "User deleted permanently");
+              }
             } catch (err) {
-              showAlert('Error', err.message);
+              showAlert("Error", err.message);
             } finally {
               setLoading(false);
             }
@@ -191,51 +269,174 @@ export default function UsersScreen() {
     );
   };
 
+  // Archive / Unarchive toggle
+  const handleArchiveToggle = async (userItem) => {
+    const action = userItem.isArchived ? "unarchive" : "archive";
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${API_URL}/users/${userItem._id}/${action}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      if (!response.ok) throw new Error(`Failed to ${action} user`);
+      await response.json();
+      setUsers(
+        users.map((u) =>
+          u._id === userItem._id
+            ? { ...u, isArchived: !userItem.isArchived }
+            : u
+        )
+      );
+      showAlert(
+        "Success",
+        `User ${action === "archive" ? "archived" : "restored"} successfully`
+      );
+    } catch (err) {
+      showAlert("Error", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle password change
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      showAlert("Error", "Please fill in all password fields");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showAlert("Error", "Passwords do not match");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      showAlert("Error", "Password should be at least 8 characters long");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/users/${selectedUser._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          password: newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to change password");
+      }
+
+      showAlert("Success", "Password changed successfully");
+      setPasswordModalVisible(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      setSelectedUser(null);
+    } catch (err) {
+      showAlert("Error", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle opening password change modal
+  const openPasswordModal = (user) => {
+    setSelectedUser(user);
+    setPasswordModalVisible(true);
+  };
+
+  // Fetch student analytics
+  const fetchStudentAnalytics = async (userId) => {
+    try {
+      setAnalyticsLoading(true);
+      const response = await fetch(
+        `${API_URL}/admin/analytics/student-analytics/${userId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        setStudentAnalytics(result.data);
+        setAnalyticsModalVisible(true);
+      } else {
+        const errorData = await response.json();
+        Alert.alert("Error", errorData.message || "Failed to fetch analytics");
+      }
+    } catch (error) {
+      console.error("Error fetching student analytics:", error);
+      Alert.alert("Error", "Failed to fetch student analytics");
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  // Handle opening student analytics modal
+  const openAnalyticsModal = (user) => {
+    if (user.privilege === "student") {
+      fetchStudentAnalytics(user._id);
+    } else {
+      Alert.alert("Info", "Analytics are only available for students");
+    }
+  };
+
   // Mark image as having error
   const handleImageError = (userId) => {
-    setImageErrors(prev => ({
+    setImageErrors((prev) => ({
       ...prev,
-      [userId]: true
+      [userId]: true,
     }));
   };
 
-  // Filter users based on search query AND active filter
-  const filteredUsers = users
-    .filter(user => {
-      const userRole = (user.role || user.privilege)?.toLowerCase();
-      // Check if the user's role matches the active filter, or if the filter is 'all'
-      const roleMatchesFilter = activeFilter === 'all' || userRole === activeFilter;
-
-      // Check if the user matches the search query
-      const searchMatchesUser = user.username?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        user.email?.toLowerCase().includes(searchQuery.toLowerCase());
-
-      return roleMatchesFilter && searchMatchesUser;
-    });
-
+  // Server already returns filtered page of users
+  const filteredUsers = users;
 
   // Get role-specific properties
   const getRoleColor = (role) => {
-    switch(role?.toLowerCase()) {
-      case 'instructor':
-        return '#FF5722';
-      case 'admin':
-        return '#673AB7';
+    switch (role?.toLowerCase()) {
+      case "instructor":
+        return "#FF5722";
+      case "admin":
+        return "#673AB7";
       default:
         return COLORS.primary;
     }
   };
-  
+
   const getRoleIcon = (role) => {
-    switch(role?.toLowerCase()) {
-      
-      case 'admin':
-        return 'shield-crown-outline';
-      case 'instructor':
-        return 'school-outline';
+    switch (role?.toLowerCase()) {
+      case "admin":
+        return "shield-crown-outline";
+      case "instructor":
+        return "school-outline";
       default:
-        return 'account-outline';
+        return "account-outline";
     }
+  };
+
+  // Scroll handling
+  const lastScrollY = useRef(0);
+  // (Legacy scroll-hide filters removed)
+  // New state for Filters Modal (to reduce inline space usage)
+  const [filtersModalVisible, setFiltersModalVisible] = useState(false);
+
+  const handleScroll = (event) => {
+    // Retain last scroll for potential future UX (currently unused)
+    lastScrollY.current = event.nativeEvent.contentOffset.y;
   };
 
   // Render item for FlatList
@@ -243,9 +444,10 @@ export default function UsersScreen() {
     // First check for profileImage (auth), then profilePicture (user route) for compatibility
     const userImage = item.profileImage || item.profilePicture;
     const hasImageError = imageErrors[item._id];
-    const role = item.role || item.privilege || 'student';
+    const role = item.role || item.privilege || "student";
     const roleColor = getRoleColor(role);
-    
+    const archived = item.isArchived;
+
     return (
       <TouchableOpacity style={styles.userCard}>
         <View style={styles.userInfo}>
@@ -257,26 +459,81 @@ export default function UsersScreen() {
             />
           ) : (
             <View style={[styles.avatarFallback, { borderColor: roleColor }]}>
-              <MaterialCommunityIcons name={getRoleIcon(role)} size={28} color={roleColor} />
+              <MaterialCommunityIcons
+                name={getRoleIcon(role)}
+                size={28}
+                color={roleColor}
+              />
             </View>
           )}
-          
+
           <View style={styles.userDetails}>
-            <Text style={styles.username}>{item.username}</Text>
+            <Text
+              style={[
+                styles.username,
+                archived && {
+                  textDecorationLine: "line-through",
+                  opacity: 0.6,
+                },
+              ]}
+            >
+              {item.fullName || item.username} {archived ? "(Archived)" : ""}
+            </Text>
             <Text style={styles.email}>{item.email}</Text>
             <View style={[styles.roleBadge, { backgroundColor: roleColor }]}>
-              <MaterialCommunityIcons name={getRoleIcon(role)} size={14} color="#FFF" style={styles.roleIcon} />
+              <MaterialCommunityIcons
+                name={getRoleIcon(role)}
+                size={14}
+                color="#FFF"
+                style={styles.roleIcon}
+              />
               <Text style={styles.roleText}>{role}</Text>
             </View>
           </View>
         </View>
-        
-        <TouchableOpacity 
-          style={styles.deleteButton} 
-          onPress={() => handleDeleteUser(item._id, item.username)}
-        >
-          <MaterialCommunityIcons name="trash-can-outline" size={22} color={COLORS.error || '#F44336'} />
-        </TouchableOpacity>
+
+        {user?.privilege === "admin" && (
+          <View style={styles.userActions}>
+            {/* Analytics button - only for students */}
+            {item.privilege === "student" && ""}
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => openPasswordModal(item)}
+            >
+              <MaterialCommunityIcons
+                name="key-outline"
+                size={20}
+                color={COLORS.warning || "#FF9800"}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleArchiveToggle(item)}
+            >
+              <MaterialCommunityIcons
+                name={item.isArchived ? "backup-restore" : "archive-outline"}
+                size={20}
+                color={
+                  item.isArchived
+                    ? COLORS.success || "#4CAF50"
+                    : COLORS.info || "#2196F3"
+                }
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() =>
+                handleDeleteUser(item._id, item.fullName || item.username)
+              }
+            >
+              <MaterialCommunityIcons
+                name="trash-can-outline"
+                size={20}
+                color={COLORS.error || "#F44336"}
+              />
+            </TouchableOpacity>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -295,7 +552,11 @@ export default function UsersScreen() {
   if (error) {
     return (
       <View style={styles.centered}>
-        <MaterialCommunityIcons name="alert-circle" size={50} color={COLORS.error || '#F44336'} />
+        <MaterialCommunityIcons
+          name="alert-circle"
+          size={50}
+          color={COLORS.error || "#F44336"}
+        />
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchUsers}>
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -305,468 +566,1356 @@ export default function UsersScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Manage Users</Text>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <MaterialCommunityIcons name="account-plus" size={24} color="#FFF" />
-          <Text style={styles.addButtonText}>Add User</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Main content container with max-width and centering */}
-      <View style={styles.mainContent}>
-        {/* Filter Buttons */}
-        <View style={styles.filterContainer}>
-          {['all', 'student', 'instructor', 'admin'].map(filter => (
-            <TouchableOpacity
-              key={filter}
-              style={[
-                styles.filterButton,
-                activeFilter === filter && styles.filterButtonActive
-              ]}
-              onPress={() => setActiveFilter(filter)}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                activeFilter === filter && styles.filterButtonTextActive
-              ]}>
-                {filter.charAt(0).toUpperCase() + filter.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search users..."
-            placeholderTextColor={COLORS.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* User List */}
-        <FlatList
-          data={filteredUsers}
-          renderItem={renderItem}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.listContainer}
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
-            fetchUsers();
-          }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons name="account-search" size={60} color={COLORS.textSecondary} />
-              <Text style={styles.emptyText}>
-                {searchQuery || activeFilter !== 'all' ? 'No users match your criteria' : 'No users found'}
-              </Text>
-            </View>
-          }
-        />
-      </View>
-
-      {/* Add User Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New User</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <MaterialCommunityIcons name="close" size={24} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-
-            
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={COLORS.textSecondary}
-              keyboardType="email-address"
-              value={newUser.email}
-              onChangeText={(text) => setNewUser({...newUser, email: text})}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor={COLORS.textSecondary}
-              value={newUser.username}
-              onChangeText={(text) => setNewUser({...newUser, username: text})}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={COLORS.textSecondary}
-              secureTextEntry
-              value={newUser.password}
-              onChangeText={(text) => setNewUser({...newUser, password: text})}
-            />
-
-            <Text style={styles.roleLabel}>Role:</Text>
-            <View style={styles.roleContainer}>
-              {['student', 'instructor', 'admin'].map(role => (
-                <TouchableOpacity
-                  key={role}
-                  style={[
-                    styles.roleOption,
-                    newUser.role === role && styles.roleOptionSelected,
-                    { borderColor: getRoleColor(role) }
-                  ]}
-                  onPress={() => setNewUser({...newUser, role})}
-                >
-                  <MaterialCommunityIcons 
-                    name={getRoleIcon(role)} 
-                    size={22} 
-                    color={newUser.role === role ? '#FFF' : getRoleColor(role)} 
-                  />
-                  <Text 
-                    style={[
-                      styles.roleOptionText,
-                      newUser.role === role && styles.roleOptionTextSelected
-                    ]}
+    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <View style={styles.pageWrapper}>
+          {!hideHeader && (
+            <View style={styles.header}>
+              <Text style={styles.title}>Manage Users</Text>
+              <View style={styles.headerButtons}>
+                {user?.privilege === "admin" && (
+                  <TouchableOpacity
+                    style={styles.bulkUploadButton}
+                    onPress={() => router.push("/admin/bulk-import")}
                   >
-                    {role.charAt(0).toUpperCase() + role.slice(1)}
-                  </Text>
+                    <MaterialCommunityIcons
+                      name="upload"
+                      size={20}
+                      color="#FFF"
+                    />
+                    <Text style={styles.bulkUploadButtonText}>Bulk Upload</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={() => setModalVisible(true)}
+                >
+                  <MaterialCommunityIcons
+                    name="account-plus"
+                    size={24}
+                    color="#FFF"
+                  />
+                  <Text style={styles.addButtonText}>Add User</Text>
                 </TouchableOpacity>
-              ))}
+              </View>
             </View>
+          )}
 
-            <TouchableOpacity 
-              style={styles.submitButton}
-              onPress={handleAddUser}
+          {/* Compact top bar with Search + Filters trigger */}
+          <View style={styles.topBar}>
+            <View style={styles.searchBarCompact}>
+              <MaterialCommunityIcons
+                name="magnify"
+                size={20}
+                color={colors.textSecondary}
+              />
+              <TextInput
+                style={styles.searchInputCompact}
+                placeholder="Search users..."
+                placeholderTextColor={colors.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={() => setSearchQuery("")}>
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              ) : null}
+              {fetching && !loading && (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.textSecondary}
+                  style={{ marginLeft: 6 }}
+                />
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.filtersButton}
+              onPress={() => setFiltersModalVisible(true)}
             >
-              <Text style={styles.submitButtonText}>Create User</Text>
-              <MaterialCommunityIcons name="account-plus" size={20} color="#FFF" />
+              <MaterialCommunityIcons
+                name="filter-variant"
+                size={22}
+                color={colors.primaryContrast || "#FFF"}
+              />
+              <Text style={styles.filtersButtonText}>Filters</Text>
+              {(roleFilter !== "all" || archivedFilter !== "active") && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>•</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
+
+          {/* Inline Actions (for embedded in Admin Dashboard) */}
+          {hideHeader && (
+            <View style={styles.inlineActions}>
+              {user?.privilege === "admin" && (
+                <TouchableOpacity
+                  style={styles.bulkUploadButton}
+                  onPress={() => router.push("/admin/bulk-import")}
+                >
+                  <MaterialCommunityIcons
+                    name="upload"
+                    size={20}
+                    color="#FFF"
+                  />
+                  <Text style={styles.bulkUploadButtonText}>Bulk Upload</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => setModalVisible(true)}
+              >
+                <MaterialCommunityIcons
+                  name="account-plus"
+                  size={24}
+                  color="#FFF"
+                />
+                <Text style={styles.addButtonText}>Add User</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* User List */}
+          <FlatList
+            data={filteredUsers}
+            renderItem={renderItem}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={styles.listContainer}
+            refreshing={refreshing}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchUsers(page);
+            }}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <MaterialCommunityIcons
+                  name="account-search"
+                  size={60}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.emptyText}>
+                  {searchQuery
+                    ? "No users match your search"
+                    : "No users found"}
+                </Text>
+              </View>
+            }
+          />
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <View style={styles.paginationContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.pageButton,
+                  page === 1 && styles.pageButtonDisabled,
+                ]}
+                disabled={page === 1}
+                onPress={() => fetchUsers(page - 1)}
+              >
+                <Text
+                  style={[
+                    styles.pageButtonText,
+                    page === 1 && styles.pageButtonTextDisabled,
+                  ]}
+                >
+                  Prev
+                </Text>
+              </TouchableOpacity>
+              <View style={styles.pageNumbersWrapper}>
+                {Array.from({ length: totalPages }).map((_, i) => {
+                  const pageNum = i + 1;
+                  const showAll = totalPages <= 7;
+                  const isEdge = pageNum === 1 || pageNum === totalPages;
+                  const isNear = Math.abs(pageNum - page) <= 1;
+                  if (!showAll && !isEdge && !isNear) {
+                    if (pageNum === 2 || pageNum === totalPages - 1) {
+                      return (
+                        <Text key={pageNum} style={styles.ellipsis}>
+                          ...
+                        </Text>
+                      );
+                    }
+                    return null;
+                  }
+                  const selected = pageNum === page;
+                  return (
+                    <TouchableOpacity
+                      key={pageNum}
+                      style={[
+                        styles.pageNumber,
+                        selected && styles.pageNumberSelected,
+                      ]}
+                      onPress={() => fetchUsers(pageNum)}
+                    >
+                      <Text
+                        style={[
+                          styles.pageNumberText,
+                          selected && styles.pageNumberTextSelected,
+                        ]}
+                      >
+                        {pageNum}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.pageButton,
+                  page === totalPages && styles.pageButtonDisabled,
+                ]}
+                disabled={page === totalPages}
+                onPress={() => fetchUsers(page + 1)}
+              >
+                <Text
+                  style={[
+                    styles.pageButtonText,
+                    page === totalPages && styles.pageButtonTextDisabled,
+                  ]}
+                >
+                  Next
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Add User Modal */}
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={modalVisible}
+            onRequestClose={() => setModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Add New User</Text>
+                  <TouchableOpacity onPress={() => setModalVisible(false)}>
+                    <MaterialCommunityIcons
+                      name="close"
+                      size={24}
+                      color={COLORS.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="email-address"
+                  value={newUser.email}
+                  onChangeText={(text) =>
+                    setNewUser({ ...newUser, email: text })
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Full Name"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newUser.fullName}
+                  onChangeText={(text) =>
+                    setNewUser({ ...newUser, fullName: text })
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newUser.username}
+                  onChangeText={(text) =>
+                    setNewUser({ ...newUser, username: text })
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                  value={newUser.password}
+                  onChangeText={(text) =>
+                    setNewUser({ ...newUser, password: text })
+                  }
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Section (e.g. CS101, optional)"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newUser.section}
+                  onChangeText={(text) =>
+                    setNewUser({ ...newUser, section: text })
+                  }
+                />
+                <Text style={styles.roleLabel}>Role:</Text>
+                <View style={styles.roleContainer}>
+                  {["student", "instructor", "admin"].map((role) => (
+                    <TouchableOpacity
+                      key={role}
+                      style={[
+                        styles.roleOption,
+                        newUser.role === role && styles.roleOptionSelected,
+                        { borderColor: getRoleColor(role) },
+                      ]}
+                      onPress={() => setNewUser({ ...newUser, role })}
+                    >
+                      <MaterialCommunityIcons
+                        name={getRoleIcon(role)}
+                        size={22}
+                        color={
+                          newUser.role === role ? "#FFF" : getRoleColor(role)
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.roleOptionText,
+                          newUser.role === role &&
+                            styles.roleOptionTextSelected,
+                        ]}
+                      >
+                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.submitButton}
+                  onPress={handleAddUser}
+                >
+                  <Text style={styles.submitButtonText}>Create User</Text>
+                  <MaterialCommunityIcons
+                    name="account-plus"
+                    size={20}
+                    color="#FFF"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+          {/* Filters Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={filtersModalVisible}
+            onRequestClose={() => setFiltersModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { maxWidth: 560 }]}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Filters</Text>
+                  <TouchableOpacity
+                    onPress={() => setFiltersModalVisible(false)}
+                  >
+                    <MaterialCommunityIcons
+                      name="close"
+                      size={24}
+                      color={colors.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.filtersSection}>
+                  <Text style={styles.filtersLabel}>Role</Text>
+                  <View style={styles.filtersRowWrap}>
+                    {[
+                      {
+                        key: "all",
+                        label: "All",
+                        icon: "account-group-outline",
+                        color: colors.textSecondary,
+                      },
+                      {
+                        key: "student",
+                        label: "Students",
+                        icon: getRoleIcon("student"),
+                        color: getRoleColor("student"),
+                      },
+                      {
+                        key: "instructor",
+                        label: "Instructors",
+                        icon: getRoleIcon("instructor"),
+                        color: getRoleColor("instructor"),
+                      },
+                      {
+                        key: "admin",
+                        label: "Admins",
+                        icon: getRoleIcon("admin"),
+                        color: getRoleColor("admin"),
+                      },
+                    ].map((f) => {
+                      const selected = roleFilter === f.key;
+                      return (
+                        <TouchableOpacity
+                          key={f.key}
+                          onPress={() => setRoleFilter(f.key)}
+                          style={[
+                            styles.modalFilterChip,
+                            selected && {
+                              backgroundColor: f.color,
+                              borderColor: f.color,
+                            },
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name={f.icon}
+                            size={16}
+                            color={
+                              selected ? getReadableTextColor(f.color) : f.color
+                            }
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text
+                            style={[
+                              styles.modalFilterChipText,
+                              selected && {
+                                color: getReadableTextColor(f.color),
+                              },
+                            ]}
+                          >
+                            {f.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+                <View style={styles.filtersSection}>
+                  <Text style={styles.filtersLabel}>Status</Text>
+                  <View style={styles.filtersRowWrap}>
+                    {[
+                      {
+                        key: "active",
+                        label: "Active",
+                        icon: "account-check-outline",
+                        color: COLORS.success || "#4CAF50",
+                      },
+                      {
+                        key: "archived",
+                        label: "Archived",
+                        icon: "archive-outline",
+                        color: COLORS.info || "#2196F3",
+                      },
+                      {
+                        key: "all",
+                        label: "All Status",
+                        icon: "swap-horizontal",
+                        color: colors.textSecondary,
+                      },
+                    ].map((f) => {
+                      const selected = archivedFilter === f.key;
+                      return (
+                        <TouchableOpacity
+                          key={f.key}
+                          onPress={() => setArchivedFilter(f.key)}
+                          style={[
+                            styles.modalFilterChip,
+                            selected && {
+                              backgroundColor: f.color,
+                              borderColor: f.color,
+                            },
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name={f.icon}
+                            size={16}
+                            color={
+                              selected ? getReadableTextColor(f.color) : f.color
+                            }
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text
+                            style={[
+                              styles.modalFilterChipText,
+                              selected && {
+                                color: getReadableTextColor(f.color),
+                              },
+                            ]}
+                          >
+                            {f.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+                <View style={styles.filtersFooter}>
+                  <TouchableOpacity
+                    style={styles.clearFiltersButton}
+                    onPress={() => {
+                      setRoleFilter("all");
+                      setArchivedFilter("active");
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="backup-restore"
+                      size={18}
+                      color={colors.primary}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.clearFiltersText}>Reset</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.applyFiltersButton}
+                    onPress={() => setFiltersModalVisible(false)}
+                  >
+                    <MaterialCommunityIcons
+                      name="check-circle"
+                      size={18}
+                      color="#FFF"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.applyFiltersText}>Apply</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+          {/* Password Change Modal */}
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={passwordModalVisible}
+            onRequestClose={() => {
+              setPasswordModalVisible(false);
+              setNewPassword("");
+              setConfirmPassword("");
+              setSelectedUser(null);
+            }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>
+                    Change Password for{" "}
+                    {selectedUser?.fullName || selectedUser?.username}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setPasswordModalVisible(false);
+                      setNewPassword("");
+                      setConfirmPassword("");
+                      setSelectedUser(null);
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="close"
+                      size={24}
+                      color={COLORS.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="New Password"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm New Password"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                />
+
+                <TouchableOpacity
+                  style={styles.submitButton}
+                  onPress={handleChangePassword}
+                  disabled={loading}
+                >
+                  <Text style={styles.submitButtonText}>
+                    {loading ? "Changing..." : "Change Password"}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="key-outline"
+                    size={20}
+                    color="#FFF"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Student Analytics Modal */}
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={analyticsModalVisible}
+            onRequestClose={() => {
+              setAnalyticsModalVisible(false);
+              setStudentAnalytics(null);
+            }}
+          >
+            <View style={styles.modalOverlay}>
+              <View
+                style={[
+                  styles.modalContent,
+                  { maxHeight: "90%", width: "95%" },
+                ]}
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>
+                    📊 Student Analytics: {studentAnalytics?.student?.username}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setAnalyticsModalVisible(false);
+                      setStudentAnalytics(null);
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="close"
+                      size={24}
+                      color={colors.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {analyticsLoading ? (
+                  <View style={styles.centered}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text
+                      style={[
+                        styles.loadingText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Loading analytics...
+                    </Text>
+                  </View>
+                ) : studentAnalytics ? (
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.scrollContainer}>
+                      {/* Progress Summary */}
+                      <View style={styles.analyticsCard}>
+                        <Text style={styles.analyticsCardTitle}>
+                          📈 Progress Summary
+                        </Text>
+                        <View style={styles.analyticsRow}>
+                          <Text
+                            style={[
+                              styles.analyticsLabel,
+                              { color: colors.text },
+                            ]}
+                          >
+                            Current Level:{" "}
+                            {studentAnalytics.progress.currentLevel}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.analyticsValue,
+                              { color: colors.primary },
+                            ]}
+                          >
+                            {studentAnalytics.progress.totalXP} XP
+                          </Text>
+                        </View>
+                        <View style={styles.analyticsRow}>
+                          <Text
+                            style={[
+                              styles.analyticsLabel,
+                              { color: colors.text },
+                            ]}
+                          >
+                            Modules Completed:{" "}
+                            {studentAnalytics.progress.completedModules}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.analyticsLabel,
+                              { color: colors.text },
+                            ]}
+                          >
+                            Modules Unlocked:{" "}
+                            {studentAnalytics.progress.unlockedModules}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Quiz Statistics */}
+                      <View style={styles.analyticsCard}>
+                        <Text style={styles.analyticsCardTitle}>
+                          🎯 Quiz Performance
+                        </Text>
+                        <View style={styles.analyticsRow}>
+                          <Text
+                            style={[
+                              styles.analyticsLabel,
+                              { color: colors.text },
+                            ]}
+                          >
+                            Total Quizzes:{" "}
+                            {studentAnalytics.analytics.totalQuizzesCompleted}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.analyticsValue,
+                              { color: colors.success || "#4CAF50" },
+                            ]}
+                          >
+                            Avg: {studentAnalytics.analytics.averageScore}%
+                          </Text>
+                        </View>
+                        <View style={styles.analyticsRow}>
+                          <Text
+                            style={[
+                              styles.analyticsLabel,
+                              { color: colors.text },
+                            ]}
+                          >
+                            Total Time:{" "}
+                            {Math.round(
+                              (studentAnalytics.analytics.totalTimeSpent || 0) /
+                                60
+                            )}{" "}
+                            minutes
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Subject Breakdown */}
+                      <View style={styles.analyticsCard}>
+                        <Text style={styles.analyticsCardTitle}>
+                          📚 Subject Performance
+                        </Text>
+                        {Object.entries(
+                          studentAnalytics.analytics.subjectBreakdown
+                        ).map(([subject, data]) => (
+                          <View key={subject} style={styles.analyticsRow}>
+                            <Text
+                              style={[
+                                styles.analyticsLabel,
+                                { color: colors.text, flex: 2 },
+                              ]}
+                            >
+                              {subject}: {data.count} quizzes
+                            </Text>
+                            <Text
+                              style={[
+                                styles.analyticsValue,
+                                { color: colors.primary },
+                              ]}
+                            >
+                              {data.averageScore}%
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+
+                      {/* Recent Activity */}
+                      <View style={styles.analyticsCard}>
+                        <Text style={styles.analyticsCardTitle}>
+                          📝 Recent Quiz Activity
+                        </Text>
+                        {studentAnalytics.analytics.recentActivity
+                          .slice(0, 5)
+                          .map((quiz, index) => (
+                            <View key={index} style={styles.activityItem}>
+                              <Text
+                                style={[
+                                  styles.activityTitle,
+                                  { color: colors.text },
+                                ]}
+                              >
+                                {quiz.quizTitle}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.activityModule,
+                                  { color: colors.textSecondary },
+                                ]}
+                              >
+                                {quiz.moduleTitle} • {quiz.subject}
+                              </Text>
+                              <View style={styles.activityMeta}>
+                                <Text
+                                  style={[
+                                    styles.activityScore,
+                                    {
+                                      color:
+                                        quiz.percentage >= 70
+                                          ? colors.success || "#4CAF50"
+                                          : colors.warning || "#FF9800",
+                                    },
+                                  ]}
+                                >
+                                  {quiz.percentage}%
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.activityDate,
+                                    { color: colors.textSecondary },
+                                  ]}
+                                >
+                                  {new Date(
+                                    quiz.completedAt
+                                  ).toLocaleDateString()}
+                                </Text>
+                              </View>
+                            </View>
+                          ))}
+                      </View>
+                    </View>
+                  </View>
+                ) : (
+                  <Text
+                    style={[styles.errorText, { color: colors.textSecondary }]}
+                  >
+                    No analytics data available
+                  </Text>
+                )}
+              </View>
+            </View>
+          </Modal>
         </View>
-      </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  mainContent: {
-    flex: 1,
-    width: '100%',
-    maxWidth: 800, // Max width for content on wider screens
-    alignSelf: 'center', // Center the container horizontally
-    paddingHorizontal: 16, // Add padding here for consistent spacing
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: COLORS.textPrimary,
-  },
-  errorText: {
-    marginTop: 10,
-    color: COLORS.error || '#F44336',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: 20,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.cardBackground,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-  },
-  addButton: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  addButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardBackground,
-    marginBottom: 10,
-    marginTop: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    color: COLORS.textPrimary,
-    fontSize: 16,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    backgroundColor: COLORS.cardBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  filterButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  filterButtonActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  filterButtonText: {
-    color: COLORS.textSecondary,
-    fontWeight: 'bold',
-  },
-  filterButtonTextActive: {
-    color: '#FFF',
-  },
-  listContainer: {
-    paddingBottom: 16,
-  },
-  userCard: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.background,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-  },
-  avatarFallback: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.background,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  userDetails: {
-    marginLeft: 14,
-    flex: 1,
-  },
-  username: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: 2,
-  },
-  email: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: 6,
-  },
-  roleBadge: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-  },
-  roleIcon: {
-    marginRight: 4,
-  },
-  roleText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  deleteButton: {
-    padding: 8,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 12,
-    marginTop: 20,
-  },
-  emptyText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: COLORS.cardBackground,
-    width: '100%',
-    maxWidth: 500,
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 10,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-  },
-  input: {
-    backgroundColor: COLORS.inputBackground || COLORS.background,
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    color: COLORS.textPrimary,
-    fontSize: 16,
-  },
-  roleLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 10,
-    marginTop: 8,
-  },
-  roleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  roleOption: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 5,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    marginHorizontal: 4,
-    borderRadius: 8,
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  roleOptionSelected: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  roleOptionText: {
-    color: COLORS.textPrimary,
-    marginLeft: 6,
-    fontWeight: '500',
-  },
-  roleOptionTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  submitButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  submitButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginRight: 8,
-  },
-});
+// Dynamic styles factory (theme-aware)
+const createStyles = (colors) =>
+  StyleSheet.create({
+    searchContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      marginTop: 5, // Reduced from 10 to position higher
+      marginBottom: 6, // Reduced from 10
+      marginHorizontal:
+        typeof window !== "undefined" && window.innerWidth < 600 ? 8 : 0,
+      paddingHorizontal: 12,
+      paddingVertical: 6, // Reduced from 8 for more compact height
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      elevation: 2,
+      // Add position relative for possible absolute positioning of dropdown results
+      position: "relative",
+      zIndex: 10,
+    },
+    searchInput: {
+      flex: 1,
+      marginLeft: 6,
+      color: colors.text,
+      fontSize: 15,
+      height: Platform.OS === "ios" ? 30 : 34, // Further reduced height
+    },
+    // (Removed legacy inline filter chip styles after modal refactor)
+    // New compact top bar styles
+    topBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal:
+        typeof window !== "undefined" && window.innerWidth < 600 ? 8 : 0,
+      marginTop: 8,
+      marginBottom: 10,
+    },
+    searchBarCompact: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    searchInputCompact: {
+      flex: 1,
+      marginLeft: 6,
+      color: colors.text,
+      fontSize: 15,
+      height: Platform.OS === "ios" ? 30 : 34,
+    },
+    filtersButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.primary,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 10,
+      position: "relative",
+    },
+    filtersButtonText: {
+      color: "#FFF",
+      fontWeight: "600",
+      marginLeft: 6,
+      fontSize: 15,
+    },
+    filterBadge: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      backgroundColor: colors.accent || "#FF9800",
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2,
+      borderColor: colors.card,
+    },
+    filterBadgeText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
+    // Modal filters
+    filtersSection: { marginBottom: 20 },
+    filtersLabel: {
+      fontSize: 16,
+      fontWeight: "700",
+      marginBottom: 10,
+      color: colors.text,
+    },
+    filtersRowWrap: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+    modalFilterChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalFilterChipText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    filtersFooter: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginTop: 10,
+    },
+    clearFiltersButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    clearFiltersText: {
+      color: colors.primary,
+      fontWeight: "600",
+      fontSize: 14,
+    },
+    applyFiltersButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 10,
+      paddingHorizontal: 18,
+      backgroundColor: colors.primary,
+      borderRadius: 8,
+    },
+    applyFiltersText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
+    container: { flex: 1, backgroundColor: colors.background },
+    safeArea: { flex: 1 },
+    pageWrapper: {
+      flex: 1,
+      width: "100%",
+      maxWidth: 1200,
+      alignSelf: "center",
+      // Remove horizontal padding on larger viewports; keep small on mobile
+      paddingHorizontal:
+        typeof window !== "undefined" && window.innerWidth < 600 ? 12 : 0,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.background,
+      padding: 20,
+    },
+    loadingText: { marginTop: 10, fontSize: 16, color: colors.text },
+    errorText: {
+      marginTop: 10,
+      color: colors.error || COLORS.error || "#F44336",
+      fontSize: 16,
+      textAlign: "center",
+    },
+    retryButton: {
+      marginTop: 20,
+      backgroundColor: colors.primary,
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      borderRadius: 5,
+    },
+    retryButtonText: { color: "#FFFFFF", fontWeight: "bold" },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 20,
+      paddingHorizontal:
+        typeof window !== "undefined" && window.innerWidth < 600 ? 12 : 0,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    title: { fontSize: 24, fontWeight: "bold", color: colors.text },
+    headerButtons: { flexDirection: "row", alignItems: "center", gap: 12 },
+    addButton: {
+      flexDirection: "row",
+      backgroundColor: colors.primary,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      alignItems: "center",
+      minHeight: 44,
+      flexShrink: 1,
+      flex: 1,
+    },
+    addButtonText: { color: "#FFFFFF", fontWeight: "bold", marginLeft: 4 },
+    bulkUploadButton: {
+      flexDirection: "row",
+      backgroundColor: colors.accent || colors.secondary || colors.primary,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      alignItems: "center",
+      minHeight: 44,
+      flexShrink: 1,
+      flex: 1,
+    },
+    bulkUploadButtonText: {
+      color: "#FFFFFF",
+      fontWeight: "600",
+      marginLeft: 6,
+      fontSize: 15,
+    },
 
-const showAlert = (title, message, buttons = [{ text: 'OK' }]) => {
-  if (Platform.OS === 'web') {
+    listContainer: {
+      paddingVertical: 16,
+      paddingHorizontal:
+        typeof window !== "undefined" && window.innerWidth < 600 ? 12 : 0,
+    },
+    inlineActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      paddingHorizontal:
+        typeof window !== "undefined" && window.innerWidth < 600 ? 12 : 0,
+      marginBottom: 12,
+      width: "100%",
+    },
+
+    filterRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 8,
+    },
+    filterChip: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      backgroundColor: colors.card,
+      marginBottom: 8,
+      minWidth: 0,
+      elevation: 1,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+    },
+
+    userCard: {
+      flexDirection: "row",
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderWidth: 1,
+      borderColor: colors.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 3,
+      elevation: 2,
+    },
+    userInfo: { flexDirection: "row", alignItems: "center", flex: 1 },
+    avatar: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.background,
+      borderWidth: 2,
+      borderColor: colors.primary,
+    },
+    avatarFallback: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.background,
+      borderWidth: 2,
+      borderColor: colors.primary,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    userDetails: { marginLeft: 14, flex: 1 },
+    username: {
+      fontSize: 17,
+      fontWeight: "bold",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    email: { fontSize: 14, color: colors.textSecondary, marginBottom: 6 },
+    roleBadge: {
+      flexDirection: "row",
+      alignSelf: "flex-start",
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+    },
+    roleIcon: { marginRight: 4 },
+    roleText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "600",
+      textTransform: "capitalize",
+    },
+    userActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+    actionButton: {
+      padding: 8,
+      borderRadius: 6,
+      backgroundColor: colors.background,
+    },
+    deleteButton: {
+      padding: 8,
+      borderRadius: 6,
+      backgroundColor: colors.background,
+    },
+    emptyContainer: {
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 40,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      marginTop: 20,
+    },
+    emptyText: {
+      marginTop: 16,
+      fontSize: 16,
+      color: colors.textSecondary,
+      textAlign: "center",
+    },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: "rgba(0,0,0,0.5)",
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      width: "100%",
+      maxWidth: 500,
+      borderRadius: 16,
+      padding: 24,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 10,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 20,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: { fontSize: 22, fontWeight: "bold", color: colors.text },
+    input: {
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      padding: 14,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      color: colors.text,
+      fontSize: 16,
+    },
+    roleLabel: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.text,
+      marginBottom: 10,
+      marginTop: 8,
+    },
+    roleContainer: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginBottom: 24,
+    },
+    roleOption: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 5,
+      alignItems: "center",
+      borderWidth: 2,
+      borderColor: colors.border,
+      marginHorizontal: 4,
+      borderRadius: 8,
+      flexDirection: "row",
+      justifyContent: "center",
+    },
+    roleOptionSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    roleOptionText: { color: colors.text, marginLeft: 6, fontWeight: "500" },
+    roleOptionTextSelected: { color: "#FFFFFF", fontWeight: "bold" },
+    submitButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 14,
+      borderRadius: 8,
+      alignItems: "center",
+      marginTop: 8,
+      flexDirection: "row",
+      justifyContent: "center",
+    },
+    submitButtonText: {
+      color: "#FFFFFF",
+      fontWeight: "bold",
+      fontSize: 16,
+      marginRight: 8,
+    },
+    paginationContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      gap: 8,
+      flexWrap: "wrap",
+    },
+    pageButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 6,
+    },
+    pageButtonText: { color: "#FFF", fontWeight: "600" },
+    pageButtonTextDisabled: { color: colors.textSecondary },
+    pageNumbersWrapper: { flexDirection: "row", alignItems: "center" },
+    pageNumber: {
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      marginHorizontal: 4,
+      borderRadius: 6,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pageNumberSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    pageNumberText: { color: colors.text, fontWeight: "500" },
+    pageNumberTextSelected: { color: "#FFF", fontWeight: "700" },
+    ellipsis: { marginHorizontal: 6, color: colors.textSecondary },
+    // Analytics Modal Styles
+    analyticsCard: {
+      backgroundColor: colors.surface,
+      padding: 15,
+      borderRadius: 8,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    analyticsCardTitle: {
+      fontSize: 16,
+      fontWeight: "bold",
+      marginBottom: 10,
+      color: colors.text,
+    },
+    analyticsRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 5,
+    },
+    analyticsLabel: {
+      fontSize: 14,
+      flex: 1,
+      color: colors.text,
+    },
+    analyticsValue: {
+      fontSize: 14,
+      fontWeight: "bold",
+      color: colors.primary,
+    },
+    activityItem: {
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    activityTitle: {
+      fontSize: 14,
+      fontWeight: "bold",
+      marginBottom: 2,
+      color: colors.text,
+    },
+    activityModule: {
+      fontSize: 12,
+      marginBottom: 4,
+      color: colors.textSecondary,
+    },
+    activityMeta: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    activityScore: {
+      fontSize: 14,
+      fontWeight: "bold",
+    },
+    activityDate: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    scrollContainer: {
+      flex: 1,
+      paddingVertical: 10,
+    },
+  });
+
+const showAlert = (title, message, buttons = [{ text: "OK" }]) => {
+  if (Platform.OS === "web") {
     // For web, use the browser's built-in alert or a custom web dialog
     if (buttons.length <= 1) {
       // Simple alert
@@ -776,11 +1925,15 @@ const showAlert = (title, message, buttons = [{ text: 'OK' }]) => {
       const confirmed = window.confirm(`${title}\n${message}`);
       if (confirmed) {
         // Find the non-cancel button and trigger its onPress
-        const confirmButton = buttons.find(button => button.style === 'destructive' || button.text === 'OK');
+        const confirmButton = buttons.find(
+          (button) => button.style === "destructive" || button.text === "OK"
+        );
         confirmButton?.onPress?.();
       } else {
         // Find the cancel button and trigger its onPress
-        const cancelButton = buttons.find(button => button.style === 'cancel');
+        const cancelButton = buttons.find(
+          (button) => button.style === "cancel"
+        );
         cancelButton?.onPress?.();
       }
     }

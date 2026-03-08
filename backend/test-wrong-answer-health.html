@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digital Defenders - Wrong Answer Health Test</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .game-state {
+        background: #f5f5f5;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 15px 0;
+      }
+      .health {
+        color: red;
+        font-weight: bold;
+        font-size: 1.2em;
+      }
+      .question {
+        background: #e7f3ff;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+      }
+      .cards {
+        display: flex;
+        gap: 10px;
+        margin: 15px 0;
+      }
+      .card {
+        background: white;
+        border: 2px solid #ccc;
+        padding: 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        min-width: 120px;
+        text-align: center;
+      }
+      .card:hover {
+        border-color: #007cba;
+        background: #f0f8ff;
+      }
+      .card.answer {
+        border-color: #4caf50;
+      }
+      .card.tool {
+        border-color: #ff9800;
+      }
+      button {
+        background: #007cba;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #005a87;
+      }
+      .log {
+        background: #000;
+        color: #00ff00;
+        padding: 10px;
+        border-radius: 5px;
+        height: 200px;
+        overflow-y: scroll;
+        font-family: monospace;
+        font-size: 12px;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Digital Defenders - Wrong Answer Health Test</h1>
+    <p>This test verifies that wrong answers reduce health by 1.</p>
+
+    <div class="game-state">
+      <h3>Game State</h3>
+      <div>Room ID: <span id="roomId">None</span></div>
+      <div>Game State: <span id="gameState">lobby</span></div>
+      <div class="health">PC Health: <span id="pcHealth">5</span>/5</div>
+      <div>Current Wave: <span id="currentWave">1</span></div>
+      <div>Player Name: <span id="playerName">TestPlayer</span></div>
+    </div>
+
+    <div class="question">
+      <h4>Current Question:</h4>
+      <div id="questionText">No question available</div>
+      <div>
+        <strong>Correct Answer:</strong> <span id="correctAnswer">N/A</span>
+      </div>
+    </div>
+
+    <div>
+      <h4>Your Hand:</h4>
+      <div class="cards" id="playerHand">
+        <!-- Cards will be populated here -->
+      </div>
+    </div>
+
+    <div>
+      <button onclick="createRoom()">Create Room</button>
+      <button onclick="startGame()">Start Game</button>
+      <button onclick="playWrongAnswer()">
+        Play Wrong Answer (Test Health Loss)
+      </button>
+      <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <script>
+      let socket;
+      let gameState = {};
+      let playerHand = [];
+      let currentQuestion = null;
+
+      function log(message) {
+        const logDiv = document.getElementById("log");
+        const timestamp = new Date().toLocaleTimeString();
+        logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+      }
+
+      function clearLog() {
+        document.getElementById("log").innerHTML = "";
+      }
+
+      function updateDisplay() {
+        document.getElementById("roomId").textContent =
+          gameState.roomId || "None";
+        document.getElementById("gameState").textContent =
+          gameState.gameState || "lobby";
+        document.getElementById("pcHealth").textContent =
+          gameState.pcHealth || 5;
+        document.getElementById("currentWave").textContent =
+          gameState.currentWave || 1;
+
+        if (currentQuestion) {
+          document.getElementById("questionText").textContent =
+            currentQuestion.text;
+          document.getElementById("correctAnswer").textContent =
+            currentQuestion.correctAnswer;
+        }
+
+        // Update player hand display
+        const handDiv = document.getElementById("playerHand");
+        handDiv.innerHTML = "";
+        playerHand.forEach((card) => {
+          const cardDiv = document.createElement("div");
+          cardDiv.className = `card ${card.type}`;
+          cardDiv.innerHTML = `
+                    <div><strong>${card.name || card.text}</strong></div>
+                    <div style="font-size: 0.9em; color: #666;">${
+                      card.type
+                    }</div>
+                `;
+          cardDiv.onclick = () => playCard(card);
+          handDiv.appendChild(cardDiv);
+        });
+      }
+
+      function playCard(card) {
+        if (!socket || !gameState.roomId) {
+          log("❌ Not connected to a game room");
+          return;
+        }
+
+        log(`🎯 Playing card: ${card.name || card.text} (${card.type})`);
+        socket.emit("play-card", {
+          roomCode: gameState.roomId,
+          cardId: card.id,
+        });
+      }
+
+      function playWrongAnswer() {
+        // Find an answer card that doesn't match the current question
+        const answerCards = playerHand.filter((card) => card.type === "answer");
+        if (answerCards.length === 0) {
+          log("❌ No answer cards in hand");
+          return;
+        }
+
+        let wrongCard = null;
+        if (currentQuestion) {
+          // Find a card that doesn't match the correct answer
+          wrongCard = answerCards.find(
+            (card) =>
+              card.text.toLowerCase().trim() !==
+              currentQuestion.correctAnswer.toLowerCase().trim()
+          );
+        }
+
+        if (!wrongCard) {
+          wrongCard = answerCards[0]; // Use first available answer card
+          log("⚠️ Using first available answer card (may be correct)");
+        }
+
+        log(
+          `🎯 Testing wrong answer: "${wrongCard.text}" vs correct: "${currentQuestion?.correctAnswer}"`
+        );
+        playCard(wrongCard);
+      }
+
+      function createRoom() {
+        socket = io("http://localhost:3001/digital-defenders");
+
+        socket.on("connect", () => {
+          log("✅ Connected to Digital Defenders server");
+
+          socket.emit("create-room", {
+            playerName: "TestPlayer",
+            maxPlayers: 4,
+          });
+        });
+
+        socket.on("room-created", (data) => {
+          log(`✅ Room created: ${data.roomCode}`);
+          gameState = { ...gameState, roomId: data.roomCode };
+          updateDisplay();
+        });
+
+        socket.on("game-state", (data) => {
+          log("📊 Game state updated");
+          gameState = { ...gameState, ...data };
+          if (data.playerHand) {
+            playerHand = data.playerHand;
+          }
+          if (data.currentQuestion) {
+            currentQuestion = data.currentQuestion;
+          }
+          updateDisplay();
+        });
+
+        socket.on("card-played", (data) => {
+          log(`🎴 Card played: ${data.card.name || data.card.text}`);
+          if (data.effect && data.effect.message) {
+            const healthInfo = data.effect.healthLost ? " [HEALTH LOST]" : "";
+            log(`📝 Effect: ${data.effect.message}${healthInfo}`);
+
+            if (data.effect.healthLost) {
+              log(
+                `❤️ Health reduced! New health: ${data.effect.currentHealth}/5`
+              );
+            }
+          }
+
+          if (data.gameState) {
+            gameState = { ...gameState, ...data.gameState };
+            updateDisplay();
+          }
+        });
+
+        socket.on("game-started", (data) => {
+          log("🚀 Game started!");
+          gameState = { ...gameState, ...data.gameState };
+          if (data.gameState.currentQuestion) {
+            currentQuestion = data.gameState.currentQuestion;
+          }
+          updateDisplay();
+        });
+
+        socket.on("game-over", (data) => {
+          log(`💀 GAME OVER: ${data.message || data.reason}`);
+          log(`📊 Final Health: ${data.finalHealth}/5`);
+          gameState = { ...gameState, gameState: "gameOver" };
+          updateDisplay();
+        });
+
+        socket.on("error", (error) => {
+          log(`❌ Error: ${error.message}`);
+        });
+
+        socket.on("disconnect", () => {
+          log("❌ Disconnected from server");
+        });
+      }
+
+      function startGame() {
+        if (!socket || !gameState.roomId) {
+          log("❌ Not connected to a game room");
+          return;
+        }
+
+        log("🎮 Starting game...");
+        socket.emit("start-game", { roomCode: gameState.roomId });
+      }
+
+      // Initialize display
+      updateDisplay();
+      log("🔄 Digital Defenders Wrong Answer Health Test initialized");
+      log('👆 Click "Create Room" to start testing');
+    </script>
+  </body>
+</html>

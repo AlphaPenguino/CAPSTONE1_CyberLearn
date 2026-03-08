@@ -101,7 +101,7 @@ async function fixProgressData() {
     try {
       await mongoose.disconnect();
       console.log('Disconnected from MongoDB');
-    } catch (err) {y
+    } catch (err) {
       console.error('Error disconnecting from MongoDB:', err);
     }
   }

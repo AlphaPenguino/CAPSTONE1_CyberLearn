@@ -1,1384 +1,885 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   ScrollView,
   Dimensions,
-  Platform,
-  Animated as RNAnimated,
-  Easing
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  withSequence,
-  withDelay,
-  runOnJS,
-  useAnimatedGestureHandler,
-  FadeIn,
-  FadeInDown,
-  ZoomIn,
-  BounceIn
-} from 'react-native-reanimated';
-import { StatusBar } from 'expo-status-bar';
-import { useAuthStore } from '@/store/authStore';
-import COLORS from '@/constants/custom-colors';
-// Removed the unsupported library import
-// import Highlighter from 'react-native-highlight-words';
+  Modal,
+  Animated,
+} from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import COLORS from "@/constants/custom-colors";
 
-const { width, height } = Dimensions.get('window');
-const isWeb = Platform.OS === 'web';
+const { width } = Dimensions.get("window");
 
-// Mock challenges database - in a real app, fetch from API
-const codeChallenges = [
+const codeSnippets = [
   {
     id: 1,
-    title: 'Fix the Login Function',
-    description: 'Repair the broken login function by dragging the correct code snippets into position.',
-    language: 'javascript',
-    difficulty: 'easy',
-    timeLimit: 120, // seconds
-    baseCode: `function loginUser(username, password) {
-  // Check if username and password are provided
-  if (!username || !password) {
-    return { success: false, message: "Username and password required" };
-  }
-  
-  // CODE_BLOCK_1
-  
-  // Hash the password for security
-  const hashedPassword = hashPassword(password);
-  
-  // CODE_BLOCK_2
-  
-  // Return success if credentials match
-  if (user && user.password === hashedPassword) {
-    return { success: true, user: { id: user.id, name: user.name } };
-  } else {
-    // CODE_BLOCK_3
-  }
-}`,
-    codeBlocks: [
-      {
-        id: 'block1',
-        correctPosition: 'CODE_BLOCK_1',
-        code: `// Find the user in the database
-const user = findUserByUsername(username);`,
-        isCorrect: true,
-      },
-      {
-        id: 'block2',
-        correctPosition: 'CODE_BLOCK_1',
-        code: `// Delete the user from database
-deleteUserByUsername(username);`,
-        isCorrect: false,
-      },
-      {
-        id: 'block3',
-        correctPosition: 'CODE_BLOCK_2',
-        code: `// Validate the user exists
-if (!user) {
-  return { success: false, message: "User not found" };
-}`,
-        isCorrect: true,
-      },
-      {
-        id: 'block4',
-        correctPosition: 'CODE_BLOCK_2',
-        code: `// Create a new user
-createUser(username, password);`,
-        isCorrect: false,
-      },
-      {
-        id: 'block5',
-        correctPosition: 'CODE_BLOCK_3',
-        code: `// Return failure if credentials don't match
-return { success: false, message: "Invalid credentials" };`,
-        isCorrect: true,
-      },
-      {
-        id: 'block6',
-        correctPosition: 'CODE_BLOCK_3',
-        code: `// Delete all users
-deleteAllUsers();`,
-        isCorrect: false,
-      },
-    ],
-    hints: [
-      "Look for code that would logically follow each comment",
-      "For block 1, we need to find the user after validating inputs",
-      "For block 3, we need to handle authentication failure"
-    ]
+    title: "Missing Semicolon",
+    code: "let password = 'secretPassword123'⬜\nconsole.log(password);",
+    options: [";", ",", ":", "'"],
+    correct: 0,
+    explanation:
+      "JavaScript statements should end with a semicolon (;) for best practices and to avoid automatic semicolon insertion issues.",
   },
   {
     id: 2,
-    title: 'Debug the Array Sorter',
-    description: 'Fix the broken array sorting algorithm by placing the correct code blocks.',
-    language: 'javascript',
-    difficulty: 'medium',
-    timeLimit: 180, // seconds
-    baseCode: `function customSort(array) {
-  // Check if input is an array
-  if (!Array.isArray(array)) {
-    throw new Error("Input must be an array");
-  }
-  
-  // Handle empty arrays
-  if (array.length === 0) {
-    return [];
-  }
-  
-  // CODE_BLOCK_1
-  
-  // Perform the sorting algorithm
-  for (let i = 0; i < array.length; i++) {
-    // CODE_BLOCK_2
-    
-    for (let j = 0; j < array.length - i - 1; j++) {
-      // CODE_BLOCK_3
-    }
-  }
-  
-  return sortedArray;
-}`,
-    codeBlocks: [
-      {
-        id: 'block1',
-        correctPosition: 'CODE_BLOCK_1',
-        code: `// Create a copy of the array to avoid mutating input
-const sortedArray = [...array];`,
-        isCorrect: true,
-      },
-      {
-        id: 'block2',
-        correctPosition: 'CODE_BLOCK_1',
-        code: `// Delete all elements in the array
-array = [];`,
-        isCorrect: false,
-      },
-      {
-        id: 'block3',
-        correctPosition: 'CODE_BLOCK_2',
-        code: `// Track position for current iteration
-let currentMinIndex = i;`,
-        isCorrect: false,
-      },
-      {
-        id: 'block4',
-        correctPosition: 'CODE_BLOCK_2',
-        code: `// Track if any swaps are made in this pass
-let swapped = false;`,
-        isCorrect: true,
-      },
-      {
-        id: 'block5',
-        correctPosition: 'CODE_BLOCK_3',
-        code: `// Compare adjacent elements and swap if needed
-if (sortedArray[j] > sortedArray[j + 1]) {
-  [sortedArray[j], sortedArray[j + 1]] = [sortedArray[j + 1], sortedArray[j]];
-  swapped = true;
-}`,
-        isCorrect: true,
-      },
-      {
-        id: 'block6',
-        correctPosition: 'CODE_BLOCK_3',
-        code: `// Delete the current element
-delete sortedArray[j];`,
-        isCorrect: false,
-      },
-    ],
-    hints: [
-      "We need to sort without modifying the original array",
-      "Bubble sort requires tracking if swaps were made",
-      "For each adjacent pair, compare and swap if needed"
-    ]
-  }
+    title: "Incorrect Function Declaration",
+    code: "⬜ validatePassword(password) {\n  return password.length >= 8;\n}",
+    options: ["function", "var", "let", "const"],
+    correct: 0,
+    explanation:
+      "Functions in JavaScript are declared using the 'function' keyword followed by the function name and parameters.",
+  },
+  {
+    id: 3,
+    title: "Missing Closing Bracket",
+    code: "if (user.isAuthenticated) {\n  console.log('Access granted');\n⬜",
+    options: ["}", ")", "]", ";"],
+    correct: 0,
+    explanation:
+      "Every opening curly brace { must have a corresponding closing curly brace } to properly close code blocks.",
+  },
+  {
+    id: 4,
+    title: "Wrong Comparison Operator",
+    code: "if (password.length ⬜ 8) {\n  alert('Password too short');\n}",
+    options: ["<", "=", "==", "=>"],
+    correct: 0,
+    explanation:
+      "To check if a value is less than another, use the < operator. The = operator is for assignment, not comparison.",
+  },
+  {
+    id: 5,
+    title: "Missing Array Declaration",
+    code: "⬜ users = ['admin', 'user1', 'guest'];\nconsole.log(users[0]);",
+    options: ["let", "function", "if", "for"],
+    correct: 0,
+    explanation:
+      "Variables in JavaScript should be declared with 'let', 'const', or 'var' before being assigned a value.",
+  },
+  {
+    id: 6,
+    title: "Incorrect String Concatenation",
+    code: "let message = 'Hello ' ⬜ username;\nconsole.log(message);",
+    options: ["+", "&", "*", "|"],
+    correct: 0,
+    explanation:
+      "In JavaScript, strings are concatenated using the + operator to join two or more strings together.",
+  },
+  {
+    id: 7,
+    title: "Missing Return Statement",
+    code: "function encrypt(data) {\n  let encrypted = data.split('').reverse().join('');\n  ⬜ encrypted;\n}",
+    options: ["return", "print", "echo", "output"],
+    correct: 0,
+    explanation:
+      "Functions use the 'return' keyword to send a value back to the caller. Without it, the function returns undefined.",
+  },
+  {
+    id: 8,
+    title: "Wrong Loop Syntax",
+    code: "⬜ (let i = 0; i < 10; i++) {\n  console.log(i);\n}",
+    options: ["for", "while", "if", "switch"],
+    correct: 0,
+    explanation:
+      "This is a for loop syntax, which requires the 'for' keyword followed by initialization, condition, and increment in parentheses.",
+  },
 ];
 
-export default function CodeChallenge() {
+const CodeChallenge = () => {
   const router = useRouter();
-  const { user } = useAuthStore();
-  const { gameId } = useLocalSearchParams();
-  const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0);
-  const [challenge, setChallenge] = useState(codeChallenges[0]);
-  const [gameState, setGameState] = useState('ready'); // ready, playing, success, failed
+
+  // Game state
+  const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(challenge.timeLimit);
-  const [selectedBlock, setSelectedBlock] = useState(null);
-  const [placedBlocks, setPlacedBlocks] = useState({});
-  const [availableBlocks, setAvailableBlocks] = useState([]);
-  const [showHint, setShowHint] = useState(false);
-  const [currentHint, setCurrentHint] = useState(0);
-  const [hintsUsed, setHintsUsed] = useState(0);
-  const [codeBlockTargets, setCodeBlockTargets] = useState({});
-  const [draggedItem, setDraggedItem] = useState(null);
-  
-  // Animation values
-  const headerY = useSharedValue(-50);
-  const timerProgress = useSharedValue(1);
-  const timerOpacity = useSharedValue(1);
-  const hintScale = useSharedValue(1);
-  const successScale = useSharedValue(0);
-  const confettiOpacity = useSharedValue(0);
-  const codePanelY = useSharedValue(50);
-  
-  // Timer ref
-  const timerRef = useRef(null);
-  
-  // Initialize game
+  const [lives, setLives] = useState(3);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [lastAnswerCorrect, setLastAnswerCorrect] = useState(false);
+  const [comboMultiplier, setComboMultiplier] = useState(1.0);
+  const [correctStreak, setCorrectStreak] = useState(0);
+  const [shuffledOptions, setShuffledOptions] = useState([]);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+
+  // Animations
+  const shakeAnimation = useRef(new Animated.Value(0)).current;
+  const pulseAnimation = useRef(new Animated.Value(1)).current;
+
+  // Timer effect
   useEffect(() => {
-    headerY.value = withSpring(0);
-    codePanelY.value = withSpring(0);
-    
-    if (challenge) {
-      // Shuffle available blocks
-      const blocks = [...challenge.codeBlocks];
-      // Fisher-Yates shuffle
-      for (let i = blocks.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
-      }
-      setAvailableBlocks(blocks);
-      setTimeLeft(challenge.timeLimit);
+    let timer;
+    if (gameStarted && !gameOver && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            setGameOver(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
-    
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [challenge]);
-  
-  // Format the base code by replacing placeholders with placed blocks or empty slots
-  const getFormattedCode = () => {
-    let formattedCode = challenge.baseCode;
-    
-    // Replace CODE_BLOCK placeholders with either placed blocks or empty slots
-    ['CODE_BLOCK_1', 'CODE_BLOCK_2', 'CODE_BLOCK_3'].forEach((placeholder) => {
-      const blockId = Object.keys(placedBlocks).find(
-        (id) => placedBlocks[id] === placeholder
-      );
-      
-      const block = blockId 
-        ? availableBlocks.find((b) => b.id === blockId)
-        : null;
-      
-      if (block) {
-        formattedCode = formattedCode.replace(
-          placeholder,
-          block.code
-        );
-      } else {
-        formattedCode = formattedCode.replace(
-          placeholder,
-          `// Drop code here for ${placeholder}`
-        );
-      }
-    });
-    
-    return formattedCode;
+    return () => clearInterval(timer);
+  }, [gameStarted, gameOver, timeLeft]);
+
+  // Initialize shuffled options when question changes
+  useEffect(() => {
+    if (currentQuestion < codeSnippets.length) {
+      const options = [...codeSnippets[currentQuestion].options];
+      setShuffledOptions(shuffleArray(options));
+    }
+  }, [currentQuestion]);
+
+  const shuffleArray = (array) => {
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+    }
+    return newArray;
   };
-  
-  // Start the game
+
   const startGame = () => {
-    setGameState('playing');
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          handleGameOver();
-          return 0;
-        }
-        
-        // Update timer progress animation
-        timerProgress.value = withTiming(prev / challenge.timeLimit);
-        
-        // Flash timer when low on time
-        if (prev <= 10) {
-          timerOpacity.value = withSequence(
-            withTiming(0.3, { duration: 300 }),
-            withTiming(1, { duration: 300 })
-          );
-        }
-        
-        return prev - 1;
-      });
-    }, 1000);
+    setGameStarted(true);
+    setCurrentQuestion(0);
+    setScore(0);
+    setLives(3);
+    setTimeLeft(60);
+    setGameOver(false);
+    setComboMultiplier(1.0);
+    setCorrectStreak(0);
   };
-  
-  // Handle game over (time expired)
-  const handleGameOver = () => {
-    setGameState('failed');
-    if (timerRef.current) clearInterval(timerRef.current);
-    
-    // Animation for failure
-    timerOpacity.value = withTiming(0.3);
-  };
-  
-  // Check if all placed blocks are correct
-  const checkSolution = () => {
-    let allCorrect = true;
-    let blockCount = 0;
-    
-    // Count placed blocks and check if they're all in correct positions
-    Object.entries(placedBlocks).forEach(([blockId, position]) => {
-      const block = availableBlocks.find((b) => b.id === blockId);
-      if (block && (block.correctPosition !== position || !block.isCorrect)) {
-        allCorrect = false;
-      }
-      blockCount++;
-    });
-    
-    // Ensure all placeholder positions have blocks
-    const requiredPositions = ['CODE_BLOCK_1', 'CODE_BLOCK_2', 'CODE_BLOCK_3'];
-    if (blockCount < requiredPositions.length) {
-      return false;
-    }
-    
-    return allCorrect;
-  };
-  
-  // Submit solution
-  const submitSolution = () => {
-    const isCorrect = checkSolution();
-    
+
+  const handleAnswerSelect = (selectedOption) => {
+    if (selectedAnswer !== null) return; // Prevent multiple selections
+
+    setSelectedAnswer(selectedOption);
+    const currentSnippet = codeSnippets[currentQuestion];
+    const correctOption = currentSnippet.options[currentSnippet.correct];
+    const isCorrect = selectedOption === correctOption;
+
+    setLastAnswerCorrect(isCorrect);
+
     if (isCorrect) {
-      // Success!
-      clearInterval(timerRef.current);
-      setGameState('success');
-      
-      // Calculate score based on time left and hints used
-      const timeBonus = Math.floor(timeLeft / 2);
-      const hintPenalty = hintsUsed * 5;
-      const newScore = 100 + timeBonus - hintPenalty;
-      setScore((prevScore) => prevScore + newScore);
-      
-      // Success animations
-      successScale.value = withSpring(1);
-      confettiOpacity.value = withTiming(1);
-      
-      // After delay, show next challenge button
-      setTimeout(() => {
-        if (currentChallengeIndex < codeChallenges.length - 1) {
-          // More challenges available
-        } else {
-          // Game complete
+      // Correct answer
+      setCorrectStreak((prev) => prev + 1);
+      setComboMultiplier((prev) => Math.min(prev + 0.1, 2.0));
+      const basePoints = 100;
+      const bonusPoints = Math.floor(basePoints * (comboMultiplier - 1));
+      setScore((prev) => prev + basePoints + bonusPoints);
+      setTimeLeft((prev) => prev + 5); // Time bonus
+
+      // Pulse animation for correct answer
+      Animated.sequence([
+        Animated.timing(pulseAnimation, {
+          toValue: 1.2,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnimation, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Wrong answer
+      setCorrectStreak(0);
+      setComboMultiplier(1.0);
+      setLives((prev) => {
+        const newLives = prev - 1;
+        if (newLives <= 0) {
+          setGameOver(true);
         }
-      }, 2000);
+        return newLives;
+      });
+      setTimeLeft((prev) => Math.max(prev - 3, 0)); // Time penalty
+
+      // Shake animation for wrong answer
+      Animated.sequence([
+        Animated.timing(shakeAnimation, {
+          toValue: 10,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shakeAnimation, {
+          toValue: -10,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shakeAnimation, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+
+    setShowFeedback(true);
+  };
+
+  const nextQuestion = () => {
+    setShowFeedback(false);
+    setSelectedAnswer(null);
+
+    if (currentQuestion + 1 >= codeSnippets.length) {
+      // End game - completed all questions
+      setGameOver(true);
     } else {
-      // Incorrect solution - shake the code panel
-      codePanelY.value = withSequence(
-        withTiming(10, { duration: 100 }),
-        withTiming(-10, { duration: 100 }),
-        withTiming(5, { duration: 100 }),
-        withTiming(-5, { duration: 100 }),
-        withTiming(0, { duration: 100 })
-      );
+      setCurrentQuestion((prev) => prev + 1);
     }
   };
-  
-  // Show next hint
-  const showNextHint = () => {
-    if (currentHint < challenge.hints.length - 1) {
-      setCurrentHint(currentHint + 1);
-    } else {
-      setCurrentHint(0);
-    }
-    
-    setHintsUsed(hintsUsed + 1);
-    setShowHint(true);
-    
-    // Animate hint button
-    hintScale.value = withSequence(
-      withTiming(1.2, { duration: 200 }),
-      withTiming(1, { duration: 200 })
-    );
+
+  const resetGame = () => {
+    setGameStarted(false);
+    setGameOver(false);
+    setShowFeedback(false);
+    setSelectedAnswer(null);
+    setCurrentQuestion(0);
+    setScore(0);
+    setLives(3);
+    setTimeLeft(60);
+    setComboMultiplier(1.0);
+    setCorrectStreak(0);
   };
-  
-  // Go to next challenge
-  const nextChallenge = () => {
-    if (currentChallengeIndex < codeChallenges.length - 1) {
-      setCurrentChallengeIndex(currentChallengeIndex + 1);
-      setChallenge(codeChallenges[currentChallengeIndex + 1]);
-      setGameState('ready');
-      setPlacedBlocks({});
-      setShowHint(false);
-      setCurrentHint(0);
-      setHintsUsed(0);
-      successScale.value = 0;
-      confettiOpacity.value = 0;
-    } else {
-      // Game complete - return to arcade
-      router.replace('/arcade');
-    }
-  };
-  
-  // Format seconds to MM:SS
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
-  
-  // Handle block placement
-  const handleBlockPlacement = (blockId, target) => {
-    // If the block was already placed somewhere, remove it from that position
-    const previousPosition = placedBlocks[blockId];
-    if (previousPosition) {
-      // Update state to remove the block from its previous position
-      setPlacedBlocks((prev) => {
-        const newPlaced = { ...prev };
-        delete newPlaced[blockId];
-        return newPlaced;
-      });
-    }
-    
-    // If another block is in the target position, swap it back to available
-    const existingBlock = Object.keys(placedBlocks).find(
-      (id) => placedBlocks[id] === target
-    );
-    
-    if (existingBlock) {
-      setPlacedBlocks((prev) => {
-        const newPlaced = { ...prev };
-        delete newPlaced[existingBlock];
-        newPlaced[blockId] = target;
-        return newPlaced;
-      });
-    } else {
-      // Place the block in the target position
-      setPlacedBlocks((prev) => ({
-        ...prev,
-        [blockId]: target,
-      }));
-    }
-  };
-  
-  // Record drop zone locations
-  const recordDropZoneLayout = (position, layout) => {
-    setCodeBlockTargets((prev) => ({
-      ...prev,
-      [position]: {
-        x: layout.x,
-        y: layout.y,
-        width: layout.width,
-        height: layout.height,
-      },
-    }));
-  };
-  
-  // Gesture handler for draggable code blocks
-  const createGestureHandler = (blockId) => {
-    return useAnimatedGestureHandler({
-      onStart: (_, ctx) => {
-        ctx.startX = 0;
-        ctx.startY = 0;
-        runOnJS(setDraggedItem)(blockId);
-      },
-      onActive: (event, ctx) => {
-        ctx.translateX = event.translationX;
-        ctx.translateY = event.translationY;
-      },
-      onEnd: (event, ctx) => {
-        // Check if dropped on a valid target
-        let droppedOnTarget = null;
-        Object.entries(codeBlockTargets).forEach(([position, layout]) => {
-          // Calculate pointer position relative to drop zone
-          const pointerX = event.absoluteX;
-          const pointerY = event.absoluteY;
-          
-          if (
-            pointerX >= layout.x &&
-            pointerX <= layout.x + layout.width &&
-            pointerY >= layout.y &&
-            pointerY <= layout.y + layout.height
-          ) {
-            droppedOnTarget = position;
-          }
-        });
-        
-        if (droppedOnTarget) {
-          // Place block in the target position
-          runOnJS(handleBlockPlacement)(blockId, droppedOnTarget);
-        }
-        
-        // Reset dragged item
-        runOnJS(setDraggedItem)(null);
-      },
-    });
-  };
-  
-  // Animated styles
-  const timerBarStyle = useAnimatedStyle(() => {
-    return {
-      width: `${timerProgress.value * 100}%`,
-      opacity: timerOpacity.value,
-      backgroundColor: 
-        timerProgress.value > 0.6 ? '#4CAF50' : 
-        timerProgress.value > 0.3 ? '#FF9800' : 
-        '#F44336',
-    };
-  });
-  
-  const hintButtonStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: hintScale.value }],
-    };
-  });
-  
-  const successStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: successScale.value }],
-      opacity: successScale.value,
-    };
-  });
-  
-  const confettiStyle = useAnimatedStyle(() => {
-    return {
-      opacity: confettiOpacity.value,
-    };
-  });
-  
-  const codePanelStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateY: codePanelY.value }],
-    };
-  });
-  
-  const headerStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateY: headerY.value }],
-    };
-  });
-  
-  // Create draggable code blocks
-const renderDraggableBlock = (block, index) => {
-  // Skip if block is already placed
-  if (placedBlocks[block.id]) return null;
-  
-  const isBeingDragged = draggedItem === block.id;
-  
-  // Use the modern Gesture API
-  const panGesture = Gesture.Pan()
-    .onBegin(() => {
-      runOnJS(setDraggedItem)(block.id);
-    })
-    .onUpdate((event) => {
-      // You can use event.translationX and event.translationY here
-      // if you want to move the block while dragging
-    })
-    .onEnd((event) => {
-      // Check if dropped on a valid target
-      let droppedOnTarget = null;
-      Object.entries(codeBlockTargets).forEach(([position, layout]) => {
-        // Calculate pointer position relative to drop zone
-        const pointerX = event.absoluteX;
-        const pointerY = event.absoluteY;
-        
-        if (
-          pointerX >= layout.x &&
-          pointerX <= layout.x + layout.width &&
-          pointerY >= layout.y &&
-          pointerY <= layout.y + layout.height
-        ) {
-          droppedOnTarget = position;
-        }
-      });
-      
-      if (droppedOnTarget) {
-        // Place block in the target position
-        runOnJS(handleBlockPlacement)(block.id, droppedOnTarget);
-      }
-      
-      // Reset dragged item
-      runOnJS(setDraggedItem)(null);
-    });
-  
-  return (
-    <Animated.View
-      key={block.id}
-      entering={FadeInDown.delay(100 * index).springify()}
-    >
-        <GestureHandlerRootView>
-      <GestureDetector gesture={panGesture}>
-        <Animated.View style={[styles.codeBlock, isBeingDragged && styles.dragging]}>
-          <BlurView intensity={20} style={styles.codeBlockContent}>
-            <Text style={styles.codeText}>{block.code}</Text>
-          </BlurView>
-        </Animated.View>
-      </GestureDetector>
-      </GestureHandlerRootView>
-    </Animated.View>
+
+  const renderGameHeader = () => (
+    <View style={styles.gameHeader}>
+      <View style={styles.statContainer}>
+        <MaterialCommunityIcons name="trophy" size={20} color="#FFD700" />
+        <Text style={styles.statText}>{score}</Text>
+      </View>
+
+      <Animated.View
+        style={[
+          styles.statContainer,
+          { transform: [{ scale: pulseAnimation }] },
+        ]}
+      >
+        <MaterialCommunityIcons
+          name="clock-outline"
+          size={20}
+          color={timeLeft <= 10 ? "#FF6B6B" : COLORS.primary}
+        />
+        <Text
+          style={[
+            styles.statText,
+            { color: timeLeft <= 10 ? "#FF6B6B" : COLORS.textPrimary },
+          ]}
+        >
+          {formatTime(timeLeft)}
+        </Text>
+      </Animated.View>
+
+      <View style={styles.livesContainer}>
+        {[...Array(3)].map((_, index) => (
+          <MaterialCommunityIcons
+            key={index}
+            name="heart"
+            size={20}
+            color={index < lives ? "#FF6B6B" : "#333"}
+          />
+        ))}
+      </View>
+    </View>
   );
-};
-  
-  // Generate code drop zones
-  const renderCodeDropZones = () => {
-    const formattedCode = getFormattedCode();
-    const codeLines = formattedCode.split('\n');
-    
-    // Find the positions of drop zones in the code
-    const dropZones = {};
-    codeLines.forEach((line, index) => {
-      if (line.includes('Drop code here for CODE_BLOCK')) {
-        const placeholder = line.match(/Drop code here for (CODE_BLOCK_\d)/)[1];
-        dropZones[index] = placeholder;
-      }
-    });
-    
+
+  const renderCodeSnippet = () => {
+    const snippet = codeSnippets[currentQuestion];
+    const codeLines = snippet.code.split("\n");
+
     return (
-      <View>
-        {codeLines.map((line, index) => {
-          const isDropZone = line.includes('Drop code here for CODE_BLOCK');
-          const dropZonePlaceholder = isDropZone ? 
-            line.match(/Drop code here for (CODE_BLOCK_\d)/)[1] : null;
-          
-          // Check if a block is placed here
-          const placedBlockId = dropZonePlaceholder ? 
-            Object.keys(placedBlocks).find(id => placedBlocks[id] === dropZonePlaceholder) : null;
-          
-          const placedBlock = placedBlockId ? 
-            availableBlocks.find(block => block.id === placedBlockId) : null;
-          
-          if (isDropZone) {
-            return (
-              <View
-                key={`line-${index}`}
-                style={[styles.codeDropZone, placedBlock && styles.filledDropZone]}
-                onLayout={(e) => recordDropZoneLayout(dropZonePlaceholder, e.nativeEvent.layout)}
-              >
-                {placedBlock ? (
-                  <View style={styles.placedBlockContainer}>
-                    <Text style={styles.codeText}>{placedBlock.code}</Text>
-                    <TouchableOpacity
-                      style={styles.removeBlockButton}
-                      onPress={() => {
-                        setPlacedBlocks(prev => {
-                          const newPlaced = { ...prev };
-                          delete newPlaced[placedBlockId];
-                          return newPlaced;
-                        });
-                      }}
-                    >
-                      <Ionicons name="close-circle" size={20} color="#F44336" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <Text style={styles.dropZoneText}>Drop code block here</Text>
-                )}
-              </View>
-            );
-          } else {
-            // Regular code line
-            return (
-              <Text key={`line-${index}`} style={styles.codeLine}>
-                {line}
+      <Animated.View
+        style={[
+          styles.codeContainer,
+          { transform: [{ translateX: shakeAnimation }] },
+        ]}
+      >
+        <Text style={styles.questionTitle}>{snippet.title}</Text>
+        <View style={styles.codeBlock}>
+          {codeLines.map((line, index) => (
+            <View key={index} style={styles.codeLine}>
+              <Text style={styles.lineNumber}>{index + 1}</Text>
+              <Text style={styles.codeText}>
+                {line.includes("⬜")
+                  ? line.split("⬜").map((part, partIndex) => (
+                      <Text key={partIndex}>
+                        {part}
+                        {partIndex < line.split("⬜").length - 1 && (
+                          <View style={styles.placeholder}>
+                            {selectedAnswer && (
+                              <Text style={styles.placeholderText}>
+                                {selectedAnswer}
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                      </Text>
+                    ))
+                  : line}
               </Text>
-            );
-          }
-        })}
+            </View>
+          ))}
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const renderOptions = () => (
+    <View style={styles.optionsContainer}>
+      <Text style={styles.optionsTitle}>Drag the correct fix:</Text>
+      <View style={styles.optionsGrid}>
+        {shuffledOptions.map((option, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[
+              styles.optionButton,
+              selectedAnswer === option && styles.selectedOption,
+              selectedAnswer === option &&
+                lastAnswerCorrect &&
+                styles.correctOption,
+              selectedAnswer === option &&
+                !lastAnswerCorrect &&
+                styles.wrongOption,
+            ]}
+            onPress={() => handleAnswerSelect(option)}
+            disabled={selectedAnswer !== null}
+          >
+            <Text
+              style={[
+                styles.optionText,
+                selectedAnswer === option && styles.selectedOptionText,
+              ]}
+            >
+              {option}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderFeedback = () => {
+    const snippet = codeSnippets[currentQuestion];
+
+    return (
+      <Modal visible={showFeedback} transparent animationType="fade">
+        <View style={styles.feedbackOverlay}>
+          <View style={styles.feedbackContainer}>
+            <MaterialCommunityIcons
+              name={lastAnswerCorrect ? "check-circle" : "close-circle"}
+              size={60}
+              color={lastAnswerCorrect ? "#4CAF50" : "#FF6B6B"}
+            />
+            <Text
+              style={[
+                styles.feedbackTitle,
+                { color: lastAnswerCorrect ? "#4CAF50" : "#FF6B6B" },
+              ]}
+            >
+              {lastAnswerCorrect ? "Correct!" : "Incorrect"}
+            </Text>
+
+            {lastAnswerCorrect && comboMultiplier > 1.0 && (
+              <Text style={styles.comboText}>
+                Combo x{comboMultiplier.toFixed(1)}!
+              </Text>
+            )}
+
+            <Text style={styles.explanationText}>{snippet.explanation}</Text>
+
+            <TouchableOpacity
+              style={styles.continueButton}
+              onPress={nextQuestion}
+            >
+              <Text style={styles.continueButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  const renderGameOver = () => {
+    const finalScore = score + timeLeft; // Bonus points for remaining time
+
+    return (
+      <View style={styles.gameOverContainer}>
+        <MaterialCommunityIcons
+          name="flag-checkered"
+          size={80}
+          color={COLORS.primary}
+        />
+        <Text style={styles.gameOverTitle}>Game Over!</Text>
+        <Text style={styles.finalScoreText}>Final Score: {finalScore}</Text>
+        <Text style={styles.statsText}>
+          Questions: {currentQuestion + 1}/{codeSnippets.length}
+        </Text>
+        <Text style={styles.statsText}>Best Streak: {correctStreak}</Text>
+
+        <View style={styles.gameOverButtons}>
+          <TouchableOpacity style={styles.playAgainButton} onPress={resetGame}>
+            <Text style={styles.playAgainText}>Play Again</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.resultBackButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backButtonText}>Back to Arcade</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
-  
-  // Render confetti for success animation
-  const renderConfetti = () => {
-    const confettiElements = [];
-    const colors = ['#FFEB3B', '#FF5722', '#4CAF50', '#2196F3', '#9C27B0', '#F44336'];
-    
-    for (let i = 0; i < 50; i++) {
-      const size = Math.random() * 10 + 5;
-      const color = colors[Math.floor(Math.random() * colors.length)];
-      const left = Math.random() * width;
-      const top = Math.random() * height * 0.6;
-      const delay = Math.random() * 2000;
-      const duration = Math.random() * 3000 + 2000;
-      const rotation = Math.random() * 360;
-      
-      // Create falling animation for this confetti piece
-      const fallAnim = RNAnimated.timing(
-        new RNAnimated.Value(0),
-        {
-          toValue: 1,
-          duration: duration,
-          delay: delay,
-          easing: Easing.ease,
-          useNativeDriver: false
-        }
-      );
-      
-      confettiElements.push(
-        <View
-          key={`confetti-${i}`}
-          style={[
-            styles.confetti,
-            {
-              width: size,
-              height: size * 1.5,
-              backgroundColor: color,
-              left: left,
-              top: -30,
-              transform: [{ rotate: `${rotation}deg` }],
-            }
-          ]}
+
+  const renderWelcomeScreen = () => (
+    <ScrollView style={styles.welcomeContainer}>
+      <View style={styles.welcomeHeader}>
+        <MaterialCommunityIcons
+          name="code-tags"
+          size={80}
+          color={COLORS.primary}
         />
-      );
-    }
-    
+        <Text style={styles.welcomeTitle}>Fix Broken Code</Text>
+        <Text style={styles.welcomeSubtitle}>
+          Race against time to fix code snippets!
+        </Text>
+      </View>
+
+      <View style={styles.instructionsContainer}>
+        <Text style={styles.instructionsTitle}>How to Play:</Text>
+
+        <View style={styles.instructionItem}>
+          <MaterialCommunityIcons
+            name="target"
+            size={24}
+            color={COLORS.primary}
+          />
+          <Text style={styles.instructionText}>
+            Fix broken code snippets by selecting the correct option
+          </Text>
+        </View>
+
+        <View style={styles.instructionItem}>
+          <MaterialCommunityIcons
+            name="clock-fast"
+            size={24}
+            color={COLORS.primary}
+          />
+          <Text style={styles.instructionText}>
+            You have 60 seconds. Correct answers add 5 seconds, wrong ones
+            subtract 3
+          </Text>
+        </View>
+
+        <View style={styles.instructionItem}>
+          <MaterialCommunityIcons
+            name="heart-multiple"
+            size={24}
+            color="#FF6B6B"
+          />
+          <Text style={styles.instructionText}>
+            You have 3 lives. Lose them all and the game ends
+          </Text>
+        </View>
+
+        <View style={styles.instructionItem}>
+          <MaterialCommunityIcons name="trophy" size={24} color="#FFD700" />
+          <Text style={styles.instructionText}>
+            100 points per fix + combo multipliers for streaks
+          </Text>
+        </View>
+      </View>
+
+      <TouchableOpacity style={styles.startButton} onPress={startGame}>
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.primaryDark]}
+          style={styles.startButtonGradient}
+        >
+          <Text style={styles.startButtonText}>Start Challenge</Text>
+          <MaterialCommunityIcons name="play" size={24} color="#FFFFFF" />
+        </LinearGradient>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+
+  if (!gameStarted) {
     return (
-      <Animated.View style={[StyleSheet.absoluteFill, confettiStyle]}>
-        {confettiElements}
-      </Animated.View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <MaterialCommunityIcons
+              name="arrow-left"
+              size={24}
+              color={COLORS.textPrimary}
+            />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Fix Broken Code</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        {renderWelcomeScreen()}
+      </SafeAreaView>
     );
-  };
+  }
+
+  if (gameOver) {
+    return (
+      <SafeAreaView style={styles.container}>{renderGameOver()}</SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView edges={['top']} style={styles.container}>
-      <StatusBar style="light" />
-      
-      {/* Confetti overlay */}
-      {gameState === 'success' && renderConfetti()}
-      
-      {/* Header */}
-      <Animated.View style={[styles.header, headerStyle]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        
-        <Text style={styles.title}>{challenge.title}</Text>
-        
-        <View style={styles.headerRight}>
-          <View style={styles.difficultyBadge}>
-            <Text style={styles.difficultyText}>{challenge.difficulty}</Text>
-          </View>
-        </View>
-      </Animated.View>
-      
-      {/* Timer bar */}
-      {gameState === 'playing' && (
-        <View style={styles.timerContainer}>
-          <Animated.View style={[styles.timerBar, timerBarStyle]} />
-          <Text style={styles.timerText}>{formatTime(timeLeft)}</Text>
-        </View>
-      )}
-      
-      {/* Game content */}
-      <ScrollView 
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Challenge description */}
-        <Animated.View 
-          entering={FadeIn}
-          style={styles.descriptionCard}
-        >
-          <Text style={styles.descriptionTitle}>{challenge.title}</Text>
-          <Text style={styles.descriptionText}>{challenge.description}</Text>
-          
-          {/* Language badge */}
-          <View style={styles.languageBadge}>
+    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.safeArea}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
             <MaterialCommunityIcons
-              name={challenge.language === 'javascript' ? 'language-javascript' : 'code-tags'}
-              size={16}
-              color="#FFFFFF"
+              name="arrow-left"
+              size={24}
+              color={COLORS.textPrimary}
             />
-            <Text style={styles.languageText}>{challenge.language}</Text>
-          </View>
-        </Animated.View>
-        
-        {/* Start button for ready state */}
-        {gameState === 'ready' && (
-          <Animated.View 
-            entering={ZoomIn.delay(300)}
-            style={styles.startButtonContainer}
-          >
-            <TouchableOpacity style={styles.startButton} onPress={startGame}>
-              <Text style={styles.startButtonText}>Start Challenge</Text>
-              <Ionicons name="play" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-            <Text style={styles.startHint}>
-              Drag code blocks to fix the broken function
-            </Text>
-          </Animated.View>
-        )}
-        
-        {/* Code panel (visible during play) */}
-        {gameState === 'playing' && (
-          <Animated.View style={[styles.codePanel, codePanelStyle]}>
-            <Text style={styles.codePanelTitle}>Fix the Code:</Text>
-            <View style={styles.codeContainer}>{renderCodeDropZones()}</View>
-          </Animated.View>
-        )}
-        
-        {/* Available code blocks (visible during play) */}
-        {gameState === 'playing' && (
-          <View style={styles.availableBlocksContainer}>
-            <Text style={styles.availableBlocksTitle}>Available Code Blocks:</Text>
-            <View style={styles.blocksGrid}>
-              {availableBlocks.map((block, index) => renderDraggableBlock(block, index))}
-            </View>
-            
-            {/* Hint button */}
-            <Animated.View style={[styles.hintContainer, hintButtonStyle]}>
-              <TouchableOpacity style={styles.hintButton} onPress={showNextHint}>
-                <Ionicons name="bulb-outline" size={20} color="#FFFFFF" />
-                <Text style={styles.hintButtonText}>Hint ({hintsUsed})</Text>
-              </TouchableOpacity>
-              
-              {showHint && (
-                <Animated.View
-                  entering={FadeInDown}
-                  style={styles.hintBubble}
-                >
-                  <Text style={styles.hintText}>{challenge.hints[currentHint]}</Text>
-                  <TouchableOpacity
-                    style={styles.closeHintButton}
-                    onPress={() => setShowHint(false)}
-                  >
-                    <Ionicons name="close" size={16} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-            </Animated.View>
-            
-            {/* Submit button */}
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={submitSolution}
-            >
-              <Text style={styles.submitButtonText}>Submit Solution</Text>
-              <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        )}
-        
-        {/* Success state */}
-        {gameState === 'success' && (
-          <Animated.View style={[styles.successContainer, successStyle]}>
-            <View style={styles.successContent}>
-              <View style={styles.successHeader}>
-                <Ionicons name="checkmark-circle" size={60} color="#4CAF50" />
-                <Text style={styles.successTitle}>Challenge Completed!</Text>
-              </View>
-              
-              <View style={styles.scoreBreakdown}>
-                <Text style={styles.scoreLabel}>Time Bonus</Text>
-                <Text style={styles.scoreValue}>+{Math.floor(timeLeft / 2)}</Text>
-                
-                <Text style={styles.scoreLabel}>Hints Used</Text>
-                <Text style={[styles.scoreValue, styles.hintPenalty]}>-{hintsUsed * 5}</Text>
-                
-                <View style={styles.totalScoreRow}>
-                  <Text style={styles.totalScoreLabel}>Points Earned</Text>
-                  <Text style={styles.totalScoreValue}>
-                    {100 + Math.floor(timeLeft / 2) - (hintsUsed * 5)}
-                  </Text>
-                </View>
-              </View>
-              
-              <TouchableOpacity
-                style={styles.nextButton}
-                onPress={nextChallenge}
-              >
-                <Text style={styles.nextButtonText}>
-                  {currentChallengeIndex < codeChallenges.length - 1
-                    ? "Next Challenge"
-                    : "Finish Game"}
-                </Text>
-                <Ionicons
-                  name={
-                    currentChallengeIndex < codeChallenges.length - 1
-                      ? "arrow-forward"
-                      : "checkmark-done"
-                  }
-                  size={20}
-                  color="#FFFFFF"
-                />
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        )}
-        
-        {/* Failure state */}
-        {gameState === 'failed' && (
-          <Animated.View
-            entering={BounceIn}
-            style={styles.failureContainer}
-          >
-            <View style={styles.failureContent}>
-              <Ionicons name="time" size={60} color="#F44336" />
-              <Text style={styles.failureTitle}>Time&apos;s Up!</Text>
-              <Text style={styles.failureMessage}>
-                You ran out of time before completing the challenge.
-              </Text>
-              
-              <View style={styles.failureButtons}>
-                <TouchableOpacity
-                  style={[styles.failureButton, styles.retryButton]}
-                  onPress={() => {
-                    setGameState('ready');
-                    setPlacedBlocks({});
-                    setTimeLeft(challenge.timeLimit);
-                    setHintsUsed(0);
-                    setCurrentHint(0);
-                    setShowHint(false);
-                  }}
-                >
-                  <Text style={styles.failureButtonText}>Try Again</Text>
-                  <Ionicons name="refresh" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.failureButton, styles.exitButton]}
-                  onPress={() => router.back()}
-                >
-                  <Text style={styles.failureButtonText}>Exit</Text>
-                  <Ionicons name="exit" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Animated.View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Fix Broken Code</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        {renderGameHeader()}
+
+        <ScrollView style={styles.gameContent}>
+          {renderCodeSnippet()}
+          {renderOptions()}
+        </ScrollView>
+
+        {renderFeedback()}
+      </SafeAreaView>
+    </LinearGradient>
   );
-}
+};
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: "transparent",
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    width: '100%',
-    zIndex: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   backButton: {
     padding: 8,
   },
-  title: {
+  headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: COLORS.textPrimary,
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  headerSpacer: {
+    width: 40, // Same width as back button to center the title
   },
-  difficultyBadge: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  difficultyText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 12,
-    textTransform: 'uppercase',
-  },
-  timerContainer: {
-    height: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 15,
-    marginHorizontal: 16,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  timerBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    height: '100%',
-    backgroundColor: COLORS.primary,
-  },
-  timerText: {
-    color: COLORS.textPrimary,
-    fontWeight: 'bold',
-    fontSize: 14,
-    width: '100%',
-    textAlign: 'center',
-    zIndex: 1,
-  },
-  content: {
+  welcomeContainer: {
     flex: 1,
+    padding: 20,
   },
-  contentContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
+  welcomeHeader: {
+    alignItems: "center",
+    marginBottom: 40,
+    marginTop: 20,
   },
-  descriptionCard: {
-    backgroundColor: 'rgba(20, 30, 48, 0.9)',
-    borderRadius: 16,
-    padding: 16,
+  welcomeTitle: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: COLORS.textPrimary,
     marginTop: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  descriptionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  descriptionText: {
+  welcomeSubtitle: {
     fontSize: 16,
-    color: COLORS.textDark,
-    lineHeight: 22,
-    marginBottom: 12,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    marginTop: 8,
   },
-  languageBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1976D2',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+  instructionsContainer: {
+    marginBottom: 40,
   },
-  languageText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 12,
-    marginLeft: 4,
-    textTransform: 'uppercase',
+  instructionsTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: COLORS.textPrimary,
+    marginBottom: 20,
   },
-  startButtonContainer: {
-    alignItems: 'center',
-    marginTop: 24,
+  instructionItem: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  instructionText: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    marginLeft: 16,
+    flex: 1,
   },
   startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 30,
+    marginBottom: 20,
+  },
+  startButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
   },
   startButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#FFFFFF",
     marginRight: 8,
   },
-  startHint: {
-    color: COLORS.textSecondary,
-    marginTop: 12,
-    fontStyle: 'italic',
+  gameHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.cardBackground,
   },
-  codePanel: {
-    backgroundColor: 'rgba(20, 30, 48, 0.9)',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  codePanelTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-  },
-  codeContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    padding: 12,
-    borderRadius: 8,
-  },
-  codeLine: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontSize: 14,
-    color: COLORS.textDark,
-    lineHeight: 20,
-  },
-  codeDropZone: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
-    padding: 8,
-    minHeight: 60,
-    marginVertical: 4,
-    justifyContent: 'center',
-  },
-  filledDropZone: {
-    backgroundColor: 'rgba(33, 150, 243, 0.15)',
-    borderColor: 'rgba(33, 150, 243, 0.5)',
-  },
-  dropZoneText: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontStyle: 'italic',
-    textAlign: 'center',
-  },
-  placedBlockContainer: {
-    position: 'relative',
-  },
-  removeBlockButton: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  availableBlocksContainer: {
-    marginTop: 24,
-  },
-  availableBlocksTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-  },
-  blocksGrid: {
-    flexDirection: isWeb ? 'row' : 'column',
-    flexWrap: isWeb ? 'wrap' : 'nowrap',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  codeBlock: {
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 12,
-    minHeight: 60,
-    width: isWeb ? width * 0.45 - 24 : '100%',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  codeBlockContent: {
-    padding: 12,
-    flex: 1,
-  },
-  dragging: {
-    opacity: 0.7,
-    transform: [{ scale: 1.05 }],
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-  },
-  codeText: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontSize: 14,
-    color: '#E0E0E0',
-    lineHeight: 20,
-  },
-  hintContainer: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  hintButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 152, 0, 0.8)',
-    paddingHorizontal: 16,
+  statContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.cardBackground,
     paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
-  hintButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
+  statText: {
+    color: COLORS.textPrimary,
+    fontWeight: "bold",
     marginLeft: 6,
   },
-  hintBubble: {
-    backgroundColor: 'rgba(255, 152, 0, 0.9)',
-    padding: 16,
+  livesContainer: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  gameContent: {
+    flex: 1,
+    padding: 20,
+  },
+  codeContainer: {
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 12,
-    marginTop: 12,
-    maxWidth: 500,
-    alignSelf: 'center',
-    position: 'relative',
-  },
-  hintText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  closeHintButton: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    padding: 4,
-  },
-  submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 8,
-    marginTop: 24,
-  },
-  submitButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginRight: 8,
-  },
-  successContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  successContent: {
-    backgroundColor: 'rgba(20, 30, 48, 0.95)',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    maxWidth: 500,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  successHeader: {
-    alignItems: 'center',
+    padding: 16,
     marginBottom: 24,
   },
-  successTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginTop: 12,
-  },
-  scoreBreakdown: {
-    width: '100%',
-    marginBottom: 24,
-  },
-  scoreLabel: {
-    color: COLORS.textDark,
-    fontSize: 16,
-  },
-  scoreValue: {
-    color: COLORS.textPrimary,
+  questionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
+    color: COLORS.primary,
     marginBottom: 12,
   },
-  hintPenalty: {
-    color: '#F44336',
-  },
-  totalScoreRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.2)',
-    paddingTop: 12,
-    marginTop: 12,
-  },
-  totalScoreLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-  },
-  totalScoreValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  nextButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+  codeBlock: {
+    backgroundColor: "#1a1a1a",
     borderRadius: 8,
-    width: '100%',
+    padding: 16,
   },
-  nextButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginRight: 8,
+  codeLine: {
+    flexDirection: "row",
+    marginBottom: 4,
   },
-  confetti: {
-    position: 'absolute',
-    width: 10,
-    height: 25,
-    backgroundColor: 'red',
+  lineNumber: {
+    color: "#666",
+    fontFamily: "monospace",
+    minWidth: 30,
+    fontSize: 14,
   },
-  failureContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
+  codeText: {
+    color: "#e6e6e6",
+    fontFamily: "monospace",
+    fontSize: 14,
+    flex: 1,
   },
-  failureContent: {
-    backgroundColor: 'rgba(20, 30, 48, 0.95)',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    maxWidth: 500,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+  placeholder: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginHorizontal: 2,
+    minWidth: 40,
+    alignItems: "center",
   },
-  failureTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#F44336',
-    marginTop: 12,
-    marginBottom: 8,
+  placeholderText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontFamily: "monospace",
   },
-  failureMessage: {
-    fontSize: 16,
-    color: COLORS.textDark,
-    textAlign: 'center',
+  optionsContainer: {
     marginBottom: 24,
   },
-  failureButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  failureButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flex: 1,
-    marginHorizontal: 8,
-  },
-  retryButton: {
-    backgroundColor: COLORS.primary,
-  },
-  exitButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  failureButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
+  optionsTitle: {
     fontSize: 16,
-    marginRight: 8,
+    fontWeight: "bold",
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+  },
+  optionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  optionButton: {
+    backgroundColor: COLORS.cardBackground,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "transparent",
+    minWidth: width * 0.2,
+    alignItems: "center",
+  },
+  selectedOption: {
+    borderColor: COLORS.primary,
+  },
+  correctOption: {
+    backgroundColor: "#4CAF50",
+    borderColor: "#4CAF50",
+  },
+  wrongOption: {
+    backgroundColor: "#FF6B6B",
+    borderColor: "#FF6B6B",
+  },
+  optionText: {
+    color: COLORS.textPrimary,
+    fontWeight: "bold",
+    fontFamily: "monospace",
+  },
+  selectedOptionText: {
+    color: "#FFFFFF",
+  },
+  feedbackOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  feedbackContainer: {
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    margin: 20,
+    maxWidth: width * 0.9,
+  },
+  feedbackTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  comboText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#FFD700",
+    marginBottom: 16,
+  },
+  explanationText: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  continueButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  continueButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  gameOverContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  gameOverTitle: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: COLORS.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  finalScoreText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: COLORS.primary,
+    marginBottom: 16,
+  },
+  statsText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  gameOverButtons: {
+    flexDirection: "row",
+    gap: 16,
+    marginTop: 32,
+  },
+  playAgainButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  playAgainText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  resultBackButton: {
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: COLORS.primary,
+    fontWeight: "bold",
+    fontSize: 16,
   },
 });
+
+export default CodeChallenge;

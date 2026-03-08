@@ -29,42 +29,58 @@
 //   black: "#000000",
 // };
 
-
 // OCEAN
 
 // const COLORS = {
-//   primary: "#1976D2", 
+//   primary: "#1976D2",
 //   textPrimary: "#1a4971",
-//   textSecondary: "#6d93b8", 
-//   textDark: "#0d2b43", 
+//   textSecondary: "#6d93b8",
+//   textDark: "#0d2b43",
 //   placeholderText: "#767676",
-//   background: "#e3f2fd", 
+//   background: "#e3f2fd",
 //   cardBackground: "#f5f9ff",
-//   inputBackground: "#f0f8ff", 
+//   inputBackground: "#f0f8ff",
 //   border: "#bbdefb",
 //   white: "#ffffff",
 //   black: "#000000",
 //   error: '#d32f2f',
 // };
 
-// dark mode
+// CYBERLEARN NAVY THEME
 
 const COLORS = {
-  primary: "#60A5FA",
-  primaryDark: "#1565C0",         // Bright blue for primary actions
-  textPrimary: "#F0F9FF",     // Almost white blue for primary text
-  textSecondary: "#93C5FD",   // Lighter blue for secondary text
-  textDark: "#BFDBFE",        // Light blue for dark mode text
-  placeholderText: "#3B82F6",  // Medium bright blue for placeholders
-  background: "#021526",      // Very dark blue background (as requested)
-  cardBackground: "#082744",   // Slightly lighter dark blue for cards
-  inputBackground: "#0C2D4D", // Bit lighter for input contrast
-  border: "#1E3A8A",          // Deep blue for borders
-  white: "#ffffff",
+  // 🌱 Primary Theme
+  primary: "#5da65d",       // Deep leafy green – strong action color
+  primaryDark: "#2f3e2f",   // Earthy dark green – for headers/navbars
+  primaryLight: "#9ccf9c",  // Sage green – hover states or soft highlights
+
+  // 🎨 Accents
+  accent: "#FF7F50",        // Coral – attention/call-to-action
+  gold: "#FFD700",          // Gold – subtle highlights (borders/icons)
+  beige: "#F5DEB3",         // Warm beige – soft secondary background
+  lightBlue: "#89C2FF",     // Cool blue – links, secondary buttons
+
+  // 🖋️ Text
+  textPrimary: "#2f3e2f",   // Dark earthy green – primary text (good contrast on mint)
+  textSecondary: "#5c6f5c", // Muted sage – subtitles, secondary text
+  textDark: "#1a1a1a",      // Rich black – for maximum contrast if needed
+  placeholderText: "#7fa87f", // Soft sage – subtle placeholder color
+
+  // 🪴 Surfaces
+  background: "#d1f0d1",    // Mint green – main app background
+  cardBackground: "#e8f9e8",// Slightly lighter mint – cards/panels
+  inputBackground: "#ffffff", // Clean white – input fields for clarity
+  border: "#c8d9c8",        // Soft gray-green – dividers and outlines
+
+  // ⚡ Status Colors
+  error: "#FF4444",         // Red – errors
+  warning: "#FF7F50",       // Coral – warnings
+  success: "#00BFA5",       // Teal – success
+
+  // 🎯 Neutrals
+  white: "#FFFFFF",
   black: "#000000",
 };
-
-
 
 // BLOSSOM
 /*
@@ -98,6 +114,5 @@ const COLORS = {
   black: "#000000",
 };
 */
-
 
 export default COLORS;

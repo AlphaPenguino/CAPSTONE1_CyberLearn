@@ -1,93 +1,122 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native"
+import { useState, useEffect } from "react";
+import {
+  ScrollView,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from "react-native";
 
-export default function GamePlay({ socket, gameData, playerData, currentQuestion }) {
-  const [selectedAnswer, setSelectedAnswer] = useState(null)
-  const [timeLeft, setTimeLeft] = useState(30)
-  const [isMyTurn, setIsMyTurn] = useState(false)
+export default function GamePlay({
+  socket,
+  gameData,
+  playerData,
+  currentQuestion,
+}) {
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [isMyTurn, setIsMyTurn] = useState(false);
 
   useEffect(() => {
     if (gameData && playerData) {
-      const myTeam = gameData.teams.find((team) => team.name === playerData.teamName)
+      const myTeam = gameData.teams.find(
+        (team) => team.name === playerData.teamName
+      );
       if (myTeam) {
-        const currentPlayer = myTeam.members[myTeam.currentPlayerIndex]
-        setIsMyTurn(currentPlayer && currentPlayer.id === playerData.id)
+        const currentPlayer = myTeam.members[myTeam.currentPlayerIndex];
+        setIsMyTurn(currentPlayer && currentPlayer.id === playerData.id);
       }
     }
-  }, [gameData, playerData])
+  }, [gameData, playerData]);
 
   useEffect(() => {
     if (currentQuestion && isMyTurn) {
-      setTimeLeft(30)
+      setTimeLeft(30);
       const timer = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
-            clearInterval(timer)
-            return 0
+            clearInterval(timer);
+            return 0;
           }
-          return prev - 1
-        })
-      }, 1000)
+          return prev - 1;
+        });
+      }, 1000);
 
-      return () => clearInterval(timer)
+      return () => clearInterval(timer);
     }
-  }, [currentQuestion, isMyTurn])
+  }, [currentQuestion, isMyTurn]);
 
   const submitAnswer = () => {
     if (selectedAnswer === null) {
-      Alert.alert("Error", "Please select an answer")
-      return
+      Alert.alert("Error", "Please select an answer");
+      return;
     }
 
     socket.emit("answer-question", {
       gameId: gameData.id,
       answerIndex: selectedAnswer,
-    })
+    });
 
-    setSelectedAnswer(null)
-  }
+    setSelectedAnswer(null);
+  };
 
   const requestHelp = () => {
-    socket.emit("request-help", { gameId: gameData.id })
-  }
+    socket.emit("request-help", { gameId: gameData.id });
+  };
 
   const getTeamColors = (index) => {
-    const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b"]
-    return colors[index % colors.length]
-  }
+    const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b"];
+    return colors[index % colors.length];
+  };
 
-  const myTeam = gameData?.teams.find((team) => team.name === playerData?.teamName)
-  const currentPlayer = myTeam?.members[myTeam.currentPlayerIndex]
+  const myTeam = gameData?.teams.find(
+    (team) => team.name === playerData?.teamName
+  );
+  const currentPlayer = myTeam?.members[myTeam.currentPlayerIndex];
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Knowledge Race</Text>
         <Text style={styles.gameId}>Game: {gameData?.id}</Text>
-        <Text style={styles.creatorInfo}>Created by: {gameData?.creator?.name}</Text>
+        <Text style={styles.creatorInfo}>
+          Created by: {gameData?.creator?.name}
+        </Text>
       </View>
 
       {/* Team Progress */}
       <View style={styles.progressSection}>
         <Text style={styles.sectionTitle}>Team Progress</Text>
         {gameData?.teams.map((team, index) => (
-          <View key={team.name} style={[styles.teamProgress, { borderLeftColor: getTeamColors(index) }]}>
-            <Text style={[styles.teamName, { color: getTeamColors(index) }]}>{team.name}</Text>
+          <View
+            key={team.name}
+            style={[
+              styles.teamProgress,
+              { borderLeftColor: getTeamColors(index) },
+            ]}
+          >
+            <Text style={[styles.teamName, { color: getTeamColors(index) }]}>
+              {team.name}
+            </Text>
             <View style={styles.progressBar}>
               <View
                 style={[
                   styles.progressFill,
                   {
-                    width: `${(team.questionsCompleted / gameData.totalQuestions) * 100}%`,
+                    width: `${
+                      (team.questionsCompleted / gameData.totalQuestions) * 100
+                    }%`,
                     backgroundColor: getTeamColors(index),
                   },
                 ]}
               />
             </View>
             <Text style={styles.progressText}>
-              {team.questionsCompleted}/{gameData.totalQuestions} | Help: {team.helpUsed}/{team.maxHelp}
+              {team.questionsCompleted}/{gameData.totalQuestions} | Help:{" "}
+              {team.helpUsed}/{team.maxHelp}
             </Text>
           </View>
         ))}
@@ -98,16 +127,22 @@ export default function GamePlay({ socket, gameData, playerData, currentQuestion
         <Text style={styles.sectionTitle}>Current Turn</Text>
         <View style={styles.turnInfo}>
           <Text style={styles.turnText}>
-            {isMyTurn ? "It's your turn!" : `${currentPlayer?.name || "Unknown"} is answering`}
+            {isMyTurn
+              ? "It's your turn!"
+              : `${currentPlayer?.name || "Unknown"} is answering`}
           </Text>
-          {isMyTurn && <Text style={styles.timerText}>Time left: {timeLeft}s</Text>}
+          {isMyTurn && (
+            <Text style={styles.timerText}>Time left: {timeLeft}s</Text>
+          )}
         </View>
       </View>
 
       {/* Question */}
       {currentQuestion && (
         <View style={styles.questionSection}>
-          <Text style={styles.questionTitle}>Question {myTeam?.questionsCompleted + 1}</Text>
+          <Text style={styles.questionTitle}>
+            Question {myTeam?.questionsCompleted + 1}
+          </Text>
           <Text style={styles.questionText}>{currentQuestion.question}</Text>
 
           <View style={styles.optionsContainer}>
@@ -138,7 +173,10 @@ export default function GamePlay({ socket, gameData, playerData, currentQuestion
           {isMyTurn && (
             <View style={styles.actionButtons}>
               <TouchableOpacity
-                style={[styles.submitButton, selectedAnswer === null && styles.disabledButton]}
+                style={[
+                  styles.submitButton,
+                  selectedAnswer === null && styles.disabledButton,
+                ]}
                 onPress={submitAnswer}
                 disabled={selectedAnswer === null}
               >
@@ -146,8 +184,13 @@ export default function GamePlay({ socket, gameData, playerData, currentQuestion
               </TouchableOpacity>
 
               {myTeam && myTeam.helpUsed < myTeam.maxHelp && (
-                <TouchableOpacity style={styles.helpButton} onPress={requestHelp}>
-                  <Text style={styles.buttonText}>Ask for Help ({myTeam.maxHelp - myTeam.helpUsed} left)</Text>
+                <TouchableOpacity
+                  style={styles.helpButton}
+                  onPress={requestHelp}
+                >
+                  <Text style={styles.buttonText}>
+                    Ask for Help ({myTeam.maxHelp - myTeam.helpUsed} left)
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -160,17 +203,30 @@ export default function GamePlay({ socket, gameData, playerData, currentQuestion
         <View style={styles.teamSection}>
           <Text style={styles.sectionTitle}>Your Team: {myTeam.name}</Text>
           {myTeam.members.map((member) => (
-            <View key={member.id} style={[styles.memberItem, member.isActive && styles.activeMemberItem]}>
-              <Text style={[styles.memberName, member.isActive && styles.activeMemberName]}>
+            <View
+              key={member.id}
+              style={[
+                styles.memberItem,
+                member.isActive && styles.activeMemberItem,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.memberName,
+                  member.isActive && styles.activeMemberName,
+                ]}
+              >
                 {member.name} {member.id === playerData?.id ? "(You)" : ""}
               </Text>
-              <Text style={styles.memberStats}>Questions answered: {member.questionsAnswered}</Text>
+              <Text style={styles.memberStats}>
+                Questions answered: {member.questionsAnswered}
+              </Text>
             </View>
           ))}
         </View>
       )}
     </ScrollView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -354,4 +410,4 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginTop: 2,
   },
-})
+});

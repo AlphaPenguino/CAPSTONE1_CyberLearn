@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digital Defenders - 4-Letter Room Code Test</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
+        color: white;
+        min-height: 100vh;
+      }
+
+      .container {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        backdrop-filter: blur(10px);
+      }
+
+      .section {
+        margin-bottom: 30px;
+        padding: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+      }
+
+      h1,
+      h2 {
+        color: #ffd700;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+      }
+
+      input,
+      button {
+        margin: 5px;
+        padding: 10px;
+        font-size: 16px;
+        border: none;
+        border-radius: 5px;
+      }
+
+      input {
+        background: rgba(255, 255, 255, 0.9);
+        color: black;
+      }
+
+      button {
+        background: #ff6b6b;
+        color: white;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+
+      button:hover {
+        background: #ff5252;
+      }
+
+      button:disabled {
+        background: #666;
+        cursor: not-allowed;
+      }
+
+      .connected {
+        background: #4caf50;
+      }
+      .error {
+        background: #f44336;
+      }
+      .info {
+        background: #2196f3;
+      }
+
+      #messages {
+        height: 300px;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .message {
+        margin: 5px 0;
+        padding: 8px;
+        border-radius: 4px;
+        border-left: 4px solid #ffd700;
+      }
+
+      .room-code {
+        font-size: 24px;
+        font-weight: bold;
+        color: #ffd700;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+      }
+
+      .player-list {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+      }
+
+      .game-state {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+
+      .status-panel {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 15px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🛡️ Digital Defenders - 4-Letter Room Code Test</h1>
+
+    <div class="container">
+      <div class="section">
+        <h2>Connection Status</h2>
+        <div id="connectionStatus">Disconnected</div>
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+      </div>
+
+      <div class="section">
+        <h2>Create Room</h2>
+        <input
+          type="text"
+          id="playerName"
+          placeholder="Your Name"
+          value="Player1"
+        />
+        <input
+          type="number"
+          id="maxPlayers"
+          placeholder="Max Players"
+          value="4"
+          min="2"
+          max="4"
+        />
+        <button onclick="createRoom()">Create Room</button>
+      </div>
+
+      <div class="section">
+        <h2>Join Room</h2>
+        <input
+          type="text"
+          id="joinPlayerName"
+          placeholder="Your Name"
+          value="Player2"
+        />
+        <input
+          type="text"
+          id="roomCodeInput"
+          placeholder="4-Letter Room Code"
+          maxlength="4"
+          style="text-transform: uppercase"
+        />
+        <button onclick="joinRoom()">Join Room</button>
+      </div>
+
+      <div class="section">
+        <h2>Room Information</h2>
+        <div id="roomInfo">No room joined</div>
+        <div id="roomCode" class="room-code" style="display: none"></div>
+        <div id="playerList" class="player-list" style="display: none">
+          <h3>Players:</h3>
+          <div id="players"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Game Actions</h2>
+        <button onclick="startGame()" id="startGameBtn" disabled>
+          Start Game
+        </button>
+        <button onclick="leaveRoom()" id="leaveRoomBtn" disabled>
+          Leave Room
+        </button>
+      </div>
+
+      <div class="game-state">
+        <div class="status-panel">
+          <h2>Game State</h2>
+          <div id="gameState">Not in game</div>
+        </div>
+
+        <div class="status-panel">
+          <h2>Debug Info</h2>
+          <button onclick="fetchActiveRooms()">Fetch Active Rooms</button>
+          <div id="debugInfo"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Messages</h2>
+        <div id="messages"></div>
+      </div>
+    </div>
+
+    <script>
+      let socket = null;
+      let currentRoom = null;
+      let isCreator = false;
+
+      function connect() {
+        if (socket) {
+          addMessage("Already connected", "info");
+          return;
+        }
+
+        socket = io("http://localhost:3000/digital-defenders");
+
+        socket.on("connect", () => {
+          addMessage("Connected to Digital Defenders server", "connected");
+          updateConnectionStatus("Connected");
+        });
+
+        socket.on("disconnect", () => {
+          addMessage("Disconnected from server", "error");
+          updateConnectionStatus("Disconnected");
+        });
+
+        socket.on("error", (data) => {
+          addMessage(`Error: ${data.message}`, "error");
+        });
+
+        socket.on("room-created", (data) => {
+          addMessage(`Room created successfully!`, "connected");
+          currentRoom = data.roomCode;
+          isCreator = data.isCreator;
+          updateRoomInfo(data);
+          updateButtons();
+        });
+
+        socket.on("room-joined", (data) => {
+          addMessage(`Joined room successfully!`, "connected");
+          currentRoom = data.roomCode;
+          isCreator = data.isCreator;
+          updateRoomInfo(data);
+          updateButtons();
+        });
+
+        socket.on("player-joined", (data) => {
+          addMessage(`${data.playerName} joined the room`, "info");
+          updatePlayerList(data.room.players);
+        });
+
+        socket.on("player-left", (data) => {
+          addMessage(`${data.playerName} left the room`, "info");
+          updatePlayerList(data.room.players);
+        });
+
+        socket.on("player-disconnected", (data) => {
+          addMessage(`${data.playerName} disconnected`, "info");
+          updatePlayerList(data.room.players);
+        });
+
+        socket.on("game-started", (data) => {
+          addMessage("Game started! Get ready to defend!", "connected");
+          updateGameState(data.gameState);
+        });
+
+        socket.on("game-state", (data) => {
+          updateGameState(data);
+        });
+
+        socket.on("room-left", (data) => {
+          addMessage("Left room successfully", "info");
+          currentRoom = null;
+          isCreator = false;
+          clearRoomInfo();
+          updateButtons();
+        });
+      }
+
+      function disconnect() {
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+          currentRoom = null;
+          isCreator = false;
+          updateConnectionStatus("Disconnected");
+          clearRoomInfo();
+          updateButtons();
+        }
+      }
+
+      function createRoom() {
+        if (!socket) {
+          addMessage("Not connected to server", "error");
+          return;
+        }
+
+        const playerName = document.getElementById("playerName").value.trim();
+        const maxPlayers = parseInt(
+          document.getElementById("maxPlayers").value
+        );
+
+        if (!playerName) {
+          addMessage("Please enter your name", "error");
+          return;
+        }
+
+        if (maxPlayers < 2 || maxPlayers > 4) {
+          addMessage("Max players must be between 2 and 4", "error");
+          return;
+        }
+
+        addMessage(`Creating room for ${playerName}...`, "info");
+        socket.emit("create-room", { playerName, maxPlayers });
+      }
+
+      function joinRoom() {
+        if (!socket) {
+          addMessage("Not connected to server", "error");
+          return;
+        }
+
+        const playerName = document
+          .getElementById("joinPlayerName")
+          .value.trim();
+        const roomCode = document
+          .getElementById("roomCodeInput")
+          .value.trim()
+          .toUpperCase();
+
+        if (!playerName) {
+          addMessage("Please enter your name", "error");
+          return;
+        }
+
+        if (!roomCode || roomCode.length !== 4) {
+          addMessage("Please enter a valid 4-letter room code", "error");
+          return;
+        }
+
+        addMessage(`Joining room ${roomCode} as ${playerName}...`, "info");
+        socket.emit("join-room", { roomCode, playerName });
+      }
+
+      function startGame() {
+        if (!socket || !currentRoom) {
+          addMessage("Not in a room", "error");
+          return;
+        }
+
+        if (!isCreator) {
+          addMessage("Only the room creator can start the game", "error");
+          return;
+        }
+
+        addMessage("Starting game...", "info");
+        socket.emit("start-game", { roomCode: currentRoom });
+      }
+
+      function leaveRoom() {
+        if (!socket || !currentRoom) {
+          addMessage("Not in a room", "error");
+          return;
+        }
+
+        addMessage("Leaving room...", "info");
+        socket.emit("leave-room", { roomCode: currentRoom });
+      }
+
+      async function fetchActiveRooms() {
+        try {
+          const response = await fetch(
+            "http://localhost:3000/api/digital-defenders/debug/rooms"
+          );
+          const data = await response.json();
+
+          if (data.success) {
+            let debugHtml = `<strong>Active Rooms: ${data.totalRooms}</strong><br>`;
+            debugHtml += `<strong>Active Players: ${data.totalPlayers}</strong><br><br>`;
+
+            data.activeRooms.forEach((room) => {
+              debugHtml += `<div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">`;
+              debugHtml += `<strong>Room:</strong> ${room.roomCode}<br>`;
+              debugHtml += `<strong>Players:</strong> ${room.playerCount}/${room.maxPlayers}<br>`;
+              debugHtml += `<strong>State:</strong> ${room.gameState}<br>`;
+              debugHtml += `<strong>Players:</strong> ${room.players
+                .map((p) => `${p.name}${p.isCreator ? " (Creator)" : ""}`)
+                .join(", ")}<br>`;
+              debugHtml += `</div>`;
+            });
+
+            document.getElementById("debugInfo").innerHTML = debugHtml;
+            addMessage("Debug info updated", "info");
+          } else {
+            addMessage("Failed to fetch debug info", "error");
+          }
+        } catch (error) {
+          addMessage(`Error fetching debug info: ${error.message}`, "error");
+        }
+      }
+
+      function updateConnectionStatus(status) {
+        const element = document.getElementById("connectionStatus");
+        element.textContent = status;
+        element.className = status === "Connected" ? "connected" : "error";
+      }
+
+      function updateRoomInfo(data) {
+        document.getElementById("roomInfo").innerHTML = `
+                <strong>Room:</strong> ${data.roomCode || data.room.id}<br>
+                <strong>Players:</strong> ${data.room.players.length}/${
+          data.room.maxPlayers
+        }<br>
+                <strong>State:</strong> ${data.room.gameState}<br>
+                <strong>You are:</strong> ${
+                  data.isCreator ? "Creator" : "Player"
+                }
+            `;
+
+        const roomCodeElement = document.getElementById("roomCode");
+        roomCodeElement.textContent = `Room Code: ${
+          data.roomCode || data.room.id
+        }`;
+        roomCodeElement.style.display = "block";
+
+        updatePlayerList(data.room.players);
+
+        const playerListElement = document.getElementById("playerList");
+        playerListElement.style.display = "block";
+      }
+
+      function updatePlayerList(players) {
+        const playersHtml = players
+          .map(
+            (player) =>
+              `<div>${player.name}${player.isCreator ? " (Creator)" : ""}</div>`
+          )
+          .join("");
+        document.getElementById("players").innerHTML = playersHtml;
+      }
+
+      function updateGameState(gameState) {
+        if (gameState) {
+          document.getElementById("gameState").innerHTML = `
+                    <strong>Wave:</strong> ${gameState.currentWave || "N/A"}<br>
+                    <strong>PC Health:</strong> ${
+                      gameState.pcHealth || "N/A"
+                    }<br>
+                    <strong>Countdown:</strong> ${
+                      gameState.countdown || "N/A"
+                    }<br>
+                    <strong>State:</strong> ${gameState.gameState || "N/A"}
+                `;
+        }
+      }
+
+      function clearRoomInfo() {
+        document.getElementById("roomInfo").textContent = "No room joined";
+        document.getElementById("roomCode").style.display = "none";
+        document.getElementById("playerList").style.display = "none";
+        document.getElementById("gameState").textContent = "Not in game";
+      }
+
+      function updateButtons() {
+        const startBtn = document.getElementById("startGameBtn");
+        const leaveBtn = document.getElementById("leaveRoomBtn");
+
+        startBtn.disabled = !currentRoom || !isCreator;
+        leaveBtn.disabled = !currentRoom;
+      }
+
+      function addMessage(message, type = "info") {
+        const messages = document.getElementById("messages");
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${type}`;
+        messageDiv.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+        messages.appendChild(messageDiv);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      // Auto-format room code input
+      document
+        .getElementById("roomCodeInput")
+        .addEventListener("input", function (e) {
+          e.target.value = e.target.value.toUpperCase();
+        });
+
+      // Load debug info on page load
+      window.addEventListener("load", () => {
+        fetchActiveRooms();
+      });
+    </script>
+  </body>
+</html>

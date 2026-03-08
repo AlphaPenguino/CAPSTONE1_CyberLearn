@@ -1,0 +1,62 @@
+{
+  "title": "Fundamentals of Cyber Safety",
+  "description": "Intro quest covering passwords, hardware vs software, and basic coding awareness.",
+  "difficulty": "medium",
+  "level": 1,
+  "questions": [
+    {
+      "type": "multipleChoice",
+      "text": "What does CPU stand for?",
+      "choices": [
+        "Central Processing Unit",
+        "Computer Processing Utility",
+        "Control Program Unit",
+        "Central Protocol Unit"
+      ],
+      "correct_index": 0,
+      "hint": "It's often called the brain of the computer"
+    },
+    {
+      "type": "fillInBlanks",
+      "text": "Fill the blanks: A ___ is physical equipment, and a ___ is a program you run.",
+      "blanks": ["hardware", "software"],
+      "hint": "One you can touch, one you cannot"
+    },
+    {
+      "type": "codeMissing",
+      "text": "Complete the Python print statement to display Hello World",
+      "codeTemplate": "print(___)",
+      "correctAnswer": "\"Hello World\"",
+      "hint": "Strings in Python use quotes"
+    },
+    {
+      "type": "codeOrdering",
+      "text": "Arrange the code to define and call a greet function",
+      "codeBlocks": [
+        { "id": 1, "code": "def greet(name):", "position": 0 },
+        { "id": 2, "code": "    return f'Hello, {name}'", "position": 1 },
+        { "id": 3, "code": "print(greet('Alice'))", "position": 2 }
+      ],
+      "hint": "Function definition first"
+    },
+    {
+      "type": "sorting",
+      "text": "Sort items into Hardware or Software",
+      "categories": ["Hardware", "Software"],
+      "items": [
+        { "id": 101, "text": "Mouse", "categoryId": 0 },
+        { "id": 102, "text": "Web Browser", "categoryId": 1 },
+        { "id": 103, "text": "CPU", "categoryId": 0 },
+        { "id": 104, "text": "Operating System", "categoryId": 1 }
+      ],
+      "hint": "Physical vs intangible"
+    },
+    {
+      "type": "cipher",
+      "text": "Decode this scrambled cybersecurity term",
+      "answer": "FIREWALL",
+      "scrambledHint": "EWFILLRA",
+      "hint": "Protects network boundaries"
+    }
+  ]
+}

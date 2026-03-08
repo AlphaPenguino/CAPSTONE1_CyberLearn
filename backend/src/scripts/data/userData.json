@@ -1,0 +1,51 @@
+[
+  {
+    "username": "student1",
+    "fullName": "John Doe",
+    "email": "student1@cyberlearn.test",
+    "password": "password123",
+    "role": "student"
+  },
+  {
+    "username": "student2",
+    "fullName": "Jane Smith",
+    "email": "student2@cyberlearn.test",
+    "password": "password123",
+    "role": "student"
+  },
+  {
+    "username": "student3",
+    "fullName": "Mike Johnson",
+    "email": "student3@cyberlearn.test",
+    "password": "password123",
+    "role": "student"
+  },
+  {
+    "username": "student4",
+    "fullName": "Sarah Wilson",
+    "email": "student4@cyberlearn.test",
+    "password": "password123",
+    "role": "student"
+  },
+  {
+    "username": "student5",
+    "fullName": "David Brown",
+    "email": "student5@cyberlearn.test",
+    "password": "password123",
+    "role": "student"
+  },
+  {
+    "username": "instructor1",
+    "fullName": "Prof. Emily Davis",
+    "email": "instructor@cyberlearn.test",
+    "password": "password123",
+    "role": "instructor"
+  },
+  {
+    "username": "admin1",
+    "fullName": "Administrator",
+    "email": "admin@cyberlearn.test",
+    "password": "password123",
+    "role": "admin"
+  }
+]

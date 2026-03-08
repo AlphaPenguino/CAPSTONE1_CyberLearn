@@ -1,7 +1,7 @@
-import { StyleSheet, Dimensions, Platform } from 'react-native';
-import RPG_COLORS from '@/constants/rpg-theme-colors';
+import { StyleSheet, Dimensions, Platform } from "react-native";
+import RPG_COLORS from "@/constants/rpg-theme-colors";
 
-const { width, height } = Dimensions.get('window');
+const { width, height } = Dimensions.get("window");
 
 export default StyleSheet.create({
   // Main containers
@@ -11,20 +11,20 @@ export default StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: RPG_COLORS.background,
   },
   loadingText: {
     color: RPG_COLORS.text,
     marginTop: 16,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: RPG_COLORS.background,
     padding: 20,
   },
@@ -32,9 +32,9 @@ export default StyleSheet.create({
     color: RPG_COLORS.error,
     marginTop: 16,
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
-  
+
   // RPG-styled Quiz Header
   quizProgressHeader: {
     padding: 16,
@@ -43,37 +43,37 @@ export default StyleSheet.create({
     borderBottomColor: RPG_COLORS.border,
   },
   progressInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
   questionCounter: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: 16,
   },
   timer: {
     color: RPG_COLORS.gold,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: 16,
   },
   progressBarContainer: {
     height: 12,
-    backgroundColor: '#0D1B2A',
+    backgroundColor: "#0D1B2A",
     borderRadius: 6,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: RPG_COLORS.primaryLight,
   },
   progressBar: {
-    height: '100%',
+    height: "100%",
     backgroundColor: RPG_COLORS.expBar,
   },
-  
+
   // RPG Status Bars
   rpgStatusBars: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 12,
     marginTop: 25,
   },
@@ -83,28 +83,35 @@ export default StyleSheet.create({
   },
   statusName: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: 14,
     marginBottom: 4,
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    ...Platform.select({
+      web: {
+        textShadow: "1px 1px 2px rgba(0,0,0,0.7)",
+      },
+      default: {
+        textShadowColor: "rgba(0,0,0,0.7)",
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 2,
+      },
+    }),
   },
   statusBars: {
     gap: 6,
   },
   barContainer: {
     height: 18,
-    backgroundColor: '#0D1B2A',
+    backgroundColor: "#0D1B2A",
     borderRadius: 9,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: RPG_COLORS.primaryLight,
-    position: 'relative',
+    position: "relative",
     marginBottom: 4,
   },
   barFill: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
@@ -119,14 +126,21 @@ export default StyleSheet.create({
     backgroundColor: RPG_COLORS.manaBar,
   },
   barText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    textAlign: 'center',
-    fontWeight: 'bold',
-    textShadowColor: '#000',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 1,
-    position: 'absolute',
+    textAlign: "center",
+    fontWeight: "bold",
+    ...Platform.select({
+      web: {
+        textShadow: "1px 1px 1px #000",
+      },
+      default: {
+        textShadowColor: "#000",
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 1,
+      },
+    }),
+    position: "absolute",
     left: 0,
     right: 0,
     top: 0,
@@ -141,58 +155,58 @@ export default StyleSheet.create({
     fontSize: 12,
     marginBottom: 4,
   },
-  
+
   // RPG Battle Area
   rpgBattleArea: {
     flex: 1,
-    width: '100%',
-    height: '100%',
-    justifyContent: 'flex-end', // Align to bottom
-    alignItems: 'center',
+    width: "100%",
+    height: "100%",
+    justifyContent: "flex-end", // Align to bottom
+    alignItems: "center",
     paddingVertical: 16,
   },
   battleCharactersContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between', // Space evenly
-    alignItems: 'flex-end',
-    width: '100%',
-    paddingHorizontal: Platform.OS === 'web' ? 40 : 15, // Less padding on mobile
+    flexDirection: "row",
+    justifyContent: "space-between", // Space evenly
+    alignItems: "flex-end",
+    width: "100%",
+    paddingHorizontal: Platform.OS === "web" ? 40 : 15, // Less padding on mobile
   },
   rpgSpriteWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
     // Scale down on mobile
-    transform: [{ scale: Platform.OS === 'web' ? 1 : 0.7 }],
+    transform: [{ scale: Platform.OS === "web" ? 1 : 0.7 }],
   },
   rpgShadow: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 5,
     width: 80,
     height: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: "rgba(0,0,0,0.3)",
     borderRadius: 40,
   },
   characterName: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 8,
     fontSize: 14,
-    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowColor: "rgba(0,0,0,0.7)",
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
   },
-  
+
   // Question Container
   questionContainer: {
     flex: 1,
     margin: 12,
-    backgroundColor: 'rgba(18, 44, 68, 0.9)', // Semi-transparent background
+    backgroundColor: "rgba(18, 44, 68, 0.9)", // Semi-transparent background
     borderRadius: 12,
     borderWidth: 3,
     borderColor: RPG_COLORS.border,
-    overflow: 'hidden',
-    shadowColor: '#000',
+    overflow: "hidden",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 6,
@@ -202,14 +216,14 @@ export default StyleSheet.create({
     backgroundColor: RPG_COLORS.primaryDark,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderBottomWidth: 2,
     borderBottomColor: RPG_COLORS.primaryLight,
   },
   rpgDialogTitle: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: 16,
     marginLeft: 8,
   },
@@ -217,17 +231,17 @@ export default StyleSheet.create({
     padding: 16,
   },
   questionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: RPG_COLORS.primaryLight,
     paddingBottom: 8,
   },
   questionTypeIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: RPG_COLORS.primaryDark,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -237,13 +251,13 @@ export default StyleSheet.create({
   },
   questionTypeText: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: 14,
     marginLeft: 6,
   },
   questionPoints: {
     color: RPG_COLORS.gold,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: 14,
     backgroundColor: RPG_COLORS.primaryDark,
     paddingHorizontal: 10,
@@ -251,22 +265,22 @@ export default StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: RPG_COLORS.gold,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   questionText: {
     color: RPG_COLORS.text,
     fontSize: 18,
     marginBottom: 20,
     lineHeight: 26,
-    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowColor: "rgba(0,0,0,0.7)",
     textShadowOffset: { width: 0.5, height: 0.5 },
     textShadowRadius: 1,
   },
-  
+
   // Navigation Container
   navigationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: RPG_COLORS.backgroundLight,
@@ -274,9 +288,9 @@ export default StyleSheet.create({
     borderTopColor: RPG_COLORS.primaryLight,
   },
   navButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: RPG_COLORS.primary,
@@ -287,7 +301,7 @@ export default StyleSheet.create({
   },
   navButtonText: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: 16,
     marginHorizontal: 6,
   },
@@ -298,12 +312,12 @@ export default StyleSheet.create({
   },
   submitButton: {
     borderRadius: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   submitButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderWidth: 2,
@@ -312,12 +326,12 @@ export default StyleSheet.create({
     minWidth: 150,
   },
   submitButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
+    color: "#FFFFFF",
+    fontWeight: "bold",
     fontSize: 16,
     marginRight: 8,
   },
-  
+
   // Multiple choice options
   optionsContainer: {
     marginTop: 8,
@@ -331,8 +345,8 @@ export default StyleSheet.create({
     marginBottom: 12,
   },
   optionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   optionRadio: {
     width: 24,
@@ -341,8 +355,8 @@ export default StyleSheet.create({
     borderWidth: 2,
     borderColor: RPG_COLORS.primaryLight,
     backgroundColor: RPG_COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
   },
   selectedRadio: {
@@ -360,7 +374,7 @@ export default StyleSheet.create({
   },
   selectedOptionText: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 
   // Fill in the blanks
@@ -371,9 +385,9 @@ export default StyleSheet.create({
     marginBottom: 16,
   },
   questionPart: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
   },
   questionPartText: {
     color: RPG_COLORS.text,
@@ -399,7 +413,7 @@ export default StyleSheet.create({
   },
   blanksHelpTitle: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 4,
   },
   blanksHelpText: {
@@ -416,7 +430,7 @@ export default StyleSheet.create({
   },
   codeTemplateTitle: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 8,
   },
   codeTemplateScroll: {
@@ -427,7 +441,7 @@ export default StyleSheet.create({
   },
   codeTemplateText: {
     color: RPG_COLORS.textSecondary,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     fontSize: 14,
   },
   codeInputContainer: {
@@ -435,7 +449,7 @@ export default StyleSheet.create({
   },
   codeInputTitle: {
     color: RPG_COLORS.text,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 8,
   },
   codeInput: {
@@ -445,9 +459,9 @@ export default StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: RPG_COLORS.primaryLight,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     fontSize: 14,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   implementationInput: {
     minHeight: 200,
@@ -456,8 +470,8 @@ export default StyleSheet.create({
   // Quiz completion
   completionContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: RPG_COLORS.background,
     padding: 20,
   },
@@ -465,12 +479,12 @@ export default StyleSheet.create({
     backgroundColor: RPG_COLORS.backgroundLight,
     borderRadius: 12,
     padding: 24,
-    width: '100%',
+    width: "100%",
     maxWidth: 500,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 3,
     borderColor: RPG_COLORS.border,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -478,21 +492,21 @@ export default StyleSheet.create({
   },
   completionTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: RPG_COLORS.text,
     marginTop: 16,
     marginBottom: 24,
-    textAlign: 'center',
+    textAlign: "center",
   },
   scoreContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 24,
   },
   scoreText: {
     fontSize: 48,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: RPG_COLORS.gold,
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: "rgba(0,0,0,0.5)",
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
   },
@@ -501,7 +515,7 @@ export default StyleSheet.create({
     fontSize: 16,
     marginTop: 8,
   },
-  
+
   // Miscellaneous
   retryButton: {
     backgroundColor: RPG_COLORS.primary,
@@ -513,8 +527,8 @@ export default StyleSheet.create({
     borderColor: RPG_COLORS.primaryLight,
   },
   retryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
+    color: "#FFFFFF",
+    fontWeight: "bold",
     fontSize: 16,
   },
 
@@ -523,36 +537,36 @@ export default StyleSheet.create({
     flex: 1,
     padding: 20,
     backgroundColor: RPG_COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     minHeight: height * 0.8,
   },
   quizHeader: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 40,
   },
   quizTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: RPG_COLORS.text,
     marginTop: 16,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   quizDescription: {
     fontSize: 16,
     color: RPG_COLORS.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
   },
   quizInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
+    flexDirection: "row",
+    justifyContent: "space-around",
+    width: "100%",
     marginBottom: 40,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   infoItem: {
-    alignItems: 'center',
+    alignItems: "center",
     backgroundColor: RPG_COLORS.backgroundLight,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -565,31 +579,31 @@ export default StyleSheet.create({
   infoText: {
     color: RPG_COLORS.text,
     marginTop: 6,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   startButton: {
     borderRadius: 8,
-    overflow: 'hidden',
-    width: '100%',
+    overflow: "hidden",
+    width: "100%",
     maxWidth: 300,
   },
   startButtonGradient: {
     paddingVertical: 16,
     paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 8,
   },
   startButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
+    color: "#FFFFFF",
+    fontWeight: "bold",
     fontSize: 18,
     marginRight: 12,
   },
   battlefieldBackground: {
     flex: 1,
-    width: '100%',
-    maxHeight: Platform.OS === 'web' ? 300 : 220, // Smaller height on mobile
+    width: "100%",
+    maxHeight: Platform.OS === "web" ? 300 : 220, // Smaller height on mobile
   },
 });

@@ -1,0 +1,57 @@
+[
+  {
+    "question": "What is the purpose of encryption in cybersecurity?",
+    "options": [
+      "To speed up data transmission",
+      "To protect data by converting it into unreadable code",
+      "To compress data files",
+      "To delete data permanently"
+    ],
+    "correct": 1,
+    "category": "Cybersecurity",
+    "difficulty": "Medium",
+    "points": 2
+  },
+  {
+    "question": "Which of the following is an example of multi-factor authentication?",
+    "options": [
+      "Password only",
+      "Password + SMS code",
+      "PIN only",
+      "Security question only"
+    ],
+    "correct": 1,
+    "category": "Authentication",
+    "difficulty": "Easy",
+    "points": 1
+  },
+  {
+    "question": "Which of these is a common hashing algorithm?",
+    "options": ["AES", "RSA", "SHA-256", "TLS"],
+    "correct": 2,
+    "category": "Cryptography",
+    "difficulty": "Medium",
+    "points": 2
+  },
+  {
+    "question": "What does the principle of least privilege mean?",
+    "options": [
+      "Users should have admin rights",
+      "Users should get access only to what they need",
+      "All users share the same permissions",
+      "Developers should have production access"
+    ],
+    "correct": 1,
+    "category": "Access Control",
+    "difficulty": "Hard",
+    "points": 3
+  },
+  {
+    "question": "Which protocol adds security to HTTP?",
+    "options": ["FTP", "SMTP", "HTTPS", "DNS"],
+    "correct": 2,
+    "category": "Networking",
+    "difficulty": "Easy",
+    "points": 1
+  }
+]

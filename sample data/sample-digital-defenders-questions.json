@@ -1,0 +1,37 @@
+[
+  {
+    "question": "Who was the first president of the Philippines?",
+    "correctAnswer": "Emilio Aguinaldo",
+    "difficulty": "Easy",
+    "wave": 1,
+    "description": "First Philippine president and independence leader"
+  },
+  {
+    "question": "What does VPN stand for?",
+    "correctAnswer": "Virtual Private Network",
+    "difficulty": "Medium",
+    "wave": 2,
+    "description": "Common cybersecurity term"
+  },
+  {
+    "question": "Which law protects personal data in the Philippines?",
+    "correctAnswer": "Data Privacy Act of 2012",
+    "difficulty": "Medium",
+    "wave": 3,
+    "description": "RA 10173"
+  },
+  {
+    "question": "What is the process of converting plaintext into ciphertext called?",
+    "correctAnswer": "Encryption",
+    "difficulty": "Easy",
+    "wave": 4,
+    "description": "Basic cryptography term"
+  },
+  {
+    "question": "What is the strongest difficulty level?",
+    "correctAnswer": "Hard",
+    "difficulty": "Hard",
+    "wave": 5,
+    "description": "Validation example"
+  }
+]
