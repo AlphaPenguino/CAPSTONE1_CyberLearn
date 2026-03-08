@@ -11,23 +11,15 @@ const envApiUrl = process.env.EXPO_PUBLIC_API_URL;
 if (envApiUrl) {
   // Use environment variable if available
   API_URL = envApiUrl;
-} else if (Platform.OS === "web") {
-  // For web development, use localhost or the current host
-  const currentHost = "localhost";
-  typeof window !== "undefined" ? window.location.hostname : "localhost";
-
-  if (currentHost === "localhost" || currentHost === "127.0.0.1") {
-    API_URL = "http://localhost:3000/api";
-  } else {
-    // Use the same host as the web app
-    API_URL = `http://${currentHost}:3000/api`;
-  }
 } else {
-  // Fallback for mobile if no environment variable
-  // API_URL = "http://192.168.1.9:3000/api";
-  API_URL = "http://localhost:3000/api";
+  // Use production backend URL as default
+  API_URL = "https://capstone-backend-deploy.onrender.com/api";
+  
+  // For local development, uncomment one of these:
+  // API_URL = "http://localhost:3000/api";
   // API_URL = "http://192.168.1.9:3000/api";
 }
+
 console.log("🚀 ~ API_URL:", API_URL);
 
 // Helper function to construct profile image URLs
@@ -71,8 +63,6 @@ export const constructProfileImageUrl = (filename) => {
   }
   return fullUrl;
 };
-
-API_URL = "http://localhost:3000/api";
 
 export { API_URL };
 
