@@ -8,6 +8,8 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import Module from "../models/Module.js";
+import Quiz from "../models/Quiz.js";
 
 const router = express.Router();
 
@@ -781,11 +783,17 @@ router.post(
         token,
       });
     } catch (error) {
-      console.error("Error creating user:", error);
+      // Enhanced error logging for deployment debugging
+      console.error("Error creating user:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code,
+      });
       res.status(500).json({
         success: false,
         message: "Failed to create user",
-        error: error.message,
+        error: error.message, // This will now show in frontend
       });
     }
   }
@@ -1123,10 +1131,7 @@ async function initializeUserProgress(userId) {
       return existingProgress;
     }
 
-    // Find first module
-    const Module = await import("../models/Module.js").then(
-      (module) => module.default
-    );
+    // Now uses static imports instead of dynamic
     const firstModule = await Module.findOne({ order: 1 });
 
     if (!firstModule) {
@@ -1134,10 +1139,6 @@ async function initializeUserProgress(userId) {
       return null;
     }
 
-    // Find first quiz in first module
-    const Quiz = await import("../models/Quiz.js").then(
-      (module) => module.default
-    );
     const firstQuiz = await Quiz.findOne({
       module: firstModule._id,
       order: 1,
@@ -1165,6 +1166,7 @@ async function initializeUserProgress(userId) {
     console.log(`Progress initialized for user ${userId}`);
     return progress;
   } catch (error) {
+    // Don't let progress initialization failure block user creation
     console.error("Error initializing user progress:", error);
     return null;
   }

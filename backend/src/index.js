@@ -6,6 +6,7 @@ import { Server } from "socket.io";
 import job from "./lib/cron.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 // API routes
 import authRoutes from "./routes/authRoutes.js";
@@ -186,4 +187,16 @@ server.listen(PORT, "0.0.0.0", async () => {
 
   // Initialize global data after database connection
   await initializeGlobalData();
+});
+
+// Ensure upload directories exist on startup
+const uploadDirs = [
+  path.join(process.cwd(), "src", "uploads", "user-profiles"),
+];
+
+uploadDirs.forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`Created directory: ${dir}`);
+  }
 });
