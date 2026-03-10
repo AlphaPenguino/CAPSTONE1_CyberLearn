@@ -2,7 +2,7 @@
   "expo": {
     "name": "CyberLearn",
     "slug": "frontend",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
@@ -13,6 +13,7 @@
       "bundleIdentifier": "com.cyberlearn.frontend"
     },
     "android": {
+      "versionCode": 2,
       "package": "com.cyberlearn.frontend",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo-branding/logo_only_transparent.png",

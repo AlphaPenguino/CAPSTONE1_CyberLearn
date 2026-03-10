@@ -13,10 +13,10 @@ if (envApiUrl) {
   API_URL = envApiUrl;
 } else {
   // Use production backend URL as default
-  API_URL = "https://capstone-backend-deploy.onrender.com/api";
+  //API_URL = "https://capstone-backend-deploy.onrender.com/api";
   
   // For local development, uncomment one of these:
-  //API_URL = "http://localhost:3000/api";
+  API_URL = "http://localhost:3000/api";
   // API_URL = "http://192.168.1.9:3000/api";
 }
 
