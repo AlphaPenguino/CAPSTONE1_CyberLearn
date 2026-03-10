@@ -17,16 +17,12 @@ import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../constants/custom-colors.js";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore.js";
-import PrivacyPolicyModal from "../../components/ui/PrivacyPolicyModal.jsx";
-import ChangePasswordModal from "../../components/ui/ChangePasswordModal.jsx";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-  const [showChangePassword, setShowChangePassword] = useState(false);
 
   const { isLoading, login, sayHello } = useAuthStore();
   const { colors } = useTheme();
@@ -151,7 +147,7 @@ export default function Login() {
               </TouchableOpacity>
             </View>
 
-            {/* Privacy policy acknowledgment */}
+            {/* Privacy policy acknowledgment - updated to navigate instead of modal */}
             <View
               style={{
                 flexDirection: "row",
@@ -187,12 +183,17 @@ export default function Login() {
               <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                 {" "}
               </Text>
-              <TouchableOpacity onPress={() => setShowPrivacyModal(true)}>
+
+              {/* Updated: navigate to privacy policy page instead of opening modal */}
+              <TouchableOpacity
+                onPress={() => router.push("/privacy-policy")}
+              >
                 <Text
                   style={{
                     color: colors.primary,
                     fontWeight: "600",
                     fontSize: 12,
+                    textDecorationLine: "underline",
                   }}
                 >
                   Privacy Policy
@@ -217,15 +218,6 @@ export default function Login() {
           </View>
         </View>
       </View>
-      <PrivacyPolicyModal
-        visible={showPrivacyModal}
-        onClose={() => setShowPrivacyModal(false)}
-        allowAccept={false}
-      />
-      <ChangePasswordModal
-        visible={showChangePassword}
-        onClose={() => setShowChangePassword(false)}
-      />
     </KeyboardAvoidingView>
   );
 }
