@@ -9,14 +9,21 @@ let API_URL;
 const envApiUrl = process.env.EXPO_PUBLIC_API_URL;
 
 if (envApiUrl) {
-  // Use environment variable if available
+  // Use environment variable if explicitly set
   API_URL = envApiUrl;
+} else if (Platform.OS === "web" && typeof window !== "undefined") {
+  // On web: if running on cyberlearn.online (production), use deployed backend
+  const hostname = window.location?.hostname || "";
+  if (hostname === "cyberlearn.online" || hostname === "www.cyberlearn.online") {
+    API_URL = "https://capstone-backend-deploy.onrender.com/api";
+  } else {
+    // Local web dev (localhost)
+    API_URL = "http://localhost:3000/api";
+  }
 } else {
-  // Use production backend URL as default
-  //API_URL = "https://capstone-backend-deploy.onrender.com/api";
-  
-  // For local development, uncomment one of these:
-  API_URL = "http://localhost:3000/api";
+  // Native mobile — always use deployed backend in production
+  API_URL = "https://capstone-backend-deploy.onrender.com/api";
+  // For local mobile dev, comment above and uncomment below:
   // API_URL = "http://192.168.1.9:3000/api";
 }
 
@@ -33,14 +40,10 @@ export const constructProfileImageUrl = (filename) => {
     try {
       const u = new URL(filename);
       if (["localhost", "127.0.0.1"].includes(u.hostname)) {
-        const base = new URL(baseUrl);
-        u.protocol = base.protocol;
-        u.host = base.host; // replaces hostname + port together
-        const normalized = u.toString();
-        if (Platform.OS !== "web") {
-          console.log("🔧 Normalized localhost image URL ->", normalized);
-        }
-        return normalized;
+        // Remap any stored localhost URLs to the deployed backend
+        const remapped = `https://capstone-backend-deploy.onrender.com${u.pathname}`;
+        console.log("🔧 Remapped localhost image URL ->", remapped);
+        return remapped;
       }
       return filename; // External or already correct
     } catch (e) {
@@ -56,10 +59,7 @@ export const constructProfileImageUrl = (filename) => {
   const fullUrl = `${baseUrl}/uploads/user-profiles/${filename}`;
 
   if (Platform.OS !== "web") {
-    console.log("📱 Mobile profile image URL construction:");
-    console.log("   📁 Filename:", filename);
-    console.log("   🌐 Base URL:", baseUrl);
-    console.log("   🔗 Full URL:", fullUrl);
+    console.log("📱 Mobile profile image URL:", fullUrl);
   }
   return fullUrl;
 };

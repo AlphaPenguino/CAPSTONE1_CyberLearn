@@ -30,6 +30,7 @@
     "multer": "^2.0.2",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.6",
+    "resend": "^6.9.3",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1"
   },

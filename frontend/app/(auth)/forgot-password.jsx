@@ -17,12 +17,13 @@ import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../constants/custom-colors.js";
 import { useTheme } from "../../contexts/ThemeContext";
+import { API_URL } from "../../constants/api.js";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
-  const [networkError] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
 
   const router = useRouter();
 
@@ -37,15 +38,23 @@ export default function ForgotPassword() {
       return;
     }
 
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      const msg = "Please enter a valid email address.";
+      if (Platform.OS === "web") {
+        alert(msg);
+      } else {
+        Alert.alert("Invalid Email", msg);
+      }
+      return;
+    }
+
     setIsLoading(true);
+    setNetworkError(false);
 
     try {
-      // Replace with your actual API endpoint
-      const API_URL =
-        process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.9:3000/api";
-      console.log(
-        `Attempting to send request to: ${API_URL}/auth/reset-password`
-      );
+      console.log(`Attempting to send request to: ${API_URL}/auth/reset-password`);
 
       // Add timeout to prevent hanging requests
       const controller = new AbortController();
@@ -57,7 +66,7 @@ export default function ForgotPassword() {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: email.toLowerCase().trim() }),
         signal: controller.signal,
       });
 
@@ -75,6 +84,7 @@ export default function ForgotPassword() {
         throw new Error(data.message || "Failed to request password reset");
       }
 
+      // Success — show confirmation regardless of whether email exists (security best practice)
       setResetSent(true);
     } catch (error) {
       console.error("Password reset error:", error);
@@ -82,9 +92,14 @@ export default function ForgotPassword() {
 
       if (error.name === "AbortError") {
         errorMsg = "Request timed out. The server may be down or unreachable.";
-      } else if (error.message === "Network request failed") {
+        setNetworkError(true);
+      } else if (
+        error.message === "Network request failed" ||
+        error.message?.includes("Failed to fetch")
+      ) {
         errorMsg =
           "Unable to connect to the server. Please check your internet connection.";
+        setNetworkError(true);
       } else if (error.message === "Server error: Received non-JSON response") {
         errorMsg =
           "The server is not responding correctly. Please try again later.";
@@ -173,6 +188,8 @@ export default function ForgotPassword() {
                         onChangeText={setEmail}
                         keyboardType="email-address"
                         autoCapitalize="none"
+                        autoCorrect={false}
+                        editable={!isLoading}
                       />
                     </View>
                   </View>
@@ -199,9 +216,22 @@ export default function ForgotPassword() {
                   />
                   <Text style={styles.successTitle}>Check Your Email</Text>
                   <Text style={styles.successText}>
-                    If an account exists with the email you provided,
+                    If an account exists with{" "}
+                    <Text style={{ fontWeight: "bold" }}>{email}</Text>,
                     you&apos;ll receive password reset instructions shortly.
+                    {"\n\n"}
+                    Please also check your spam or junk folder.
                   </Text>
+                  <TouchableOpacity
+                    style={[styles.button, { marginTop: 12 }]}
+                    onPress={() => {
+                      setResetSent(false);
+                      setEmail("");
+                      setNetworkError(false);
+                    }}
+                  >
+                    <Text style={styles.buttonText}>Try a Different Email</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[
                       styles.button,
@@ -209,7 +239,10 @@ export default function ForgotPassword() {
                         flexDirection: "row",
                         justifyContent: "center",
                         alignItems: "center",
-                        marginTop: 20,
+                        marginTop: 10,
+                        backgroundColor: "transparent",
+                        borderWidth: 1,
+                        borderColor: COLORS.primary,
                       },
                     ]}
                     onPress={() => router.replace("/")}
@@ -217,10 +250,12 @@ export default function ForgotPassword() {
                     <Ionicons
                       name="arrow-back-outline"
                       size={20}
-                      color={COLORS.white}
+                      color={COLORS.primary}
                       style={{ marginRight: 8 }}
                     />
-                    <Text style={styles.buttonText}>Return to Login</Text>
+                    <Text style={[styles.buttonText, { color: COLORS.primary }]}>
+                      Return to Login
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
