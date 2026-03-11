@@ -846,15 +846,17 @@ export default function UsersScreen({ hideHeader = false }) {
                     setNewUser({ ...newUser, password: text })
                   }
                 />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Section (e.g. CS101, optional)"
-                  placeholderTextColor={colors.textSecondary}
-                  value={newUser.section}
-                  onChangeText={(text) =>
-                    setNewUser({ ...newUser, section: text })
-                  }
-                />
+                {newUser.role === "student" && (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Section (e.g. CS101, optional)"
+                    placeholderTextColor={colors.textSecondary}
+                    value={newUser.section}
+                    onChangeText={(text) =>
+                      setNewUser({ ...newUser, section: text })
+                    }
+                  />
+                )}
                 <Text style={styles.roleLabel}>Role:</Text>
                 <View style={styles.roleContainer}>
                   {["student", "instructor", "admin"].map((role) => (
@@ -865,7 +867,14 @@ export default function UsersScreen({ hideHeader = false }) {
                         newUser.role === role && styles.roleOptionSelected,
                         { borderColor: getRoleColor(role) },
                       ]}
-                      onPress={() => setNewUser({ ...newUser, role })}
+                      onPress={() =>
+                        setNewUser({
+                          ...newUser,
+                          role,
+                          // Clear section when switching away from student
+                          section: role === "student" ? newUser.section : "",
+                        })
+                      }
                     >
                       <MaterialCommunityIcons
                         name={getRoleIcon(role)}
