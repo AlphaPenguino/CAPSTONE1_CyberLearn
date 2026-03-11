@@ -7,6 +7,8 @@ console.log('EMAIL_HOST:', process.env.EMAIL_HOST || 'Not set');
 console.log('EMAIL_PORT:', process.env.EMAIL_PORT || 'Not set');
 console.log('EMAIL_USER:', process.env.EMAIL_USER ? '***' : 'Not set');
 console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '***' : 'Not set');
+console.log('RESEND_API_KEY:', process.env.RESEND_API_KEY ? '*** set ***' : 'NOT SET ⚠️');
+console.log('EMAIL_FROM:', process.env.EMAIL_FROM || 'Not set');
 console.log('FRONTEND_URL:', process.env.FRONTEND_URL || 'Not set');
 
 import express from "express";

@@ -16,7 +16,6 @@ import styles from "../../assets/styles/forgot.styles.js";
 import { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../constants/custom-colors.js";
-// ✅ Import from constants — works for both localhost and production
 import { API_URL } from "../../constants/api.js";
 
 export default function ResetPassword() {
@@ -42,6 +41,7 @@ export default function ResetPassword() {
   }, [token]);
 
   const handleResetPassword = async () => {
+    // Validations
     if (!newPassword || !confirmPassword) {
       const msg = "Please fill in all fields.";
       Platform.OS === "web" ? alert(msg) : Alert.alert("Input Required", msg);
@@ -50,20 +50,26 @@ export default function ResetPassword() {
 
     if (newPassword !== confirmPassword) {
       const msg = "Passwords do not match.";
-      Platform.OS === "web" ? alert(msg) : Alert.alert("Password Mismatch", msg);
+      Platform.OS === "web"
+        ? alert(msg)
+        : Alert.alert("Password Mismatch", msg);
       return;
     }
 
     if (newPassword.length < 8) {
       const msg = "Password must be at least 8 characters long.";
-      Platform.OS === "web" ? alert(msg) : Alert.alert("Password Too Short", msg);
+      Platform.OS === "web"
+        ? alert(msg)
+        : Alert.alert("Password Too Short", msg);
       return;
     }
 
     setIsLoading(true);
 
     try {
-      console.log(`[ResetPassword] POST → ${API_URL}/auth/reset-password/confirm`);
+      console.log(
+        `[ResetPassword] Confirming reset at: ${API_URL}/auth/reset-password/confirm`
+      );
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -88,6 +94,7 @@ export default function ResetPassword() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Token expired or invalid
         if (response.status === 400) {
           setTokenValid(false);
           setTokenError(
@@ -121,7 +128,7 @@ export default function ResetPassword() {
     }
   };
 
-  // ── Invalid / expired token screen ──────────────────────────────────────
+  // ── Invalid / expired token screen ───────────────────────────────────────
   if (!tokenValid) {
     return (
       <KeyboardAvoidingView style={{ flex: 1 }}>
@@ -210,7 +217,8 @@ export default function ResetPassword() {
               {!resetSuccess ? (
                 <>
                   <Text style={styles.instructionText}>
-                    Enter your new password below. Must be at least 8 characters.
+                    Enter your new password below. Make sure it&apos;s at least
+                    8 characters.
                   </Text>
 
                   {/* New Password */}
@@ -267,11 +275,15 @@ export default function ResetPassword() {
                         editable={!isLoading}
                       />
                       <TouchableOpacity
-                        onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                        onPress={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
                       >
                         <Ionicons
                           name={
-                            showConfirmPassword ? "eye-outline" : "eye-off-outline"
+                            showConfirmPassword
+                              ? "eye-outline"
+                              : "eye-off-outline"
                           }
                           size={20}
                           color={COLORS.primary}
@@ -281,14 +293,14 @@ export default function ResetPassword() {
                     </View>
                   </View>
 
-                  {/* Live match indicator */}
+                  {/* Password match hint */}
                   {confirmPassword.length > 0 && (
                     <Text
                       style={{
                         fontSize: 12,
                         marginBottom: 8,
-                        marginLeft: 4,
-                        color: newPassword === confirmPassword ? "#10B981" : "#EF4444",
+                        color:
+                          newPassword === confirmPassword ? "#10B981" : "#EF4444",
                       }}
                     >
                       {newPassword === confirmPassword
@@ -310,6 +322,7 @@ export default function ResetPassword() {
                   </TouchableOpacity>
                 </>
               ) : (
+                // ── Success screen ──────────────────────────────────────
                 <View style={styles.successContainer}>
                   <Ionicons
                     name="checkmark-circle"
