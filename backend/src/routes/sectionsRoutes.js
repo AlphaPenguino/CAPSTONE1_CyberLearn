@@ -697,5 +697,165 @@ router.delete(
     }
   }
 );
+router.get(
+  "/:id/cyber-quests/export",
+  protectRoute,
+  authorizeRole(["instructor", "admin"]),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
+      const subject = await Section.findById(id);
+      if (!subject) {
+        return res.status(404).json({
+          success: false,
+          message: "Subject not found",
+        });
+      }
+
+      const cyberQuests = await CyberQuest.findBySubject(id);
+
+      // Strip volatile fields like timestamps to keep JSON simpler
+      const exported = cyberQuests.map((q) => ({
+        _id: q._id, // keep _id so we can upsert on import
+        title: q.title,
+        description: q.description,
+        difficulty: q.difficulty,
+        level: q.level,
+        prerequisiteLevel: q.prerequisiteLevel,
+        questions: q.questions,
+      }));
+
+      return res.json({
+        success: true,
+        subject: {
+          _id: subject._id,
+          name: subject.name,
+          sectionCode: subject.sectionCode,
+          subjectCode: subject.subjectCode,
+        },
+        cyberQuests: exported,
+        exportedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error exporting cyber quests:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to export cyber quests",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// Import (merge/upsert) cyber quests JSON for a subject
+router.post(
+  "/:id/cyber-quests/import",
+  protectRoute,
+  authorizeRole(["instructor", "admin"]),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { cyberQuests } = req.body;
+
+      const subject = await Section.findById(id);
+      if (!subject) {
+        return res.status(404).json({
+          success: false,
+          message: "Subject not found",
+        });
+      }
+
+      if (!Array.isArray(cyberQuests) || cyberQuests.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "cyberQuests array is required and cannot be empty",
+        });
+      }
+
+      let createdCount = 0;
+      let updatedCount = 0;
+      const errors = [];
+
+      for (const item of cyberQuests) {
+        try {
+          const payload = {
+            title: item.title,
+            description: item.description || "",
+            difficulty: item.difficulty || "medium",
+            level: item.level || 1,
+            prerequisiteLevel:
+              item.prerequisiteLevel !== undefined
+                ? item.prerequisiteLevel
+                : null,
+            subject: subject._id,
+            questions: item.questions,
+            created_by: req.user.id,
+          };
+
+          // Basic shape validation
+          if (!payload.title || !Array.isArray(payload.questions)) {
+            throw new Error("Each cyber quest must have title and questions");
+          }
+
+          // Upsert by _id if present and valid
+          if (item._id) {
+            const existing = await CyberQuest.findById(item._id);
+            if (existing) {
+              existing.title = payload.title;
+              existing.description = payload.description;
+              existing.difficulty = payload.difficulty;
+              existing.level = payload.level;
+              existing.prerequisiteLevel = payload.prerequisiteLevel;
+              existing.subject = payload.subject;
+              existing.questions = payload.questions;
+
+              const validationErrors = existing.validateQuestions();
+              if (validationErrors) {
+                throw new Error(validationErrors.join("; "));
+              }
+
+              await existing.save();
+              updatedCount++;
+              continue;
+            }
+          }
+
+          // Create new cyber quest
+          const cq = new CyberQuest(payload);
+          const validationErrors = cq.validateQuestions();
+          if (validationErrors) {
+            throw new Error(validationErrors.join("; "));
+          }
+          await cq.save();
+          createdCount++;
+        } catch (err) {
+          console.error("Error importing cyber quest entry:", err);
+          errors.push({
+            title: item.title || "(untitled)",
+            error: err.message,
+          });
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Cyber quests import completed",
+        summary: {
+          created: createdCount,
+          updated: updatedCount,
+          failed: errors.length,
+        },
+        errors,
+      });
+    } catch (error) {
+      console.error("Error importing cyber quests:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to import cyber quests",
+        error: error.message,
+      });
+    }
+  }
+);
 export default router;

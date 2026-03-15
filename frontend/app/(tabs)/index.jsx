@@ -128,6 +128,13 @@ export default function Home() {
   const { colors } = useTheme();
   const isinstructor =
     user?.privilege === "instructor" || user?.privilege === "admin";
+
+    const isInstructorOrAdmin =
+  user?.privilege === "instructor" || user?.privilege === "admin";
+
+const [exporting, setExporting] = React.useState(false);
+const [importing, setImporting] = React.useState(false);
+
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -146,6 +153,155 @@ export default function Home() {
   const [levelProgress, setLevelProgress] = useState(null);
   const levelProgressLoadedRef = useRef(false); // Track if level progress has been loaded
   const router = useRouter();
+
+const downloadJsonWeb = (data, filename) => {
+  try {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Download JSON failed:", err);
+    alert("Failed to start download. See console for details.");
+  }
+};
+
+const handleExportCyberQuests = async () => {
+  if (!selectedSubject?._id) {
+    if (Platform.OS === "web") {
+      alert("Please select a subject first.");
+    } else {
+      Alert.alert("Subject Required", "Please select a subject first.");
+    }
+    return;
+  }
+
+  try {
+    setExporting(true);
+    const res = await fetch(
+      `${API_URL}/subjects/${selectedSubject._id}/cyber-quests/export`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || "Failed to export cyber quests");
+    }
+
+    const json = await res.json();
+
+    if (!json.success) {
+      throw new Error(json.message || "Failed to export cyber quests");
+    }
+
+    const filename = `cyberquests-${json.subject.sectionCode || json.subject.name || "subject"}.json`;
+
+    if (Platform.OS === "web") {
+      downloadJsonWeb(json, filename);
+    } else {
+      // For native: just log + simple alert; you can wire FileSystem/Sharing later
+      console.log("Exported cyber quests JSON:", json);
+      Alert.alert(
+        "Export Ready",
+        "Cyber quests JSON has been generated. See console logs for now."
+      );
+    }
+  } catch (err) {
+    console.error("Error exporting cyber quests:", err);
+    if (Platform.OS === "web") {
+      alert(err.message || "Failed to export cyber quests");
+    } else {
+      Alert.alert("Error", err.message || "Failed to export cyber quests");
+    }
+  } finally {
+    setExporting(false);
+  }
+};
+
+// Web-only simple file picker import
+const handleImportCyberQuestsWeb = () => {
+  if (Platform.OS !== "web") {
+    Alert.alert(
+      "Not Supported",
+      "Import via file is currently only supported on web."
+    );
+    return;
+  }
+
+  if (!selectedSubject?._id) {
+    alert("Please select a subject first.");
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json";
+
+  input.onchange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      const payload = Array.isArray(parsed.cyberQuests)
+        ? parsed
+        : { cyberQuests: parsed };
+
+      if (!Array.isArray(payload.cyberQuests)) {
+        throw new Error("Invalid file format: expected cyberQuests array.");
+      }
+
+      const res = await fetch(
+        `${API_URL}/subjects/${selectedSubject._id}/cyber-quests/import`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            cyberQuests: payload.cyberQuests,
+          }),
+        }
+      );
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Failed to import cyber quests");
+      }
+
+      alert(
+        `Import completed.\nCreated: ${json.summary?.created || 0}\nUpdated: ${
+          json.summary?.updated || 0
+        }\nFailed: ${json.summary?.failed || 0}`
+      );
+
+      // Refresh map/quests after import
+      fetchModules();
+    } catch (err) {
+      console.error("Error importing cyber quests:", err);
+      alert(err.message || "Failed to import cyber quests");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  input.click();
+};
 
   // Load saved background preference on component mount
   useEffect(() => {
@@ -1081,6 +1237,46 @@ export default function Home() {
 
           <View style={styles.headerActions}>
             {/* Background Selector Button - Only visible to instructors and admins */}
+            
+
+            
+
+            {!isinstructor && (
+              <TouchableOpacity
+                style={styles.joinButton}
+                onPress={() => router.push("/join-subject")}
+              >
+                <Ionicons name="enter" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+             {isInstructorOrAdmin && selectedSubject && (
+              <>
+                <TouchableOpacity
+                  style={styles.backgroundSelector}
+                  onPress={handleExportCyberQuests}
+                  disabled={exporting}
+                >
+                  <Ionicons
+                    name="download-outline"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.backgroundSelector}
+                  onPress={handleImportCyberQuestsWeb}
+                  disabled={importing}
+                >
+                  <Ionicons
+                    name="cloud-upload-outline"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              </>
+            )}
+
             {isinstructor && (
               <TouchableOpacity
                 style={styles.backgroundSelector}
