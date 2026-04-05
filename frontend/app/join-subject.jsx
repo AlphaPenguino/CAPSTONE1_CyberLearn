@@ -102,10 +102,9 @@ export default function JoinSubject() {
 
       const data = await response.json();
 
-      // Treat certain backend errors as success (legacy sections validation or already enrolled)
+      // Treat certain legacy backend validation errors as success
       const message = data?.message || "";
       const backendError = data?.error || "";
-      const alreadyEnrolled = /already enrolled/i.test(message);
       const legacySectionValidation =
         /no_section is not a valid section|User validation failed/i.test(
           backendError || message
@@ -113,7 +112,6 @@ export default function JoinSubject() {
 
       if (
         (response.ok && data.success) ||
-        alreadyEnrolled ||
         legacySectionValidation
       ) {
         openModal(
@@ -133,9 +131,8 @@ export default function JoinSubject() {
       const msg = String(error?.message || "");
       const legacySectionValidation =
         /no_section is not a valid section|User validation failed/i.test(msg);
-      const alreadyEnrolled = /already enrolled/i.test(msg);
 
-      if (legacySectionValidation || alreadyEnrolled) {
+      if (legacySectionValidation) {
         openModal(
           "Success! 🎉",
           "You're enrolled in the subject. You can access it from your home page.",
@@ -211,28 +208,30 @@ export default function JoinSubject() {
                         style={styles.inputIcon}
                       />
                      <TextInput
-  style={[styles.input, { 
-    backgroundColor: 'rgba(255, 255, 255, 0.5)', // Increased opacity for even lighter background
-    color: "#004d00" // Much darker green text for higher contrast
+  style={[styles.input, {
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
   }]}
   placeholder="Enter subject code (e.g., CSS101)"
-  placeholderTextColor="rgba(46, 90, 46, 0.6)" // Darker placeholder text
+  placeholderTextColor="rgba(17, 24, 39, 0.45)"
   value={subjectCode}
   onChangeText={setSubjectCode}
   autoCapitalize="characters"
+  textColor="#111111"
+  selectionColor={COLORS.primary}
   theme={{
     colors: {
-      text: "#004d00", // Much darker green text in theme
-      placeholder: "rgba(46, 90, 46, 0.6)",
-      background: "rgba(29, 13, 13, 0.5)", // Lighter background
+      text: "#111111",
+      onSurface: "#111111",
+      placeholder: "rgba(17, 24, 39, 0.45)",
+      background: "#FFFFFF",
       primary: COLORS.primary,
     }
   }}
   mode="outlined"
   outlineColor={COLORS.border}
   activeOutlineColor={COLORS.primary}
-  dense={true} // Add this to make the text more compact and visible
-  textAlign="center" // Center text for better visibility
+  dense={true}
+  textAlign="center"
 />
                     </View>
                   </View>
@@ -341,8 +340,9 @@ inputIcon: {
 input: {
   flex: 1,
   height: 48,
-  fontSize: 16,
-  color: "#2e5a2e", // Changed from "#FFFFFF" to dark green
+  fontSize: 17,
+  fontWeight: "700",
+  color: "#111111",
   paddingVertical: 12,
 },
   container: {

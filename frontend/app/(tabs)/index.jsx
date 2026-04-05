@@ -1241,14 +1241,6 @@ const handleImportCyberQuestsWeb = () => {
 
             
 
-            {!isinstructor && (
-              <TouchableOpacity
-                style={styles.joinButton}
-                onPress={() => router.push("/join-subject")}
-              >
-                <Ionicons name="enter" size={20} color={colors.primary} />
-              </TouchableOpacity>
-            )}
              {isInstructorOrAdmin && selectedSubject && (
               <>
                 <TouchableOpacity
@@ -1694,7 +1686,13 @@ const handleImportCyberQuestsWeb = () => {
                     numberOfLines={1}
                     ellipsizeMode="tail"
                   >
-                    {sectionItem.description}
+                    {isInstructorOrAdmin
+                      ? `${sectionItem.description || "No description"} • ${
+                          sectionItem.studentCount ??
+                          sectionItem.students?.length ??
+                          0
+                        } students`
+                      : sectionItem.description || "No description"}
                   </Text>
                 </View>
                 {(selectedSubject?._id || selectedSubject?.id) ===
@@ -1976,10 +1974,12 @@ const handleImportCyberQuestsWeb = () => {
                       color={COLORS.primary}
                       style={styles.sectionListIconImage}
                     />
-                    {section.students?.length > 0 && (
+                    {isInstructorOrAdmin &&
+                      (section.studentCount ?? section.students?.length ?? 0) >
+                        0 && (
                       <View style={styles.studentCountBadge}>
                         <Text style={styles.studentCountText}>
-                          {section.students?.length}
+                          {section.studentCount ?? section.students?.length ?? 0}
                         </Text>
                       </View>
                     )}
@@ -2005,26 +2005,11 @@ const handleImportCyberQuestsWeb = () => {
                         {section.description}
                       </Text>
                     )}
-                    <View style={styles.sectionListMeta}>
-                      <View style={styles.sectionListMetaItem}>
-                        <Ionicons
-                          name="people"
-                          size={14}
-                          color={COLORS.textSecondary}
-                        />
-                        <Text
-                          style={[
-                            styles.sectionListMetaText,
-                            { color: colors.textSecondary },
-                          ]}
-                        >
-                          {section.students?.length || 0} students
-                        </Text>
-                      </View>
-                      {section.sectionCode && (
+                    {isInstructorOrAdmin && (
+                      <View style={styles.sectionListMeta}>
                         <View style={styles.sectionListMetaItem}>
                           <Ionicons
-                            name="key"
+                            name="people"
                             size={14}
                             color={COLORS.textSecondary}
                           />
@@ -2034,11 +2019,28 @@ const handleImportCyberQuestsWeb = () => {
                               { color: colors.textSecondary },
                             ]}
                           >
-                            {section.sectionCode}
+                            {section.studentCount ?? section.students?.length ?? 0} students
                           </Text>
                         </View>
-                      )}
-                    </View>
+                        {(section.subjectCode || section.sectionCode) && (
+                          <View style={styles.sectionListMetaItem}>
+                            <Ionicons
+                              name="key"
+                              size={14}
+                              color={COLORS.textSecondary}
+                            />
+                            <Text
+                              style={[
+                                styles.sectionListMetaText,
+                                { color: colors.textSecondary },
+                              ]}
+                            >
+                              {section.subjectCode || section.sectionCode}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
                   </View>
 
                   <View style={styles.sectionListArrow}>

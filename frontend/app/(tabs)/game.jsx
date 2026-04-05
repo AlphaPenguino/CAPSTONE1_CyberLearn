@@ -188,7 +188,7 @@ const LeaderboardCard = ({ title, onViewAll, colors }) => {
                 { color: colors.textSecondary },
               ]}
             >
-              View top performers and rankings across all game modes
+              View top performers and rankings for each Subject in Cyberquest
             </Text>
 
             <View style={styles.leaderboardInfo}>

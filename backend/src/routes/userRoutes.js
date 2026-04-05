@@ -10,6 +10,7 @@ import path from "path";
 import fs from "fs";
 import Module from "../models/Module.js";
 import Quiz from "../models/Quiz.js";
+import Section from "../models/Section.js";
 
 const router = express.Router();
 
@@ -406,34 +407,111 @@ router.get(
 
 /**
  * @route   GET /api/users/leaderboard
- * @desc    Get leaderboard data with user rankings (public access)
- * @access  Public
+ * @desc    Get leaderboard data with role-scoped subject filtering
+ * @access  Private
  */
-router.get("/leaderboard", async (req, res) => {
+router.get("/leaderboard", protectRoute, async (req, res) => {
   try {
-    const { section } = req.query;
+    const { subject, sectionCode } = req.query;
+    const userId = req.user.id;
+    const userRole = req.user.privilege;
+
+    const subjectBaseFilter = {
+      isActive: { $ne: false },
+      archived: { $ne: true },
+    };
+
+    let accessibleSubjects = [];
+    if (userRole === "admin") {
+      accessibleSubjects = await Section.find(subjectBaseFilter).select(
+        "_id name sectionCode subjectCode students"
+      );
+    } else if (userRole === "instructor") {
+      accessibleSubjects = await Section.find({
+        ...subjectBaseFilter,
+        $or: [{ instructor: userId }, { instructors: userId }],
+      }).select("_id name sectionCode subjectCode students");
+    } else {
+      accessibleSubjects = await Section.find({
+        ...subjectBaseFilter,
+        students: userId,
+      }).select("_id name sectionCode subjectCode students");
+    }
+
+    const availableSubjects = accessibleSubjects.map((subjectDoc) => ({
+      _id: String(subjectDoc._id),
+      name: subjectDoc.name,
+    }));
+
+    // For instructors/students, default to the first accessible subject when none is selected.
+    let selectedSubjectId = null;
+    const subjectSelector =
+      typeof sectionCode === "string" && sectionCode.trim().length > 0
+        ? sectionCode.trim()
+        : subject;
+
+    if (subjectSelector && subjectSelector !== "all") {
+      const requestedSubject = accessibleSubjects.find(
+        (subjectDoc) =>
+          String(subjectDoc._id) === String(subjectSelector) ||
+          String(subjectDoc.sectionCode || "").toUpperCase() ===
+            String(subjectSelector).toUpperCase() ||
+          String(subjectDoc.subjectCode || "").toUpperCase() ===
+            String(subjectSelector).toUpperCase()
+      );
+
+      if (!requestedSubject) {
+        return res.status(403).json({
+          success: false,
+          message: "You do not have access to this subject leaderboard",
+        });
+      }
+
+      selectedSubjectId = String(requestedSubject._id);
+    } else if (userRole !== "admin" && availableSubjects.length > 0) {
+      selectedSubjectId = availableSubjects[0]._id;
+    }
+
+    // Non-admins without subjects should receive an empty, valid response.
+    if (userRole !== "admin" && availableSubjects.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          rankings: [],
+          availableSubjects,
+          selectedSubject: null,
+        },
+      });
+    }
 
     // Import UserLevel model for cyber quest level data
     const UserLevel = await import("../models/UserLevel.js").then(
       (module) => module.default
     );
 
-    // Build filter
-    const filter = { privilege: "student" }; // Only students appear in leaderboard
-
-    // If section filter is provided
-    if (section && section !== "all") {
-      filter.section = section;
+    // Build ranking filter (only students appear in leaderboard)
+    const filter = { privilege: "student" };
+    if (selectedSubjectId) {
+      const selectedSubjectDoc = accessibleSubjects.find(
+        (subjectDoc) => String(subjectDoc._id) === selectedSubjectId
+      );
+      const selectedStudentIds = (selectedSubjectDoc?.students || []).map(
+        (studentId) => String(studentId)
+      );
+      filter._id = { $in: selectedStudentIds };
     }
 
-    // Get users sorted by totalXP descending
-    const users = await User.find(filter)
+    // Get users sorted by totalXP descending.
+    // For a selected subject, return the full enrolled roster (not capped at top 100).
+    let usersQuery = User.find(filter)
       .select("username fullName section profileImage gamification")
-      .sort({ "gamification.totalXP": -1 })
-      .limit(100); // Limit to top 100 users
+      .sort({ "gamification.totalXP": -1 });
 
-    // Get available sections for filtering
-    const sections = await User.distinct("section", { privilege: "student" });
+    if (!selectedSubjectId) {
+      usersQuery = usersQuery.limit(100);
+    }
+
+    const users = await usersQuery;
 
     // Enhance leaderboard data with cyber quest level points
     const enhancedLeaderboard = await Promise.all(
@@ -483,8 +561,10 @@ router.get("/leaderboard", async (req, res) => {
       })
     );
 
-    // Re-sort by combined score (now equivalent to totalXP) and update ranks
-    enhancedLeaderboard.sort((a, b) => b.combinedScore - a.combinedScore);
+    // Ensure rankings are highest-to-lowest XP for the selected subject roster.
+    enhancedLeaderboard.sort(
+      (a, b) => b.totalXP - a.totalXP || a.username.localeCompare(b.username)
+    );
     enhancedLeaderboard.forEach((user, index) => {
       user.rank = index + 1;
     });
@@ -493,15 +573,8 @@ router.get("/leaderboard", async (req, res) => {
       success: true,
       data: {
         rankings: enhancedLeaderboard,
-        availableSections: sections.filter((s) => s !== "no_section"),
-        totalUsers: await User.countDocuments(filter),
-        // Additional metadata about the scoring system
-        scoringInfo: {
-          description:
-            "Leaderboard score now equals Global XP (level bonus removed)",
-          levelPointsFormula: null,
-          example: null,
-        },
+        availableSubjects,
+        selectedSubject: selectedSubjectId || "all",
       },
     });
   } catch (error) {

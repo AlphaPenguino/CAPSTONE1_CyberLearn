@@ -21,7 +21,7 @@ import { API_URL } from "@/constants/api";
 import { router, useFocusEffect } from "expo-router";
 
 export default function Leaderboards() {
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const { colors, isDarkMode } = useTheme();
   const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,11 +31,13 @@ export default function Leaderboards() {
   const [availableSections, setAvailableSections] = useState([]);
   const [currentUserRank, setCurrentUserRank] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [subjectsLoaded, setSubjectsLoaded] = useState(false);
   const staleRefreshTimerRef = useRef(null);
 
-  // Check if user is instructor
-  const isInstructor =
+  // Role helpers
+  const isInstructorOrAdmin =
     user?.privilege === "instructor" || user?.privilege === "admin";
+  const isAdmin = user?.privilege === "admin";
 
   // Get image URL helper (handles localhost, relative paths, and Dicebear SVG on native)
   const getImageUrl = (imagePath) => {
@@ -79,21 +81,108 @@ export default function Leaderboards() {
     return `${apiBase}/uploads/user-profiles/${imagePath}`;
   };
 
+  // Load subjects from the same source as Cyber Adventure Path
+  const fetchAvailableSubjects = useCallback(async () => {
+    try {
+      if (!token) {
+        setAvailableSections([]);
+        setSubjectsLoaded(true);
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/subjects/user-subjects`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch subjects (${response.status})`);
+      }
+
+      const data = await response.json();
+      const subjects = (data.subjects || []).map((subject) => ({
+        _id: String(subject._id || subject.id || ""),
+        name: subject.name || "Unnamed Subject",
+        sectionCode: subject.sectionCode || subject.subjectCode || "",
+        students: Array.isArray(subject.students)
+          ? subject.students.map((studentId) => String(studentId))
+          : [],
+      }));
+
+      setAvailableSections(subjects);
+
+      setSelectedSection((previousSelected) => {
+        if (isAdmin) {
+          if (previousSelected === "all") return "all";
+          const stillExists = subjects.some(
+            (subject) => (subject._id || subject.id) === previousSelected
+          );
+          return stillExists ? previousSelected : "all";
+        }
+
+        if (subjects.length === 0) return "all";
+
+        const stillExists = subjects.some(
+          (subject) => (subject._id || subject.id) === previousSelected
+        );
+        return stillExists
+          ? previousSelected
+          : subjects[0]._id || subjects[0].id || "all";
+      });
+
+      setSubjectsLoaded(true);
+    } catch (err) {
+      console.error("Failed to fetch leaderboard subjects:", err);
+      setAvailableSections([]);
+      if (!isAdmin) {
+        setSelectedSection("all");
+      }
+      setSubjectsLoaded(true);
+    }
+  }, [isAdmin, token]);
+
   // Fetch leaderboard data from backend
   const fetchLeaderboards = useCallback(async () => {
     try {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      // Non-admin roles must be scoped to a selected subject.
+      if (!isAdmin && (!subjectsLoaded || selectedSection === "all")) {
+        setLeaders([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
       const params = new URLSearchParams();
+      // Treat selectedSection as a subjectId now
       if (selectedSection !== "all") {
-        params.append("section", selectedSection);
+        params.append("subject", selectedSection);
+        const selectedSubject = availableSections.find(
+          (subject) => String(subject._id || subject.id) === String(selectedSection)
+        );
+        if (selectedSubject?.sectionCode) {
+          params.append("sectionCode", selectedSubject.sectionCode);
+        }
       }
 
       console.log("Fetching leaderboard...");
       console.log("API URL:", `${API_URL}/users/leaderboard?${params}`);
 
-      const response = await fetch(`${API_URL}/users/leaderboard?${params}`);
+      const response = await fetch(`${API_URL}/users/leaderboard?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -102,9 +191,24 @@ export default function Leaderboards() {
       const data = await response.json();
 
       if (data.success) {
-        setLeaders(data.data.rankings || []);
-        setAvailableSections(data.data.availableSections || []);
-        // Note: currentUserRank no longer available in public endpoint
+        let rankings = data.data.rankings || [];
+
+        if (selectedSection !== "all") {
+          const selectedSubject = availableSections.find(
+            (subject) => String(subject._id || subject.id) === String(selectedSection)
+          );
+          const enrolledStudentIds = new Set(
+            (selectedSubject?.students || []).map((studentId) => String(studentId))
+          );
+
+          rankings = rankings.filter((leader) =>
+            enrolledStudentIds.has(String(leader._id))
+          );
+
+          rankings.sort((a, b) => (b.totalXP || 0) - (a.totalXP || 0));
+        }
+
+        setLeaders(rankings);
         setCurrentUserRank(null);
         setLastUpdated(Date.now());
       } else {
@@ -112,12 +216,17 @@ export default function Leaderboards() {
       }
     } catch (err) {
       console.error("Leaderboards fetch error:", err);
+      setLeaders([]);
       setError(err.message || "Failed to load leaderboards");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedSection]);
+  }, [availableSections, isAdmin, selectedSection, subjectsLoaded, token]);
+
+  useEffect(() => {
+    fetchAvailableSubjects();
+  }, [fetchAvailableSubjects]);
 
   useEffect(() => {
     fetchLeaderboards();
@@ -233,8 +342,8 @@ export default function Leaderboards() {
           </TouchableOpacity>
         </View>
 
-        {/* Class Filter for Instructors */}
-        {isInstructor && availableSections.length > 0 && (
+        {/* Subject filter by role */}
+        {availableSections.length > 0 && (
           <View
             style={[styles.filterContainer, { backgroundColor: colors.card }]}
           >
@@ -252,9 +361,13 @@ export default function Leaderboards() {
               mode="dropdown"
               itemStyle={Platform.OS === "ios" ? styles.pickerItem : undefined}
             >
-              <Picker.Item label="All Classes" value="all" />
-              {availableSections.map((section) => (
-                <Picker.Item key={section} label={section} value={section} />
+              {isAdmin && <Picker.Item label="All Subjects" value="all" />}
+              {availableSections.map((subject) => (
+                <Picker.Item
+                  key={subject._id || subject.id || subject}
+                  label={subject.name || subject}
+                  value={subject._id || subject.id || subject}
+                />
               ))}
             </Picker>
           </View>
@@ -275,7 +388,7 @@ export default function Leaderboards() {
         }
       >
         {/* Current User Rank Card - Only for Students */}
-        {currentUserRank && !isInstructor && (
+        {currentUserRank && !isInstructorOrAdmin && (
           <View
             style={[
               styles.userRankCard,
@@ -372,7 +485,14 @@ export default function Leaderboards() {
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               {selectedSection === "all"
                 ? "Complete quizzes to appear on the leaderboard"
-                : `No students found in ${selectedSection}`}
+                : (() => {
+                    const selected = availableSections.find(
+                      (s) => (s._id || s.id || s) === selectedSection
+                    );
+                    return `No students found in ${
+                      selected?.name || "this subject"
+                    }`;
+                  })()}
             </Text>
           </View>
         )}
@@ -390,7 +510,15 @@ export default function Leaderboards() {
                   ]}
                 >
                   {" "}
-                  in {selectedSection}
+                  in{" "}
+                  {(() => {
+                    const subj =
+                      availableSections.find(
+                        (s) =>
+                          (s._id || s.id || s) === selectedSection
+                      ) || {};
+                    return subj.name || selectedSection;
+                  })()}
                 </Text>
               )}
             </Text>

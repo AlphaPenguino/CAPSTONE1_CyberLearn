@@ -710,13 +710,15 @@ export default function Settings() {
         icon="moon-outline"
       /> */}
 
-      <SettingItem
-        title="Notifications"
-        subtitle="Receive push notifications"
-        value={settings.notifications}
-        onToggle={(value) => handleSettingToggle("notifications", value)}
-        icon="notifications-outline"
-      />
+      {Platform.OS === "android" && (
+        <SettingItem
+          title="Notifications"
+          subtitle="Receive push notifications"
+          value={settings.notifications}
+          onToggle={(value) => handleSettingToggle("notifications", value)}
+          icon="notifications-outline"
+        />
+      )}
     </View>
   );
 
@@ -736,7 +738,7 @@ export default function Settings() {
           App Version
         </Text>
         <Text style={[styles.aboutValue, { color: colors.textSecondary }]}>
-          1.0.3
+          1.0.4
         </Text>
       </View>
 

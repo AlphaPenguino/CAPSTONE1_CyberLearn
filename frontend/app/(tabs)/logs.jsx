@@ -10,6 +10,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,6 +36,9 @@ export default function LogsScreen() {
   const [, setLoadingUsers] = useState(false); // future enhancement spinner placeholder
   const [summary, setSummary] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [loadingSubjectDetails, setLoadingSubjectDetails] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     if (!token) return;
@@ -61,6 +66,64 @@ export default function LogsScreen() {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  const fetchSubjectName = useCallback(
+    async (subjectId) => {
+      if (!token || !subjectId) return null;
+      try {
+        const response = await fetch(
+          `${API_URL}/instructor/subjects/${subjectId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            return data.data.subjectName || data.data.name;
+          }
+        }
+      } catch (_err) {
+        console.error("Error fetching subject:", _err);
+      }
+      return null;
+    },
+    [token]
+  );
+
+  const fetchSubjectDetails = useCallback(
+    async (subjectId) => {
+      if (!token || !subjectId) return null;
+      try {
+        setLoadingSubjectDetails(true);
+        const response = await fetch(
+          `${API_URL}/instructor/subjects/${subjectId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            return data.data;
+          }
+        }
+      } catch (_err) {
+        console.error("Error fetching subject details:", _err);
+        Alert.alert("Error", "Failed to load subject details");
+      } finally {
+        setLoadingSubjectDetails(false);
+      }
+      return null;
+    },
+    [token]
+  );
 
   const fetchLogs = useCallback(
     async (reset = false) => {
@@ -95,13 +158,25 @@ export default function LogsScreen() {
         const data = await response.json();
         if (data.success) {
           const logsData = data.data.logs || [];
+          
+          // Enrich logs with subject names if resource is "subject"
+          const enrichedLogsData = await Promise.all(
+            logsData.map(async (log) => {
+              if (log.resource === "subject" && log.resourceId) {
+                const subjectName = await fetchSubjectName(log.resourceId);
+                return { ...log, subjectName };
+              }
+              return log;
+            })
+          );
+          
           if (reset) {
-            setLogs(logsData);
+            setLogs(enrichedLogsData);
           } else {
             // Prevent duplicate logs by filtering out any that already exist
             setLogs((prev) => {
               const existingIds = new Set(prev.map((log) => log._id));
-              const newLogs = logsData.filter(
+              const newLogs = enrichedLogsData.filter(
                 (log) => !existingIds.has(log._id)
               );
               return [...prev, ...newLogs];
@@ -131,7 +206,7 @@ export default function LogsScreen() {
         setRefreshing(false);
       }
     },
-    [token, page, filters]
+    [token, page, filters, fetchSubjectName]
   );
 
   useEffect(() => {
@@ -277,12 +352,407 @@ export default function LogsScreen() {
         </Text>
       </View>
 
+      {item.resource === "subject" && item.subjectName && (
+        <TouchableOpacity
+          style={styles.subjectContainer}
+          onPress={async () => {
+            if (item.resourceId) {
+              const details = await fetchSubjectDetails(item.resourceId);
+              if (details) {
+                setSelectedSubject(details);
+                setShowSubjectModal(true);
+              }
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="folder-outline"
+            size={14}
+            color={colors.primary}
+            style={styles.subjectIcon}
+          />
+          <Text style={[styles.subjectName, { color: colors.text }]}>
+            Subject: <Text style={{ fontWeight: "600" }}>{item.subjectName}</Text>
+          </Text>
+          <Ionicons
+            name="chevron-forward"
+            size={14}
+            color={colors.primary}
+            style={styles.chevronIcon}
+          />
+        </TouchableOpacity>
+      )}
+
       {item.details && Object.keys(item.details).length > 0 && (
         <Text style={[styles.details, { color: colors.textSecondary }]}>
           {formatDetails(item.details)}
         </Text>
       )}
     </View>
+  );
+
+  const renderSubjectModal = () => (
+    <Modal
+      visible={showSubjectModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowSubjectModal(false)}
+    >
+      <SafeScreen
+        style={[
+          styles.modalContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity
+            onPress={() => setShowSubjectModal(false)}
+            style={styles.closeButton}
+          >
+            <Ionicons
+              name="close"
+              size={24}
+              color={colors.text}
+            />
+          </TouchableOpacity>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>
+            Subject Details
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        {loadingSubjectDetails ? (
+          <View style={styles.modalLoading}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Loading subject details...
+            </Text>
+          </View>
+        ) : selectedSubject ? (
+          <ScrollView
+            style={styles.modalContent}
+            showsVerticalScrollIndicator={true}
+          >
+            {/* Subject Name */}
+            <View
+              style={[
+                styles.detailSection,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <View style={styles.detailHeader}>
+                <Ionicons
+                  name="book-outline"
+                  size={20}
+                  color={colors.primary}
+                  style={styles.detailIcon}
+                />
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                  Subject Name
+                </Text>
+              </View>
+              <Text style={[styles.detailValue, { color: colors.text }]}>
+                {selectedSubject.name || selectedSubject.subjectName || "N/A"}
+              </Text>
+            </View>
+
+            {/* Subject Code */}
+            {selectedSubject.subjectCode && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="barcode-outline"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Subject Code
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {selectedSubject.subjectCode}
+                </Text>
+              </View>
+            )}
+
+            {/* Description */}
+            {selectedSubject.description && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="document-text-outline"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Description
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {selectedSubject.description || "No description provided"}
+                </Text>
+              </View>
+            )}
+
+            {/* Status */}
+            <View
+              style={[
+                styles.detailSection,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <View style={styles.detailHeader}>
+                <Ionicons
+                  name={selectedSubject.isActive ? "checkmark-circle-outline" : "close-circle-outline"}
+                  size={20}
+                  color={selectedSubject.isActive ? "#10B981" : "#EF4444"}
+                  style={styles.detailIcon}
+                />
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                  Status
+                </Text>
+              </View>
+              <Text style={[styles.detailValue, { color: colors.text }]}>
+                {selectedSubject.isActive ? "Active" : "Inactive"}
+              </Text>
+            </View>
+
+            {/* Student Count */}
+            {selectedSubject.studentCount !== undefined && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="people-outline"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Students Enrolled
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {selectedSubject.studentCount || 0}
+                </Text>
+              </View>
+            )}
+
+            {/* Primary Instructor */}
+            {selectedSubject.instructor && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Primary Instructor
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {selectedSubject.instructor.username || selectedSubject.instructor.fullName || "N/A"}
+                </Text>
+                {selectedSubject.instructor.email && (
+                  <Text style={[styles.detailSubValue, { color: colors.textSecondary }]}>
+                    {selectedSubject.instructor.email}
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* Additional Instructors */}
+            {selectedSubject.instructors && selectedSubject.instructors.length > 0 && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="people-sharp"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Additional Instructors
+                  </Text>
+                </View>
+                {selectedSubject.instructors.map((inst, idx) => (
+                  <View key={idx} style={styles.listItem}>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>
+                      • {inst.username || inst.fullName || "N/A"}
+                    </Text>
+                    {inst.email && (
+                      <Text style={[styles.detailSubValue, { color: colors.textSecondary }]}>
+                        {inst.email}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Created At */}
+            {selectedSubject.createdAt && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Created
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {new Date(selectedSubject.createdAt).toLocaleString()}
+                </Text>
+              </View>
+            )}
+
+            {/* Created By */}
+            {selectedSubject.createdBy && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="create-outline"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Created By
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {selectedSubject.createdBy.username || selectedSubject.createdBy.fullName || "N/A"}
+                </Text>
+              </View>
+            )}
+
+            {/* Archived Status */}
+            {selectedSubject.archived && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="archive-outline"
+                    size={20}
+                    color="#F59E0B"
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Archived
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  Yes - {new Date(selectedSubject.archivedAt).toLocaleString()}
+                </Text>
+              </View>
+            )}
+
+            {/* Section Code */}
+            {selectedSubject.sectionCode && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="code-outline"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Section Code
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {selectedSubject.sectionCode}
+                </Text>
+              </View>
+            )}
+
+            {/* Last Updated */}
+            {selectedSubject.updatedAt && (
+              <View
+                style={[
+                  styles.detailSection,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.detailHeader}>
+                  <Ionicons
+                    name="refresh-outline"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.detailIcon}
+                  />
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                    Last Updated
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: colors.text }]}>
+                  {new Date(selectedSubject.updatedAt).toLocaleString()}
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        ) : (
+          <View style={styles.modalLoading}>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              No subject details available
+            </Text>
+          </View>
+        )}
+      </SafeScreen>
+    </Modal>
   );
 
   if (loading && logs.length === 0) {
@@ -301,9 +771,10 @@ export default function LogsScreen() {
   }
 
   return (
-    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
-      <SafeScreen style={styles.safeScreen}>
-        <View style={styles.pageWrapper}>
+    <>
+      <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+        <SafeScreen style={styles.safeScreen}>
+          <View style={styles.pageWrapper}>
           {/* Header */}
           <View
             style={[
@@ -516,6 +987,8 @@ export default function LogsScreen() {
         </View>
       </SafeScreen>
     </LinearGradient>
+    {renderSubjectModal()}
+    </>
   );
 }
 
@@ -677,6 +1150,24 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "uppercase",
   },
+  subjectContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  subjectIcon: {
+    marginRight: 6,
+  },
+  chevronIcon: {
+    marginLeft: 6,
+  },
+  subjectName: {
+    fontSize: 13,
+    flex: 1,
+  },
   ipAddress: {
     fontSize: 12,
   },
@@ -704,5 +1195,67 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     fontStyle: "italic",
+  },
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  closeButton: {
+    padding: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  modalContent: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+  },
+  modalLoading: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  detailSection: {
+    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  detailHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  detailIcon: {
+    marginRight: 8,
+  },
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 28,
+  },
+  detailSubValue: {
+    fontSize: 12,
+    marginLeft: 28,
+    marginTop: 4,
+  },
+  listItem: {
+    marginVertical: 4,
   },
 });

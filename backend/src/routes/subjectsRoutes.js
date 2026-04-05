@@ -186,7 +186,7 @@ router.get("/user-subjects", protectRoute, async (req, res) => {
         students: userId,
         ...baseFilters,
       }).select(
-        "_id name description sectionCode instructor archived archivedAt"
+        "_id name description sectionCode subjectCode instructor students archived archivedAt"
       );
     } else if (userRole === "instructor") {
       // For instructors, find subjects they created/teach OR are assigned to as additional instructors
@@ -212,6 +212,18 @@ router.get("/user-subjects", protectRoute, async (req, res) => {
       `📡 Backend: Found ${subjects.length} subjects for ${userRole} ${userId}`
     );
 
+    const subjectsWithCounts = subjects.map((subject) => {
+      const subjectObj =
+        typeof subject.toObject === "function" ? subject.toObject() : subject;
+      return {
+        ...subjectObj,
+        subjectCode: subjectObj.subjectCode || subjectObj.sectionCode || "",
+        studentCount: Array.isArray(subjectObj.students)
+          ? subjectObj.students.length
+          : 0,
+      };
+    });
+
     // Log subject view activity
     const requestInfo = extractRequestInfo(req);
     await logActivity({
@@ -230,8 +242,8 @@ router.get("/user-subjects", protectRoute, async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      subjects: subjects,
-      count: subjects.length,
+      subjects: subjectsWithCounts,
+      count: subjectsWithCounts.length,
     });
   } catch (error) {
     console.error("Error fetching user subjects:", error);
@@ -279,11 +291,14 @@ router.post("/join", protectRoute, async (req, res) => {
       subject.students = [];
     }
 
-    // Check if user is already in the subject
-    if (subject.students.includes(userId)) {
+    // Check if user is already in the subject (ObjectId-safe comparison)
+    const isAlreadyEnrolled = (subject.students || []).some(
+      (studentId) => String(studentId) === String(userId)
+    );
+    if (isAlreadyEnrolled) {
       return res.status(400).json({
         success: false,
-        message: "You are already enrolled in this subject",
+        message: "Subject Already enrolled",
       });
     }
 

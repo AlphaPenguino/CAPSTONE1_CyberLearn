@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
+  Animated,
   View,
   Text,
   ScrollView,
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Dimensions,
   TouchableOpacity,
   RefreshControl,
   Platform,
   Modal,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -24,11 +25,91 @@ import COLORS from "../../constants/custom-colors";
 import UsersScreen from "./users";
 import LogsScreen from "./logs";
 
-const { width: screenWidth } = Dimensions.get("window");
+const DAY_MS = 86400000;
+
+const startOfDay = (date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const endOfDay = (date) => {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+};
+
+const formatRangeLabel = (startDate, endDate, period) => {
+  if (period === "monthly") {
+    return `${startDate.toLocaleString("en-US", {
+      month: "short",
+      year: "numeric",
+    })} - ${endDate.toLocaleString("en-US", {
+      month: "short",
+      year: "numeric",
+    })}`;
+  }
+  return `${startDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })} - ${endDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })}`;
+};
+
+const getCalendarWindow = (period, page) => {
+  const today = startOfDay(new Date());
+
+  if (period === "daily") {
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() - page * 7);
+    const startDate = new Date(endDate);
+    startDate.setDate(endDate.getDate() - 6);
+    return {
+      startDate,
+      endDate,
+      label: formatRangeLabel(startDate, endDate, period),
+    };
+  }
+
+  if (period === "weekly") {
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() - page * 28);
+    const startDate = new Date(endDate);
+    startDate.setDate(endDate.getDate() - 27);
+    return {
+      startDate,
+      endDate,
+      label: formatRangeLabel(startDate, endDate, period),
+    };
+  }
+
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const endMonth = new Date(
+    currentMonthStart.getFullYear(),
+    currentMonthStart.getMonth() - page,
+    1
+  );
+  const startDate = new Date(endMonth.getFullYear(), endMonth.getMonth() - 5, 1);
+  const endDate = new Date(endMonth.getFullYear(), endMonth.getMonth() + 1, 0);
+
+  // Keep current month window aligned with current day to avoid future dates.
+  const boundedEndDate =
+    page === 0 && endDate > today ? new Date(today) : endDate;
+
+  return {
+    startDate,
+    endDate: boundedEndDate,
+    label: formatRangeLabel(startDate, boundedEndDate, period),
+  };
+};
 
 export default function Dashboard() {
   const { user, token } = useAuthStore();
   const { colors } = useTheme();
+  const { width: viewportWidth } = useWindowDimensions();
+  const isAndroid = Platform.OS === "android";
 
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -64,15 +145,40 @@ export default function Dashboard() {
   // Interactive tooltip state
   const [tooltipData, setTooltipData] = useState(null);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [selectedUsagePoint, setSelectedUsagePoint] = useState(null);
+  const [selectedRole, setSelectedRole] = useState(null);
+  const [visibleActiveRoleSeries, setVisibleActiveRoleSeries] = useState({
+    students: true,
+    instructors: true,
+    admins: true,
+  });
+  const [calendarPage, setCalendarPage] = useState(0);
+  const hasLoadedDashboardRef = useRef(false);
+
+  const chartFadeAnim = useRef(new Animated.Value(1)).current;
+
+  const calendarWindow = useMemo(
+    () => getCalendarWindow(analyticsPeriod, calendarPage),
+    [analyticsPeriod, calendarPage]
+  );
+  const calendarLabel = calendarWindow.label;
+  const isLatestCalendarWindow = calendarPage === 0;
+
+  useEffect(() => {
+    chartFadeAnim.setValue(0.45);
+    Animated.timing(chartFadeAnim, {
+      toValue: 1,
+      duration: 320,
+      useNativeDriver: true,
+    }).start();
+  }, [chartFadeAnim, analyticsPeriod, calendarPage, usageData, activeUsersStats]);
 
   const fetchAnalyticsData = useCallback(async () => {
     try {
-      // Decide days window based on selected period - for monthly, use full YTD like system usage
-      const today = new Date();
-      const jan1 = new Date(today.getFullYear(), 0, 1);
-      const daysFromJan1 = Math.floor((today - jan1) / 86400000) + 1; // inclusive
-      const periodDaysMap = { daily: 7, weekly: 28, monthly: daysFromJan1 };
-      const daysWindow = periodDaysMap[analyticsPeriod] || 7;
+      const today = startOfDay(new Date());
+      const { startDate, endDate } = calendarWindow;
+      const daysWindow =
+        Math.floor((today - startOfDay(startDate)) / DAY_MS) + 1;
 
       const [completionResponse, activeUsersResponse] = await Promise.all([
         // Fetch completion statistics
@@ -91,12 +197,13 @@ export default function Dashboard() {
         ).catch(() => null),
       ]);
 
-      // Build timeline & grouping (front-end aggregation for weekly/monthly)
-      const now = new Date();
+      // Build timeline for the selected calendar window.
       const dateKeys = []; // raw day keys (YYYY-MM-DD)
-      for (let i = daysWindow - 1; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(now.getDate() - i);
+      for (
+        let d = startOfDay(startDate);
+        d <= endOfDay(endDate);
+        d = new Date(d.getTime() + DAY_MS)
+      ) {
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, "0");
         const dd = String(d.getDate()).padStart(2, "0");
@@ -127,11 +234,17 @@ export default function Dashboard() {
         labelKeys = weeks.map((w) => w.days[0]);
         labelDisplay = weeks.map((w) => w.label);
       } else if (analyticsPeriod === "monthly") {
-        // Build months from January to current month inclusive (zero fill)
-        const currentYear = now.getFullYear();
+        // Build months in the active six-month calendar window.
         const monthsSeq = [];
-        for (let m = 0; m <= now.getMonth(); m++) {
-          const mKey = `${currentYear}-${String(m + 1).padStart(2, "0")}`;
+        for (
+          let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+          m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+          m = new Date(m.getFullYear(), m.getMonth() + 1, 1)
+        ) {
+          const mKey = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(
+            2,
+            "0"
+          )}`;
           monthsSeq.push(mKey);
         }
         labelKeys = monthsSeq;
@@ -324,16 +437,19 @@ export default function Dashboard() {
     } catch (error) {
       console.error("Error fetching analytics data:", error);
     }
-  }, [token, analyticsPeriod]);
+  }, [token, analyticsPeriod, calendarWindow]);
 
   const fetchDashboardData = useCallback(async () => {
+    const shouldShowInitialLoader = !hasLoadedDashboardRef.current;
+
     try {
-      setLoading(true);
-      // Determine dynamic usage fetch range (monthly requires full year from Jan 1)
-      const today = new Date();
-      const jan1 = new Date(today.getFullYear(), 0, 1);
-      const daysFromJan1 = Math.floor((today - jan1) / 86400000) + 1; // inclusive
-      const usageDaysParam = analyticsPeriod === "monthly" ? daysFromJan1 : 90;
+      if (shouldShowInitialLoader) {
+        setLoading(true);
+      }
+      const today = startOfDay(new Date());
+      const { startDate, endDate } = calendarWindow;
+      const usageDaysParam =
+        Math.floor((today - startOfDay(startDate)) / DAY_MS) + 1;
 
       const [statsResponse, leaderboardResponse, usageResponse] =
         await Promise.all([
@@ -378,20 +494,17 @@ export default function Dashboard() {
         }
       }
 
-      // Build ISO date keys for raw usage window oldest -> newest to aggregate later
-      const days = usageDaysParam;
-      const now = new Date();
-      const labelKeys = []; // YYYY-MM-DD (UTC)
-      const labelDisplay = []; // M/D for chart labels
-      for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(now.getDate() - i);
-        // Use local date components to build a stable YYYY-MM-DD string
+      // Build keys for the selected visible window.
+      const labelKeys = [];
+      for (
+        let d = startOfDay(startDate);
+        d <= endOfDay(endDate);
+        d = new Date(d.getTime() + DAY_MS)
+      ) {
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, "0");
         const dd = String(d.getDate()).padStart(2, "0");
         labelKeys.push(`${yyyy}-${mm}-${dd}`);
-        labelDisplay.push(`${d.getMonth() + 1}/${d.getDate()}`);
       }
 
       // Parse usage if endpoint exists; otherwise default to zeros
@@ -409,14 +522,8 @@ export default function Dashboard() {
               pt.students ?? pt.count ?? pt.value ?? 0,
             ])
           );
-          const rawCounts = labelKeys.map((key) => map.get(key) || 0);
-          const periodDaysMap = { daily: 7, weekly: 28, monthly: daysFromJan1 };
-          const windowSize = periodDaysMap[analyticsPeriod] || 7;
-          // For daily & weekly we only need the trailing window; for monthly we want full YTD (already fetched)
-          const sliceStart =
-            analyticsPeriod === "monthly" ? 0 : rawCounts.length - windowSize;
-          const windowKeys = labelKeys.slice(sliceStart);
-          const windowCounts = rawCounts.slice(sliceStart);
+          const windowKeys = labelKeys;
+          const windowCounts = windowKeys.map((key) => map.get(key) || 0);
 
           if (analyticsPeriod === "daily") {
             setUsageLabels(
@@ -439,20 +546,25 @@ export default function Dashboard() {
             setUsageLabels(labels);
             setUsageData(data);
           } else if (analyticsPeriod === "monthly") {
-            // Build month totals from January to current month inclusive (zero fill)
-            const currentYear = today.getFullYear();
+            // Build month totals for the selected six-month calendar window.
             const monthTotals = new Map();
-            // Aggregate counts by month key
-            labelKeys.forEach((k, idx) => {
+            windowKeys.forEach((k, idx) => {
               const mKey = k.slice(0, 7); // YYYY-MM
               monthTotals.set(
                 mKey,
-                (monthTotals.get(mKey) || 0) + (rawCounts[idx] || 0)
+                (monthTotals.get(mKey) || 0) + (windowCounts[idx] || 0)
               );
             });
             const monthsSeq = [];
-            for (let m = 0; m <= today.getMonth(); m++) {
-              const mKey = `${currentYear}-${String(m + 1).padStart(2, "0")}`;
+            for (
+              let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+              m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+              m = new Date(m.getFullYear(), m.getMonth() + 1, 1)
+            ) {
+              const mKey = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(
+                2,
+                "0"
+              )}`;
               monthsSeq.push(mKey);
             }
             setUsageLabels(
@@ -469,7 +581,7 @@ export default function Dashboard() {
               ? 7
               : analyticsPeriod === "weekly"
               ? 4
-              : 3;
+              : 6;
           setUsageLabels(new Array(fallbackLen).fill(""));
           setUsageData(new Array(fallbackLen).fill(0));
         }
@@ -479,7 +591,7 @@ export default function Dashboard() {
             ? 7
             : analyticsPeriod === "weekly"
             ? 4
-            : 3;
+            : 6;
         setUsageLabels(new Array(fallbackLen).fill(""));
         setUsageData(new Array(fallbackLen).fill(0));
       }
@@ -487,23 +599,34 @@ export default function Dashboard() {
       console.error("Error fetching dashboard data:", error);
       Alert.alert("Error", "Failed to load dashboard data");
     } finally {
+      hasLoadedDashboardRef.current = true;
       setLoading(false);
       setRefreshing(false);
     }
-  }, [token, analyticsPeriod]);
+  }, [token, analyticsPeriod, calendarWindow]);
 
   const handlePeriodChange = useCallback(
     (newPeriod) => {
       setAnalyticsPeriod(newPeriod);
-      // Immediately fetch new analytics data without refreshing entire dashboard
-      fetchAnalyticsData();
+      setCalendarPage(0);
+      setSelectedUsagePoint(null);
     },
-    [fetchAnalyticsData]
+    []
   );
+
+  const handleCalendarPageChange = useCallback((direction) => {
+    setCalendarPage((current) => {
+      if (direction > 0) {
+        return current + 1;
+      }
+      return Math.max(0, current - 1);
+    });
+    setSelectedUsagePoint(null);
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData, analyticsPeriod]);
+  }, [fetchDashboardData]);
 
   // Separate useEffect for analytics data that depends on period
   useEffect(() => {
@@ -532,6 +655,42 @@ export default function Dashboard() {
     setTooltipData(null);
   }, []);
 
+  const togglePieRole = useCallback((roleName) => {
+    setSelectedRole((current) => (current === roleName ? null : roleName));
+  }, []);
+
+  const toggleActiveRoleSeries = useCallback((roleKey) => {
+    setVisibleActiveRoleSeries((current) => {
+      const next = { ...current, [roleKey]: !current[roleKey] };
+      // Keep at least one role visible so chart always remains actionable.
+      if (Object.values(next).every((isVisible) => !isVisible)) {
+        return current;
+      }
+      return next;
+    });
+  }, []);
+
+  const chartWidth = useMemo(() => {
+    const available = viewportWidth - (Platform.OS === "web" ? 84 : 60);
+    const max = Platform.OS === "web" ? 820 : viewportWidth - 12;
+    return Math.max(260, Math.min(available, max));
+  }, [viewportWidth]);
+
+  const usageChartHeight = isAndroid ? 280 : 240;
+  const activeUsersChartHeight = isAndroid ? 300 : 260;
+  const contentChartHeight = isAndroid ? 250 : 220;
+  const monthlyLabelSpacing = isAndroid ? 104 : 80;
+
+  const pieChartSize = useMemo(
+    () => Math.max(isAndroid ? 210 : 190, Math.min(chartWidth - 8, 320)),
+    [chartWidth, isAndroid]
+  );
+
+  const pieChartCanvasWidth = useMemo(
+    () => Math.max(pieChartSize, chartWidth - 16),
+    [chartWidth, pieChartSize]
+  );
+
   const chartConfig = {
     backgroundGradientFrom: colors.card,
     backgroundGradientTo: colors.card,
@@ -540,36 +699,167 @@ export default function Dashboard() {
     barPercentage: 0.7,
     useShadowColorFromDataset: false,
     decimalPlaces: 0,
+    labelColor: (opacity = 1) => `rgba(55, 65, 81, ${opacity})`,
+    fillShadowGradientOpacity: 0.2,
+    fillShadowGradientFromOpacity: 0.2,
+    fillShadowGradientToOpacity: 0.02,
     propsForLabels: {
-      fontSize: 12,
-      fontWeight: "bold",
+      fontSize: isAndroid ? 13 : 11,
+      fontWeight: "700",
+    },
+    propsForDots: {
+      r: "4",
+      strokeWidth: "2",
+      stroke: colors.primary,
+    },
+    propsForBackgroundLines: {
+      stroke: colors.textSecondary + "26",
     },
   };
 
-  const userRoleData = [
-    {
-      name: "Students",
-      population: stats.totalStudents,
-      color: "#6366F1",
-      legendFontColor: colors.text,
-      legendFontSize: 15,
+  const pieRoles = useMemo(
+    () => [
+      {
+        key: "students",
+        name: "Students",
+        population: stats.totalStudents,
+        color: "#6366F1",
+        colorRgb: "99, 102, 241",
+      },
+      {
+        key: "instructors",
+        name: "Instructors",
+        population: stats.totalInstructors,
+        color: "#10B981",
+        colorRgb: "16, 185, 129",
+      },
+      {
+        key: "admins",
+        name: "Admins",
+        population:
+          stats.totalUsers - stats.totalStudents - stats.totalInstructors,
+        color: "#F59E0B",
+        colorRgb: "245, 158, 11",
+      },
+    ],
+    [stats.totalInstructors, stats.totalStudents, stats.totalUsers]
+  );
+
+  const userRoleData = useMemo(
+    () =>
+      pieRoles.map((role) => ({
+        ...role,
+        color:
+          selectedRole && selectedRole !== role.name
+            ? `rgba(${role.colorRgb}, 0.3)`
+            : role.color,
+        legendFontColor: colors.text,
+        legendFontSize: 14,
+      })),
+    [colors.text, pieRoles, selectedRole]
+  );
+
+  const activeRoleSeries = useMemo(() => {
+    const base = [
+      {
+        key: "students",
+        label: "Students",
+        colorHex: "#3B82F6",
+        colorRgba: "rgba(59,130,246,",
+        values: activeUsersStats.students,
+      },
+      {
+        key: "instructors",
+        label: "Instructors",
+        colorHex: "#10B981",
+        colorRgba: "rgba(16,185,129,",
+        values: activeUsersStats.instructors,
+      },
+      {
+        key: "admins",
+        label: "Admins",
+        colorHex: "#EF4444",
+        colorRgba: "rgba(239,68,68,",
+        values: activeUsersStats.admins,
+      },
+    ];
+
+    return base.filter((series) => visibleActiveRoleSeries[series.key]);
+  }, [activeUsersStats.admins, activeUsersStats.instructors, activeUsersStats.students, visibleActiveRoleSeries]);
+
+  const handleActiveUsersDataPointClick = useCallback(
+    (data) => {
+      const pointIndex = data?.index;
+      if (pointIndex === undefined || pointIndex === null) {
+        return;
+      }
+
+      const clickedValue = Number(data?.value ?? 0);
+      let selectedSeries = null;
+
+      if (data?.dataset?.roleKey) {
+        selectedSeries = activeRoleSeries.find(
+          (series) => series.key === data.dataset.roleKey
+        );
+      }
+
+      if (!selectedSeries && data?.dataset?.label) {
+        selectedSeries = activeRoleSeries.find(
+          (series) => series.label === data.dataset.label
+        );
+      }
+
+      if (!selectedSeries && Number.isInteger(data?.datasetIndex)) {
+        selectedSeries = activeRoleSeries[data.datasetIndex];
+      }
+
+      if (!selectedSeries) {
+        const matchedByValue = activeRoleSeries.filter(
+          (series) => (series.values[pointIndex] || 0) === clickedValue
+        );
+        if (matchedByValue.length === 1) {
+          selectedSeries = matchedByValue[0];
+        }
+      }
+
+      if (!selectedSeries) {
+        selectedSeries = activeRoleSeries[0];
+      }
+
+      const dataValues = activeRoleSeries.map(
+        (series) => series.values[pointIndex] || 0
+      );
+      const overlappingDatasets = activeRoleSeries
+        .map((series) => series.label)
+        .filter(
+          (_, idx) => dataValues[idx] === clickedValue && dataValues[idx] !== 0
+        );
+      const periodLabel =
+        analyticsPeriod === "daily"
+          ? "Day"
+          : analyticsPeriod === "weekly"
+          ? "Week"
+          : "Month";
+
+      handleDataPointClick({
+        x: activeUsersStats.labels[pointIndex],
+        value: clickedValue,
+        index: pointIndex,
+        dataset: {
+          label:
+            overlappingDatasets.length > 1
+              ? overlappingDatasets.join(", ")
+              : selectedSeries?.label || "Users",
+          data: selectedSeries?.values || [],
+        },
+        overlappingDatasets:
+          overlappingDatasets.length > 1 ? overlappingDatasets : null,
+        xLabel: periodLabel,
+        yLabel: "Active Users",
+      });
     },
-    {
-      name: "Instructors",
-      population: stats.totalInstructors,
-      color: "#10B981",
-      legendFontColor: colors.text,
-      legendFontSize: 15,
-    },
-    {
-      name: "Admins",
-      population:
-        stats.totalUsers - stats.totalStudents - stats.totalInstructors,
-      color: "#F59E0B",
-      legendFontColor: colors.text,
-      legendFontSize: 15,
-    },
-  ];
+    [activeRoleSeries, activeUsersStats.labels, analyticsPeriod, handleDataPointClick]
+  );
 
   const contentData = {
     labels: ["Modules", "Quizzes", "Active Sessions"],
@@ -837,8 +1127,8 @@ export default function Dashboard() {
                     <View style={styles.pieChartContainer}>
                       <PieChart
                         data={userRoleData}
-                        width={Math.min(screenWidth - 80, 280)} // Reduced width
-                        height={240} // Reduced height
+                        width={pieChartCanvasWidth}
+                        height={pieChartSize}
                         chartConfig={{
                           ...chartConfig,
                           color: (opacity = 1) => `rgba(0,0,0,${opacity})`,
@@ -846,10 +1136,24 @@ export default function Dashboard() {
                         accessor="population"
                         backgroundColor="transparent"
                         paddingLeft={"0"}
-                        center={[0, 0]} // Center the chart
+                        center={[0, 0]}
                         absolute
                         hasLegend={false}
                         style={{ marginVertical: 4, borderRadius: 16 }}
+                        onDataPointClick={(slice) => {
+                          togglePieRole(slice.name);
+                          handleDataPointClick({
+                            x: slice.name,
+                            value: slice.population,
+                            index: slice.index,
+                            dataset: {
+                              label: slice.name,
+                              data: userRoleData.map((item) => item.population),
+                            },
+                            xLabel: "Role",
+                            yLabel: "Users",
+                          });
+                        }}
                       />
                     </View>
                     <Text
@@ -866,13 +1170,25 @@ export default function Dashboard() {
                         const pct = stats.totalUsers
                           ? ((d.population / stats.totalUsers) * 100).toFixed(1)
                           : "0.0";
+                        const isSelected = selectedRole === d.name;
                         return (
-                          <View
+                          <TouchableOpacity
                             key={d.name}
+                            onPress={() => togglePieRole(d.name)}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${d.name} role filter`}
+                            accessibilityHint="Tap to highlight this pie chart role"
                             style={{
                               flexDirection: "row",
                               alignItems: "center",
                               marginBottom: 6,
+                              borderRadius: 10,
+                              paddingHorizontal: 8,
+                              paddingVertical: 6,
+                              backgroundColor: isSelected
+                                ? colors.primary + "22"
+                                : "transparent",
                             }}
                           >
                             <View
@@ -880,7 +1196,8 @@ export default function Dashboard() {
                                 width: 14,
                                 height: 14,
                                 borderRadius: 7,
-                                backgroundColor: d.color,
+                                backgroundColor: pieRoles.find((r) => r.name === d.name)
+                                  ?.color,
                                 marginRight: 8,
                               }}
                             />
@@ -902,9 +1219,24 @@ export default function Dashboard() {
                             >
                               {d.population} ({pct}%)
                             </Text>
-                          </View>
+                          </TouchableOpacity>
                         );
                       })}
+                    </View>
+                    <View style={styles.interactionHintRow}>
+                      <MaterialCommunityIcons
+                        name="gesture-tap"
+                        size={14}
+                        color={colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.interactionHintText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Tap a slice or role row to highlight distribution.
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -919,16 +1251,89 @@ export default function Dashboard() {
                   <View
                     style={[styles.chartCard, { backgroundColor: colors.card }]}
                   >
+                    <View style={styles.calendarControlsRow}>
+                      <TouchableOpacity
+                        style={styles.calendarButton}
+                        onPress={() => handleCalendarPageChange(1)}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Previous date range"
+                        accessibilityHint="Shows an older date window"
+                      >
+                        <MaterialCommunityIcons
+                          name="chevron-left"
+                          size={18}
+                          color={colors.primary}
+                        />
+                      </TouchableOpacity>
+                      <Text
+                        style={[styles.calendarLabel, { color: colors.textSecondary }]}
+                      >
+                        {calendarLabel}
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.calendarButton,
+                          isLatestCalendarWindow && styles.calendarButtonDisabled,
+                        ]}
+                        onPress={() => handleCalendarPageChange(-1)}
+                        disabled={isLatestCalendarWindow}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Next date range"
+                        accessibilityHint="Shows a newer date window"
+                      >
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={18}
+                          color={
+                            isLatestCalendarWindow
+                              ? colors.textSecondary
+                              : colors.primary
+                          }
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.interactionHintRow}>
+                      <MaterialCommunityIcons
+                        name="gesture-tap"
+                        size={14}
+                        color={colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.interactionHintText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Use arrows to change range. Tap any point for details.
+                      </Text>
+                    </View>
+                    <Animated.View
+                      style={[
+                        styles.animatedChart,
+                        {
+                          opacity: chartFadeAnim,
+                          transform: [
+                            {
+                              translateY: chartFadeAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [10, 0],
+                              }),
+                            },
+                          ],
+                        },
+                      ]}
+                    >
                     {analyticsPeriod === "monthly" ? (
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
                       >
                         {(() => {
-                          const baseWidth = screenWidth - 40;
                           const dynamicWidth = Math.max(
-                            baseWidth,
-                            usageLabels.length * 80
+                            chartWidth,
+                            usageLabels.length * monthlyLabelSpacing
                           );
                           return (
                             <LineChart
@@ -944,7 +1349,7 @@ export default function Dashboard() {
                                 legend: ["Students per Month"],
                               }}
                               width={dynamicWidth}
-                              height={240}
+                              height={usageChartHeight}
                               yAxisInterval={1}
                               chartConfig={{
                                 ...chartConfig,
@@ -963,7 +1368,16 @@ export default function Dashboard() {
                               style={{ marginVertical: 8, borderRadius: 16 }}
                               fromZero
                               segments={4}
+                              verticalLabelRotation={
+                                isAndroid && analyticsPeriod !== "daily" ? 18 : 0
+                              }
                               onDataPointClick={(data) => {
+                                const point = {
+                                  label: usageLabels[data.index],
+                                  value: usageData[data.index],
+                                  series: "Students per Month",
+                                };
+                                setSelectedUsagePoint(point);
                                 handleDataPointClick({
                                   x: usageLabels[data.index],
                                   value: usageData[data.index],
@@ -997,8 +1411,8 @@ export default function Dashboard() {
                               : "Students per Week",
                           ],
                         }}
-                        width={screenWidth - 40}
-                        height={240}
+                        width={chartWidth}
+                        height={usageChartHeight}
                         yAxisInterval={1}
                         chartConfig={{
                           ...chartConfig,
@@ -1017,6 +1431,9 @@ export default function Dashboard() {
                         style={{ marginVertical: 8, borderRadius: 16 }}
                         fromZero
                         segments={4}
+                        verticalLabelRotation={
+                          isAndroid && analyticsPeriod !== "daily" ? 18 : 0
+                        }
                         onDataPointClick={(data) => {
                           const legendLabel =
                             analyticsPeriod === "daily"
@@ -1024,6 +1441,11 @@ export default function Dashboard() {
                               : "Students per Week";
                           const periodLabel =
                             analyticsPeriod === "daily" ? "Day" : "Week";
+                          setSelectedUsagePoint({
+                            label: usageLabels[data.index],
+                            value: usageData[data.index],
+                            series: legendLabel,
+                          });
                           handleDataPointClick({
                             x: usageLabels[data.index],
                             value: usageData[data.index],
@@ -1034,6 +1456,24 @@ export default function Dashboard() {
                           });
                         }}
                       />
+                    )}
+                    </Animated.View>
+                    {selectedUsagePoint && (
+                      <View
+                        style={[
+                          styles.selectedPointChip,
+                          { backgroundColor: colors.primary + "16" },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.selectedPointText,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {selectedUsagePoint.series}: {selectedUsagePoint.label} = {selectedUsagePoint.value}
+                        </Text>
+                      </View>
                     )}
                     {usageData.reduce((a, b) => a + b, 0) === 0 && (
                       <Text
@@ -1049,9 +1489,7 @@ export default function Dashboard() {
               {/* Analytics Period Selector - Admin Only */}
               {isAdmin && (
                 <View style={styles.periodSelectorContainer}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    📈 Advanced Analytics
-                  </Text>
+
                   <View style={styles.periodSelectorRow}>
                     {["daily", "weekly", "monthly"].map((period) => (
                       <TouchableOpacity
@@ -1063,6 +1501,9 @@ export default function Dashboard() {
                           },
                         ]}
                         onPress={() => handlePeriodChange(period)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${period} period`}
+                        accessibilityHint="Switches chart grouping window"
                       >
                         <Text
                           style={[
@@ -1080,6 +1521,21 @@ export default function Dashboard() {
                       </TouchableOpacity>
                     ))}
                   </View>
+                  <View style={styles.interactionHintRow}>
+                    <MaterialCommunityIcons
+                      name="information-outline"
+                      size={14}
+                      color={colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.interactionHintText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Tap Daily, Weekly, or Monthly to change how points are grouped.
+                    </Text>
+                  </View>
                 </View>
               )}
 
@@ -1090,21 +1546,94 @@ export default function Dashboard() {
               {isAdmin && (
                 <View style={styles.chartContainer}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    👥 Active Users by Role
+                    👥 Active Users
                   </Text>
                   <View
                     style={[styles.chartCard, { backgroundColor: colors.card }]}
                   >
+                    <View style={styles.calendarControlsRow}>
+                      <TouchableOpacity
+                        style={styles.calendarButton}
+                        onPress={() => handleCalendarPageChange(1)}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Previous active users range"
+                        accessibilityHint="Shows an older active users date window"
+                      >
+                        <MaterialCommunityIcons
+                          name="chevron-left"
+                          size={18}
+                          color={colors.primary}
+                        />
+                      </TouchableOpacity>
+                      <Text
+                        style={[styles.calendarLabel, { color: colors.textSecondary }]}
+                      >
+                        {calendarLabel}
+                      </Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.calendarButton,
+                          isLatestCalendarWindow && styles.calendarButtonDisabled,
+                        ]}
+                        onPress={() => handleCalendarPageChange(-1)}
+                        disabled={isLatestCalendarWindow}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Next active users range"
+                        accessibilityHint="Shows a newer active users date window"
+                      >
+                        <MaterialCommunityIcons
+                          name="chevron-right"
+                          size={18}
+                          color={
+                            isLatestCalendarWindow
+                              ? colors.textSecondary
+                              : colors.primary
+                          }
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.interactionHintRow}>
+                      <MaterialCommunityIcons
+                        name="gesture-tap"
+                        size={14}
+                        color={colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.interactionHintText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Tap legend items to show or hide role lines.
+                      </Text>
+                    </View>
+                    <Animated.View
+                      style={[
+                        styles.animatedChart,
+                        {
+                          opacity: chartFadeAnim,
+                          transform: [
+                            {
+                              translateY: chartFadeAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [10, 0],
+                              }),
+                            },
+                          ],
+                        },
+                      ]}
+                    >
                     {analyticsPeriod === "monthly" ? (
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
                       >
                         {(() => {
-                          const baseWidth = screenWidth - 40;
                           const dynamicWidth = Math.max(
-                            baseWidth,
-                            activeUsersStats.labels.length * 80
+                            chartWidth,
+                            activeUsersStats.labels.length * monthlyLabelSpacing
                           );
                           return (
                             <LineChart
@@ -1113,32 +1642,30 @@ export default function Dashboard() {
                                   ? activeUsersStats.labels
                                   : [""],
                                 datasets: [
-                                  {
-                                    data: activeUsersStats.students.length
-                                      ? activeUsersStats.students
+                                  ...(activeRoleSeries.length
+                                    ? activeRoleSeries
+                                    : [
+                                        {
+                                          key: "students",
+                                          label: "Students",
+                                          values: [0],
+                                          colorRgba: "rgba(59,130,246,",
+                                        },
+                                      ]
+                                  ).map((series) => ({
+                                    data: series.values.length
+                                      ? series.values
                                       : [0],
-                                    color: (o = 1) => `rgba(59,130,246,${o})`,
+                                    color: (o = 1) => `${series.colorRgba}${o})`,
                                     strokeWidth: 3,
-                                  },
-                                  {
-                                    data: activeUsersStats.instructors.length
-                                      ? activeUsersStats.instructors
-                                      : [0],
-                                    color: (o = 1) => `rgba(16,185,129,${o})`,
-                                    strokeWidth: 3,
-                                  },
-                                  {
-                                    data: activeUsersStats.admins.length
-                                      ? activeUsersStats.admins
-                                      : [0],
-                                    color: (o = 1) => `rgba(239,68,68,${o})`,
-                                    strokeWidth: 3,
-                                  },
+                                    roleKey: series.key,
+                                    label: series.label,
+                                  })),
                                 ],
-                                legend: ["Students", "Instructors", "Admins"],
+                                legend: activeRoleSeries.map((d) => d.label),
                               }}
                               width={dynamicWidth}
-                              height={260}
+                              height={activeUsersChartHeight}
                               yAxisInterval={1}
                               chartConfig={{
                                 ...chartConfig,
@@ -1152,56 +1679,10 @@ export default function Dashboard() {
                               style={{ marginVertical: 8, borderRadius: 16 }}
                               fromZero
                               segments={4}
-                              onDataPointClick={(data) => {
-                                const datasets = [
-                                  "Students",
-                                  "Instructors",
-                                  "Admins",
-                                ];
-                                const dataValues = [
-                                  activeUsersStats.students[data.index],
-                                  activeUsersStats.instructors[data.index],
-                                  activeUsersStats.admins[data.index],
-                                ];
-                                const datasetIndex = data.datasetIndex || 0;
-                                const periodLabel =
-                                  analyticsPeriod === "daily"
-                                    ? "Day"
-                                    : analyticsPeriod === "weekly"
-                                    ? "Week"
-                                    : "Month";
-
-                                // Find all datasets with the same value (overlapping points)
-                                const clickedValue = dataValues[datasetIndex];
-                                const overlappingDatasets = datasets.filter(
-                                  (_, idx) =>
-                                    dataValues[idx] === clickedValue &&
-                                    dataValues[idx] !== 0
-                                );
-
-                                handleDataPointClick({
-                                  x: activeUsersStats.labels[data.index],
-                                  value: clickedValue,
-                                  index: data.index,
-                                  dataset: {
-                                    label:
-                                      overlappingDatasets.length > 1
-                                        ? overlappingDatasets.join(", ")
-                                        : datasets[datasetIndex],
-                                    data: [
-                                      activeUsersStats.students,
-                                      activeUsersStats.instructors,
-                                      activeUsersStats.admins,
-                                    ][datasetIndex],
-                                  },
-                                  overlappingDatasets:
-                                    overlappingDatasets.length > 1
-                                      ? overlappingDatasets
-                                      : null,
-                                  xLabel: periodLabel,
-                                  yLabel: "Active Users",
-                                });
-                              }}
+                              verticalLabelRotation={
+                                isAndroid && analyticsPeriod !== "daily" ? 18 : 0
+                              }
+                              onDataPointClick={handleActiveUsersDataPointClick}
                             />
                           );
                         })()}
@@ -1213,32 +1694,28 @@ export default function Dashboard() {
                             ? activeUsersStats.labels
                             : [""],
                           datasets: [
-                            {
-                              data: activeUsersStats.students.length
-                                ? activeUsersStats.students
-                                : [0],
-                              color: (o = 1) => `rgba(59,130,246,${o})`,
+                            ...(activeRoleSeries.length
+                              ? activeRoleSeries
+                              : [
+                                  {
+                                    key: "students",
+                                    label: "Students",
+                                    values: [0],
+                                    colorRgba: "rgba(59,130,246,",
+                                  },
+                                ]
+                            ).map((series) => ({
+                              data: series.values.length ? series.values : [0],
+                              color: (o = 1) => `${series.colorRgba}${o})`,
                               strokeWidth: 3,
-                            },
-                            {
-                              data: activeUsersStats.instructors.length
-                                ? activeUsersStats.instructors
-                                : [0],
-                              color: (o = 1) => `rgba(16,185,129,${o})`,
-                              strokeWidth: 3,
-                            },
-                            {
-                              data: activeUsersStats.admins.length
-                                ? activeUsersStats.admins
-                                : [0],
-                              color: (o = 1) => `rgba(239,68,68,${o})`,
-                              strokeWidth: 3,
-                            },
+                              roleKey: series.key,
+                              label: series.label,
+                            })),
                           ],
-                          legend: ["Students", "Instructors", "Admins"],
+                          legend: activeRoleSeries.map((d) => d.label),
                         }}
-                        width={screenWidth - 40}
-                        height={260}
+                        width={chartWidth}
+                        height={activeUsersChartHeight}
                         yAxisInterval={1}
                         chartConfig={{
                           ...chartConfig,
@@ -1252,60 +1729,24 @@ export default function Dashboard() {
                         style={{ marginVertical: 8, borderRadius: 16 }}
                         fromZero
                         segments={4}
-                        onDataPointClick={(data) => {
-                          const datasets = [
-                            "Students",
-                            "Instructors",
-                            "Admins",
-                          ];
-                          const dataValues = [
-                            activeUsersStats.students[data.index],
-                            activeUsersStats.instructors[data.index],
-                            activeUsersStats.admins[data.index],
-                          ];
-                          const datasetIndex = data.datasetIndex || 0;
-                          const periodLabel =
-                            analyticsPeriod === "daily"
-                              ? "Day"
-                              : analyticsPeriod === "weekly"
-                              ? "Week"
-                              : "Month";
-
-                          // Find all datasets with the same value (overlapping points)
-                          const clickedValue = dataValues[datasetIndex];
-                          const overlappingDatasets = datasets.filter(
-                            (_, idx) =>
-                              dataValues[idx] === clickedValue &&
-                              dataValues[idx] !== 0
-                          );
-
-                          handleDataPointClick({
-                            x: activeUsersStats.labels[data.index],
-                            value: clickedValue,
-                            index: data.index,
-                            dataset: {
-                              label:
-                                overlappingDatasets.length > 1
-                                  ? overlappingDatasets.join(", ")
-                                  : datasets[datasetIndex],
-                              data: [
-                                activeUsersStats.students,
-                                activeUsersStats.instructors,
-                                activeUsersStats.admins,
-                              ][datasetIndex],
-                            },
-                            overlappingDatasets:
-                              overlappingDatasets.length > 1
-                                ? overlappingDatasets
-                                : null,
-                            xLabel: periodLabel,
-                            yLabel: "Active Users",
-                          });
-                        }}
+                        verticalLabelRotation={
+                          isAndroid && analyticsPeriod !== "daily" ? 18 : 0
+                        }
+                        onDataPointClick={handleActiveUsersDataPointClick}
                       />
                     )}
+                    </Animated.View>
                     <View style={styles.legendContainer}>
-                      <View style={styles.legendItem}>
+                      <TouchableOpacity
+                        style={[
+                          styles.legendItem,
+                          !visibleActiveRoleSeries.students &&
+                            styles.legendItemInactive,
+                        ]}
+                        onPress={() => toggleActiveRoleSeries("students")}
+                        accessibilityRole="button"
+                        accessibilityLabel="Toggle students line"
+                      >
                         <View
                           style={[
                             styles.legendColor,
@@ -1317,8 +1758,17 @@ export default function Dashboard() {
                         >
                           Students
                         </Text>
-                      </View>
-                      <View style={styles.legendItem}>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.legendItem,
+                          !visibleActiveRoleSeries.instructors &&
+                            styles.legendItemInactive,
+                        ]}
+                        onPress={() => toggleActiveRoleSeries("instructors")}
+                        accessibilityRole="button"
+                        accessibilityLabel="Toggle instructors line"
+                      >
                         <View
                           style={[
                             styles.legendColor,
@@ -1330,8 +1780,17 @@ export default function Dashboard() {
                         >
                           Instructors
                         </Text>
-                      </View>
-                      <View style={styles.legendItem}>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.legendItem,
+                          !visibleActiveRoleSeries.admins &&
+                            styles.legendItemInactive,
+                        ]}
+                        onPress={() => toggleActiveRoleSeries("admins")}
+                        accessibilityRole="button"
+                        accessibilityLabel="Toggle admins line"
+                      >
                         <View
                           style={[
                             styles.legendColor,
@@ -1343,7 +1802,7 @@ export default function Dashboard() {
                         >
                           Admins
                         </Text>
-                      </View>
+                      </TouchableOpacity>
                     </View>
                     {activeUsersStats.students.reduce((a, b) => a + b, 0) +
                       activeUsersStats.instructors.reduce((a, b) => a + b, 0) +
@@ -1369,12 +1828,26 @@ export default function Dashboard() {
                   >
                     <BarChart
                       data={contentData}
-                      width={screenWidth - 60}
-                      height={220}
+                      width={chartWidth}
+                      height={contentChartHeight}
                       yAxisLabel=""
                       chartConfig={chartConfig}
                       verticalLabelRotation={30}
                       showValuesOnTopOfBars={true}
+                      fromZero
+                      onDataPointClick={(data) => {
+                        handleDataPointClick({
+                          x: contentData.labels[data.index],
+                          value: data.value,
+                          index: data.index,
+                          dataset: {
+                            label: "Platform Content",
+                            data: contentData.datasets[0].data,
+                          },
+                          xLabel: "Metric",
+                          yLabel: "Count",
+                        });
+                      }}
                     />
                   </View>
                 </View>
@@ -1435,7 +1908,7 @@ export default function Dashboard() {
                       {tooltipData.xLabel || "Period"}:
                     </Text>
                     <Text style={[styles.tooltipValue, { color: colors.text }]}>
-                      {tooltipData.x || "N/A"}
+                      {tooltipData.x ?? "N/A"}
                     </Text>
                   </View>
                   <View style={styles.tooltipRow}>
@@ -1448,7 +1921,7 @@ export default function Dashboard() {
                       {tooltipData.yLabel || "Value"}:
                     </Text>
                     <Text style={[styles.tooltipValue, { color: colors.text }]}>
-                      {tooltipData.value || "N/A"}
+                      {tooltipData.value ?? "N/A"}
                     </Text>
                   </View>
                   {tooltipData.overlappingDatasets &&
@@ -1690,20 +2163,20 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   chartContainer: {
-    padding: 24,
+    padding: Platform.OS === "android" ? 16 : 24,
     paddingTop: 8,
     width: "100%",
   },
   chartCard: {
     borderRadius: 16,
-    padding: 20,
+    padding: Platform.OS === "android" ? 14 : 20,
     elevation: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 8,
     alignItems: "center",
-    overflow: "hidden",
+    overflow: Platform.OS === "android" ? "visible" : "hidden",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
     width: "100%",
@@ -1779,6 +2252,48 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "capitalize",
   },
+  calendarControlsRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  calendarButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.25)",
+  },
+  calendarButtonDisabled: {
+    opacity: 0.45,
+  },
+  calendarLabel: {
+    fontSize: Platform.OS === "android" ? 13 : 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  interactionHintRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  interactionHintText: {
+    flex: 1,
+    fontSize: Platform.OS === "android" ? 12 : 11,
+    lineHeight: Platform.OS === "android" ? 17 : 15,
+    fontWeight: "500",
+  },
+  animatedChart: {
+    width: "100%",
+    alignItems: "center",
+  },
   legendContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -1791,19 +2306,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
+  legendItemInactive: {
+    opacity: 0.45,
+  },
   legendColor: {
     width: 12,
     height: 12,
     borderRadius: 6,
   },
   legendText: {
-    fontSize: 12,
-    fontWeight: "500",
+    fontSize: Platform.OS === "android" ? 13 : 12,
+    fontWeight: "600",
   },
   contentWrapper: {
     width: "100%",
     maxWidth: Platform.OS === "web" ? 900 : "100%",
     alignSelf: "center",
+  },
+  selectedPointChip: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+  },
+  selectedPointText: {
+    fontSize: Platform.OS === "android" ? 13 : 12,
+    fontWeight: "600",
   },
   tooltipOverlay: {
     flex: 1,
