@@ -2,7 +2,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Pressable,
   TouchableWithoutFeedback,
   Image,
   ScrollView,
@@ -152,7 +151,6 @@ const [importing, setImporting] = React.useState(false);
     BACKGROUND_OPTIONS[0]
   );
   const [levelProgress, setLevelProgress] = useState(null);
-  const [showCyberLearnHistory, setShowCyberLearnHistory] = useState(false);
   const levelProgressLoadedRef = useRef(false); // Track if level progress has been loaded
   const router = useRouter();
 
@@ -1191,82 +1189,6 @@ const handleImportCyberQuestsWeb = () => {
     return url || null;
   };
 
-  const toNumber = (value) => {
-    if (typeof value === "number") return value;
-    if (typeof value === "string" && value.trim()) {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    return null;
-  };
-
-  const formatHistoryDate = (value) => {
-    if (!value) return "N/A";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString();
-  };
-
-  const cyberLearnHistory = modules
-    .filter(
-      (moduleItem) =>
-        moduleItem?.type === "cyber-quest" &&
-        Array.isArray(moduleItem?.progress?.attempts) &&
-        moduleItem.progress.attempts.length > 0
-    )
-    .flatMap((moduleItem) => {
-      const subjectName =
-        moduleItem?.subject?.name ||
-        moduleItem?.subjectName ||
-        selectedSubject?.name ||
-        "N/A";
-
-      return moduleItem.progress.attempts.map((attempt, attemptIndex) => {
-        const totalQuestions =
-          toNumber(attempt?.totalQuestions) ??
-          (Array.isArray(moduleItem?.questions) ? moduleItem.questions.length : null);
-        const score = toNumber(attempt?.score) ?? toNumber(moduleItem?.bestScore);
-        const correctAnswers =
-          toNumber(attempt?.correctAnswers) ??
-          (Array.isArray(attempt?.answers)
-            ? attempt.answers.filter((a) => a?.isCorrect).length
-            : typeof totalQuestions === "number" && typeof score === "number"
-            ? Math.max(
-                Math.min(Math.round((score / 100) * totalQuestions), totalQuestions),
-                0
-              )
-            : null);
-        const incorrectAnswers =
-          toNumber(attempt?.incorrectAnswers) ??
-          (typeof totalQuestions === "number" && typeof correctAnswers === "number"
-            ? Math.max(totalQuestions - correctAnswers, 0)
-            : null);
-
-        return {
-          id:
-            attempt?._id ||
-            `${moduleItem._id || moduleItem.id}-attempt-${attempt?.attemptNumber || attemptIndex + 1}`,
-          title: moduleItem?.title || "CyberQuest",
-          subjectName,
-          level:
-            toNumber(attempt?.level) ??
-            toNumber(moduleItem?.level) ??
-            toNumber(moduleItem?.order) ??
-            "N/A",
-          attemptNumber: toNumber(attempt?.attemptNumber) ?? attemptIndex + 1,
-          score,
-          correctAnswers,
-          incorrectAnswers,
-          totalQuestions,
-          difficulty: moduleItem?.difficulty || "medium",
-          completedAt: attempt?.completedAt || attempt?.startedAt || moduleItem?.completedAt,
-        };
-      });
-    })
-    .sort(
-      (a, b) =>
-        new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime()
-    );
-
   useFocusEffect(
     React.useCallback(() => {
       if (!selectedModule) {
@@ -1641,60 +1563,6 @@ const handleImportCyberQuestsWeb = () => {
                 </View>
               </View>
             </View>
-
-            <Pressable
-              style={styles.cyberHistoryButton}
-              onPress={() => setShowCyberLearnHistory((prev) => !prev)}
-              hitSlop={10}
-            >
-              <MaterialCommunityIcons
-                name="history"
-                size={16}
-                color="#E2E8F0"
-              />
-              <Text style={styles.cyberHistoryButtonText}>
-                {showCyberLearnHistory
-                  ? "Hide CyberLearn History"
-                  : "View CyberLearn History"}
-              </Text>
-            </Pressable>
-
-            {showCyberLearnHistory && (
-              <View style={styles.cyberHistoryContainer}>
-                {cyberLearnHistory.length > 0 ? (
-                  cyberLearnHistory.map((entry) => (
-                    <View key={entry.id} style={styles.cyberHistoryItem}>
-                      <Text style={styles.cyberHistoryTitle}>{entry.title}</Text>
-                      <Text style={styles.cyberHistoryDetail}>
-                        Subject: {entry.subjectName}
-                      </Text>
-                      <Text style={styles.cyberHistoryDetail}>
-                        Level: {entry.level} • Attempt: {entry.attemptNumber}
-                      </Text>
-                      <Text style={styles.cyberHistoryDetail}>
-                        Score: {typeof entry.score === "number" ? `${entry.score}%` : "N/A"}
-                      </Text>
-                      <Text style={styles.cyberHistoryDetail}>
-                        Correct: {typeof entry.correctAnswers === "number" ? entry.correctAnswers : "N/A"} • Incorrect: {typeof entry.incorrectAnswers === "number" ? entry.incorrectAnswers : "N/A"}
-                        {typeof entry.totalQuestions === "number"
-                          ? ` • Total: ${entry.totalQuestions}`
-                          : ""}
-                      </Text>
-                      <Text style={styles.cyberHistoryDetail}>
-                        Difficulty: {entry.difficulty}
-                      </Text>
-                      <Text style={styles.cyberHistoryDetail}>
-                        Finished: {formatHistoryDate(entry.completedAt)}
-                      </Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.cyberHistoryEmptyText}>
-                    No CyberLearn history yet. Complete a CyberQuest to see attempts here.
-                  </Text>
-                )}
-              </View>
-            )}
           </View>
         )}
       </View>
@@ -3564,9 +3432,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    position: "relative",
-    zIndex: 30,
-    elevation: 12,
     // Remove the conflicting web-specific styles here
     ...Platform.select({
       web: {
@@ -3608,58 +3473,6 @@ const styles = StyleSheet.create({
   levelProgressValue: {
     fontSize: 18,
     fontWeight: "bold",
-  },
-  cyberHistoryButton: {
-    marginTop: 12,
-    minHeight: 42,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.22)",
-    backgroundColor: "rgba(30, 41, 59, 0.6)",
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  cyberHistoryButtonText: {
-    color: "#E2E8F0",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  cyberHistoryContainer: {
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.14)",
-    paddingTop: 10,
-    maxHeight: 260,
-  },
-  cyberHistoryItem: {
-    backgroundColor: "rgba(15, 23, 42, 0.58)",
-    borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.25)",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 8,
-  },
-  cyberHistoryTitle: {
-    color: "#F8FAFC",
-    fontSize: 13,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  cyberHistoryDetail: {
-    color: "#CBD5E1",
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  cyberHistoryEmptyText: {
-    color: "#CBD5E1",
-    fontSize: 12,
-    fontStyle: "italic",
-    textAlign: "center",
-    paddingVertical: 12,
   },
 
   // Small screen optimizations

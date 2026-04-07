@@ -2,7 +2,6 @@ import express from "express";
 import User from "../models/Users.js";
 import Progress from "../models/Progress.js";
 import Quiz from "../models/Quiz.js";
-import Section from "../models/Section.js";
 import { protectRoute, authorizeRole } from "../middleware/auth.middleware.js";
 import {
   logActivity,
@@ -112,54 +111,12 @@ router.get(
         _id: { $in: uniqueCyberQuestIds },
       })
         .select("_id title subject level questions")
-        .populate("subject", "name sectionCode")
         .lean();
-
-      const sectionNameMap = new Map();
-      const unresolvedSubjectIds = [];
-      for (const cq of cyberQuests) {
-        if (cq.subject && typeof cq.subject === "object" && cq.subject._id) {
-          sectionNameMap.set(
-            cq.subject._id.toString(),
-            cq.subject.name || cq.subject.sectionCode || "N/A"
-          );
-        } else if (cq.subject) {
-          unresolvedSubjectIds.push(cq.subject.toString());
-        }
-      }
-
-      if (unresolvedSubjectIds.length) {
-        const sections = await Section.find({
-          _id: { $in: [...new Set(unresolvedSubjectIds)] },
-        })
-          .select("_id name sectionCode")
-          .lean();
-
-        for (const section of sections) {
-          sectionNameMap.set(
-            section._id.toString(),
-            section.name || section.sectionCode || "N/A"
-          );
-        }
-      }
 
       // Merge both types into a single map
       const quizMap = new Map();
       quizzes.forEach((q) => quizMap.set(q._id.toString(), q));
-      cyberQuests.forEach((cq) => {
-        const subjectId =
-          cq.subject && typeof cq.subject === "object" && cq.subject._id
-            ? cq.subject._id.toString()
-            : cq.subject?.toString() || null;
-
-        quizMap.set(cq._id.toString(), {
-          ...cq,
-          subject: subjectId || "N/A",
-          subjectName: subjectId
-            ? sectionNameMap.get(subjectId) || "N/A"
-            : "N/A",
-        });
-      }); // No recent game results are collected/returned
+      cyberQuests.forEach((cq) => quizMap.set(cq._id.toString(), cq)); // No recent game results are collected/returned
 
       // First pass: compute raw stats & collect quiz ids needed
       const studentStats = students.map((stu) => {
@@ -287,7 +244,6 @@ router.get(
             const resolvedQuestInfo = cyberQuestInfo || {
               title: "CyberQuest",
               subject: "N/A",
-              subjectName: "N/A",
               level: null,
             };
             if (cyberQuestId) {
@@ -329,10 +285,6 @@ router.get(
                      id: `${cyberQuestId}-attempt-${attemptStamp}`,
                      title: resolvedQuestInfo.title,
                      subject: resolvedQuestInfo.subject || "N/A",
-                      subjectName:
-                        resolvedQuestInfo.subjectName ||
-                        resolvedQuestInfo.subject ||
-                        "N/A",
                      score: toNum(attempt.score) ?? toNum(cqp.bestScore) ?? 0,
                      completedAt:
                        attempt.completedAt ||
@@ -355,10 +307,6 @@ router.get(
                    id: `${cyberQuestId}-best-${attemptStamp}`,
                    title: resolvedQuestInfo.title,
                    subject: resolvedQuestInfo.subject || "N/A",
-                    subjectName:
-                      resolvedQuestInfo.subjectName ||
-                      resolvedQuestInfo.subject ||
-                      "N/A",
                    score: toNum(cqp.bestScore),
                    completedAt: cqp.lastAttemptAt || new Date().toISOString(),
                    type: "cyberQuest",
