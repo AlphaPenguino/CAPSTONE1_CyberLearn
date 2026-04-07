@@ -129,6 +129,8 @@ const progressSchema = new mongoose.Schema(
             score: Number,
             totalQuestions: Number,
             correctAnswers: Number,
+            incorrectAnswers: Number,
+            level: Number,
             answers: [
               {
                 questionIndex: Number,
@@ -619,7 +621,8 @@ progressSchema.methods.recordCyberQuestAttempt = async function (
   cyberQuestId,
   sectionId,
   answers,
-  score
+  score,
+  meta = {}
 ) {
   try {
     // Find existing cyber quest progress or create new one
@@ -641,13 +644,24 @@ progressSchema.methods.recordCyberQuestAttempt = async function (
 
     // Create new attempt
     const attemptNumber = questProgress.totalAttempts + 1;
-    const correctAnswers = answers.filter((a) => a.isCorrect).length;
+    const correctAnswers =
+      typeof meta.correctAnswers === "number"
+        ? meta.correctAnswers
+        : answers.filter((a) => a.isCorrect).length;
+    const totalQuestions =
+      typeof meta.totalQuestions === "number" ? meta.totalQuestions : answers.length;
+    const incorrectAnswers =
+      typeof meta.incorrectAnswers === "number"
+        ? meta.incorrectAnswers
+        : Math.max(totalQuestions - correctAnswers, 0);
 
     const newAttempt = {
       attemptNumber,
       score,
-      totalQuestions: answers.length,
+      totalQuestions,
       correctAnswers,
+      incorrectAnswers,
+      level: typeof meta.questLevel === "number" ? meta.questLevel : meta.level,
       answers,
       startedAt: new Date(),
       completedAt: new Date(),
@@ -689,6 +703,9 @@ progressSchema.methods.recordCyberQuestAttempt = async function (
       totalAttempts: questProgress.totalAttempts,
       firstCompletedAt: questProgress.firstCompletedAt,
       lastAttemptAt: questProgress.lastAttemptAt,
+      correctAnswers,
+      incorrectAnswers,
+      level: newAttempt.level ?? null,
     };
   } catch (error) {
     console.error("Error recording cyber quest attempt:", error);

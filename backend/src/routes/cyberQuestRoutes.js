@@ -1863,7 +1863,16 @@ router.post(
         questId,
         cyberQuest.subject,
         processedAnswers,
-        score
+        score,
+        {
+          correctAnswers: correctCount,
+          incorrectAnswers: Math.max(
+            cyberQuest.questions.length - correctCount,
+            0
+          ),
+          totalQuestions: cyberQuest.questions.length,
+          questLevel: cyberQuest.level,
+        }
       );
 
       // Handle XP and level progression

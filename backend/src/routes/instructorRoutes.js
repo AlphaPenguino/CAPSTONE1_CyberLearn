@@ -110,7 +110,7 @@ router.get(
       const cyberQuests = await CyberQuest.find({
         _id: { $in: uniqueCyberQuestIds },
       })
-        .select("_id title subject")
+        .select("_id title subject level questions")
         .lean();
 
       // Merge both types into a single map
@@ -125,6 +125,14 @@ router.get(
         const analyticsLastActivityTs = analytics.lastActivity
           ? new Date(analytics.lastActivity).getTime()
           : null;
+        const toNum = (value) => {
+          if (typeof value === "number") return value;
+          if (typeof value === "string" && value.trim()) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+          }
+          return null;
+        };
 
         // We will derive gamesPlayed strictly from CyberQuest attempts (map-only)
         let gamesPlayed = 0;
@@ -151,6 +159,7 @@ router.get(
         let lastActivity = analytics.lastActivity || null;
         // recentAttempts removed
         const gameHistory = [];
+        const cyberQuestHistory = [];
 
         // If we have progress data, also count from there (for backward compatibility)
         if (prog) {
@@ -232,40 +241,113 @@ router.get(
             const cyberQuestInfo = cyberQuestId
               ? quizMap.get(cyberQuestId)
               : null;
-            if (cyberQuestInfo) {
+            const resolvedQuestInfo = cyberQuestInfo || {
+              title: "CyberQuest",
+              subject: "N/A",
+              level: null,
+            };
+            if (cyberQuestId) {
               // Push EACH attempt (if attempts array exists) otherwise fallback to bestScore summary
-              if (Array.isArray(cqp.attempts) && cqp.attempts.length) {
-                cqp.attempts.forEach((attempt, idx) => {
-                  const attemptStamp = attempt.completedAt
-                    ? new Date(attempt.completedAt).getTime()
-                    : Date.now() + idx;
-                  gameHistory.push({
-                    id: `${cyberQuestId}-attempt-${attemptStamp}`,
-                    title: cyberQuestInfo.title,
-                    subject: cyberQuestInfo.subject || "N/A",
-                    score: attempt.score ?? cqp.bestScore ?? 0,
-                    completedAt:
-                      attempt.completedAt ||
-                      attempt.startedAt ||
-                      cqp.lastAttemptAt ||
-                      new Date().toISOString(),
-                    type: "cyberQuest",
-                  });
-                });
-              } else if (cqp.bestScore > 0) {
-                // Preserve a single summary entry if no granular attempts exist
-                const attemptStamp = cqp.lastAttemptAt
-                  ? new Date(cqp.lastAttemptAt).getTime()
-                  : Date.now();
-                gameHistory.push({
-                  id: `${cyberQuestId}-best-${attemptStamp}`,
-                  title: cyberQuestInfo.title,
-                  subject: cyberQuestInfo.subject || "N/A",
-                  score: cqp.bestScore,
-                  completedAt: cqp.lastAttemptAt || new Date().toISOString(),
-                  type: "cyberQuest",
-                });
-              }
+               if (Array.isArray(cqp.attempts) && cqp.attempts.length) {
+                 cqp.attempts.forEach((attempt, idx) => {
+                   const attemptStamp = attempt.completedAt
+                     ? new Date(attempt.completedAt).getTime()
+                     : Date.now() + idx;
+                   const derivedTotal =
+                     toNum(attempt.totalQuestions) ??
+                     (Array.isArray(attempt.answers)
+                       ? attempt.answers.length
+                       : Array.isArray(resolvedQuestInfo.questions)
+                       ? resolvedQuestInfo.questions.length
+                       : null);
+                   const derivedCorrect =
+                     toNum(attempt.correctAnswers) ??
+                     (Array.isArray(attempt.answers)
+                       ? attempt.answers.filter((a) => a.isCorrect).length
+                      : typeof derivedTotal === "number" &&
+                        typeof toNum(attempt.score) === "number"
+                      ? Math.max(
+                          Math.min(
+                            Math.round((toNum(attempt.score) / 100) * derivedTotal),
+                            derivedTotal
+                          ),
+                          0
+                        )
+                       : null);
+                   const derivedIncorrect =
+                     toNum(attempt.incorrectAnswers) ??
+                     (typeof derivedTotal === "number" &&
+                     typeof derivedCorrect === "number"
+                       ? Math.max(derivedTotal - derivedCorrect, 0)
+                       : null);
+
+                   cyberQuestHistory.push({
+                     id: `${cyberQuestId}-attempt-${attemptStamp}`,
+                     title: resolvedQuestInfo.title,
+                     subject: resolvedQuestInfo.subject || "N/A",
+                     score: toNum(attempt.score) ?? toNum(cqp.bestScore) ?? 0,
+                     completedAt:
+                       attempt.completedAt ||
+                       attempt.startedAt ||
+                       cqp.lastAttemptAt ||
+                       new Date().toISOString(),
+                     type: "cyberQuest",
+                     level: toNum(attempt.level) ?? toNum(resolvedQuestInfo.level),
+                     totalQuestions: derivedTotal,
+                     correctAnswers: derivedCorrect,
+                     incorrectAnswers: derivedIncorrect,
+                   });
+                 });
+               } else if (cqp.bestScore > 0) {
+                 // Preserve a single summary entry if no granular attempts exist
+                 const attemptStamp = cqp.lastAttemptAt
+                   ? new Date(cqp.lastAttemptAt).getTime()
+                   : Date.now();
+                 cyberQuestHistory.push({
+                   id: `${cyberQuestId}-best-${attemptStamp}`,
+                   title: resolvedQuestInfo.title,
+                   subject: resolvedQuestInfo.subject || "N/A",
+                   score: toNum(cqp.bestScore),
+                   completedAt: cqp.lastAttemptAt || new Date().toISOString(),
+                   type: "cyberQuest",
+                   level: toNum(resolvedQuestInfo.level),
+                   totalQuestions: Array.isArray(resolvedQuestInfo.questions)
+                    ? resolvedQuestInfo.questions.length
+                    : null,
+                  correctAnswers:
+                    Array.isArray(resolvedQuestInfo.questions) &&
+                    typeof toNum(cqp.bestScore) === "number"
+                      ? Math.max(
+                          Math.min(
+                            Math.round(
+                              (toNum(cqp.bestScore) / 100) *
+                                resolvedQuestInfo.questions.length
+                            ),
+                            resolvedQuestInfo.questions.length
+                          ),
+                          0
+                        )
+                      : null,
+                  incorrectAnswers:
+                    Array.isArray(resolvedQuestInfo.questions) &&
+                    typeof toNum(cqp.bestScore) === "number"
+                      ? Math.max(
+                          resolvedQuestInfo.questions.length -
+                            Math.max(
+                              Math.min(
+                                Math.round(
+                                  (toNum(cqp.bestScore) / 100) *
+                                    resolvedQuestInfo.questions.length
+                                ),
+                                resolvedQuestInfo.questions.length
+                              ),
+                              0
+                            ),
+                          0
+                        )
+                      : null,
+                 });
+               }
             }
           }
         }
@@ -281,21 +363,29 @@ router.get(
             const isGenericTitle =
               rawTitle === `${gameType} game` ||
               rawTitle === `${gameType} play`;
-            // Skip generic placeholders for quiz & cyberQuest (already represented by detailed progress attempts)
-            if (
-              isGenericTitle &&
-              (gameType === "quiz" || gameType === "cyberQuest")
-            ) {
-              return;
-            }
-            gameHistory.push({
-              id: `alog-${stamp}-${gameType}`,
-              title: rawTitle,
-              subject: gameType,
-              score: typeof log.score === "number" ? log.score : null,
-              completedAt: log.completedAt || new Date().toISOString(),
-              type: gameType,
-            });
+             // Skip generic placeholders for quiz & cyberQuest (already represented by detailed progress attempts)
+             if (
+               isGenericTitle &&
+               (gameType === "quiz" || gameType === "cyberQuest")
+             ) {
+               return;
+             }
+
+             // Extract CyberQuest metadata enriched by trackGameCompletion
+             const meta = log.meta || {};
+             const toNum = (v) =>
+               typeof v === "number" ? v :
+               typeof v === "string" && v.trim() ? Number(v) || null :
+               null;
+
+             gameHistory.push({
+               id: `alog-${stamp}-${gameType}`,
+               title: rawTitle,
+               subject: gameType,
+               score: typeof log.score === "number" ? log.score : toNum(meta.score),
+               completedAt: log.completedAt || new Date().toISOString(),
+               type: gameType,
+             });
           });
         }
 
@@ -320,7 +410,7 @@ router.get(
         const combinedScore = globalXP;
 
         // Recalculate gamesPlayed strictly as number of CyberQuest entries
-        gamesPlayed = gameHistory.filter((g) => g.type === "cyberQuest").length;
+        gamesPlayed = cyberQuestHistory.length;
 
         return {
           id: stu._id.toString(),
@@ -335,6 +425,11 @@ router.get(
           lastActivity,
           combinedScore,
           gameHistory: gameHistory.sort(
+            (a, b) =>
+              new Date(b.completedAt).getTime() -
+              new Date(a.completedAt).getTime()
+          ),
+          cyberQuestHistory: cyberQuestHistory.sort(
             (a, b) =>
               new Date(b.completedAt).getTime() -
               new Date(a.completedAt).getTime()

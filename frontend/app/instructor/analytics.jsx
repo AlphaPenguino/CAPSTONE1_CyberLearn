@@ -76,6 +76,47 @@ export default function InstructorAnalytics() {
     }
   }, [token]);
 
+  const formatCount = (value) =>
+    typeof value === "number" ? value : "N/A";
+
+  const toNum = (value) => {
+    if (typeof value === "number") return value;
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+
+  const getCyberQuestCount = (game, key) => {
+    const directValue = toNum(game[key]);
+    if (typeof directValue === "number") {
+      return directValue;
+    }
+
+    const totalQuestions = toNum(game.totalQuestions);
+
+    if (key === "correctAnswers") {
+      const score = toNum(game.score);
+      if (typeof totalQuestions === "number" && typeof score === "number") {
+        return Math.max(Math.round((score / 100) * totalQuestions), 0);
+      }
+      return null;
+    }
+
+    if (key === "incorrectAnswers") {
+      const correct = toNum(game.correctAnswers);
+      if (
+        typeof totalQuestions === "number" &&
+        typeof correct === "number"
+      ) {
+        return Math.max(totalQuestions - correct, 0);
+      }
+    }
+
+    return null;
+  };
+
   // Load data on component mount
   useEffect(() => {
     fetchStudentAnalytics();
@@ -619,36 +660,75 @@ export default function InstructorAnalytics() {
 
                         {expandedStudent === student.id && (
                           <View style={styles.historyContainer}>
-                            {student.gameHistory?.length > 0 ? (
-                              student.gameHistory.map((game, index) => (
-                                <View key={index} style={styles.historyItem}>
-                                  <Text style={styles.historyTitle}>
-                                    {game.title}
-                                  </Text>
-                                  <Text style={styles.historyDetails}>
-                                    Score:{" "}
-                                    {typeof game.score === "number"
-                                      ? game.score
-                                      : "N/A"}
-                                  </Text>
-                                  {game.type &&
-                                    game.type !== "quiz" &&
-                                    game.type !== "cyberQuest" && (
-                                      <Text style={styles.historyDetails}>
-                                        Type: {game.type}
+                            {(student.cyberQuestHistory?.length > 0
+                              ? student.cyberQuestHistory
+                              : student.gameHistory?.filter(
+                                  (game) => game.type === "cyberQuest"
+                                ) || [])
+                              .length > 0 ? (
+                              (student.cyberQuestHistory?.length > 0
+                                ? student.cyberQuestHistory
+                                : student.gameHistory?.filter(
+                                    (game) => game.type === "cyberQuest"
+                                  ) || [])
+                                .map((game, index) => {
+                                  const resolvedCorrect = getCyberQuestCount(
+                                    game,
+                                    "correctAnswers"
+                                  );
+                                  const resolvedIncorrect =
+                                    typeof game.incorrectAnswers === "number"
+                                      ? game.incorrectAnswers
+                                      : typeof game.totalQuestions === "number" &&
+                                        typeof resolvedCorrect === "number"
+                                      ? Math.max(
+                                          game.totalQuestions - resolvedCorrect,
+                                          0
+                                        )
+                                      : null;
+
+                                  return (
+                                    <View
+                                      key={game.id || index}
+                                      style={styles.historyItem}
+                                    >
+                                      <Text style={styles.historyTitle}>
+                                        {game.title}
                                       </Text>
-                                    )}
-                                  <Text style={styles.historyDetails}>
-                                    Finished:{" "}
-                                    {new Date(
-                                      game.completedAt
-                                    ).toLocaleDateString()}
-                                  </Text>
-                                </View>
-                              ))
+
+                                      <Text style={styles.historyDetails}>
+                                        Level: {toNum(game.level) ?? toNum(game.questLevel) ?? toNum(game.cyberQuestLevel) ?? "N/A"} • Attempt: {game.attemptNumber ?? index + 1}
+                                      </Text>
+                                      <Text style={styles.historyDetails}>
+                                        Score: {" "}
+                                        {typeof toNum(game.score) === "number"
+                                          ? `${toNum(game.score)}%`
+                                          : "N/A"}
+                                        {typeof game.passed === "boolean"
+                                          ? ` • ${game.passed ? "Passed" : "In progress"}`
+                                          : ""}
+                                      </Text>
+                                      <Text style={styles.historyDetails}>
+                                        Correct: {formatCount(resolvedCorrect)} • Incorrect: {formatCount(resolvedIncorrect)}
+                                        {typeof toNum(game.totalQuestions) === "number"
+                                          ? ` • Total: ${toNum(game.totalQuestions)}`
+                                          : ""}
+                                      </Text>
+                                      <Text style={styles.historyDetails}>
+                                        Difficulty: {game.difficulty || "medium"}
+                                      </Text>
+                                      <Text style={styles.historyDetails}>
+                                        Finished: {" "}
+                                        {game.completedAt
+                                          ? new Date(game.completedAt).toLocaleString()
+                                          : "N/A"}
+                                      </Text>
+                                    </View>
+                                  );
+                                })
                             ) : (
                               <Text style={styles.noGamesText}>
-                                No game history available.
+                                No CyberQuest history available.
                               </Text>
                             )}
                           </View>

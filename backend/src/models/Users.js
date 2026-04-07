@@ -241,11 +241,47 @@ userSchema.methods.trackGameCompletion = function (
     (meta.data && meta.data.score) ||
     meta.totalScore ||
     (meta.stats && (meta.stats.score || meta.stats.wavesCompleted)) ||
+    (meta.result && meta.result.score) ||
     (typeof meta.wavesCompleted === "number" ? meta.wavesCompleted : null);
   const xpEarned =
     meta.xpEarned ||
     (meta.data && meta.data.xpEarned) ||
+    (meta.result && meta.result.xpEarned) ||
     (typeof meta.xp === "number" ? meta.xp : undefined);
+
+  // Extract additional metadata for CyberQuest (from result or body)
+  const derivedMeta = {
+    correctAnswers:
+      (meta.result && meta.result.correctAnswers) ||
+      (meta.body && meta.body.correctAnswers) ||
+      undefined,
+    incorrectAnswers:
+      (meta.result && meta.result.incorrectAnswers) ||
+      (meta.body && meta.body.incorrectAnswers) ||
+      undefined,
+    totalQuestions:
+      (meta.result && meta.result.totalQuestions) ||
+      (meta.body && meta.body.totalQuestions) ||
+      undefined,
+    questLevel:
+      (meta.body && meta.body.questLevel) ||
+      (meta.result && meta.result.questLevel) ||
+      undefined,
+    level:
+      (meta.result && meta.result.levelProgression && meta.result.levelProgression.newLevel) ||
+      (meta.result && meta.result.levelProgression && meta.result.levelProgression.currentLevel) ||
+      undefined,
+    difficulty:
+      (meta.body && meta.body.difficulty) ||
+      (meta.result && meta.result.difficulty) ||
+      undefined,
+    passed:
+      (meta.result && meta.result.passed) ||
+      undefined,
+    attempts:
+      (meta.result && meta.result.questProgress && meta.result.questProgress.totalAttempts) ||
+      undefined,
+  };
 
   // Push into gameLog (cap at last 200 entries to avoid unbounded growth)
   if (!Array.isArray(this.analytics.gameLog)) this.analytics.gameLog = [];
@@ -255,7 +291,10 @@ userSchema.methods.trackGameCompletion = function (
     score: typeof derivedScore === "number" ? derivedScore : undefined,
     xpEarned,
     completedAt: now,
-    meta,
+    meta: {
+      ...meta,
+      ...derivedMeta,
+    },
   });
   if (this.analytics.gameLog.length > 200) {
     this.analytics.gameLog = this.analytics.gameLog.slice(-200);

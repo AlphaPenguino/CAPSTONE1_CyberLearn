@@ -1,5 +1,6 @@
 import { Slot, useRouter, useSegments } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "@/store/authStore";
@@ -8,14 +9,54 @@ import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
 import { SettingsProvider } from "../contexts/SettingsContext";
 import { NotificationProvider } from "../contexts/NotificationContext";
 
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+
 function AppContent() {
   const [mounted, setMounted] = useState(false);
   // Ensure we don't redirect until auth state is hydrated from storage
   const [authReady, setAuthReady] = useState(false);
   const router = useRouter();
   const segments = useSegments();
-  const { checkAuth, user, token } = useAuthStore();
+  const { checkAuth, logout, user, token } = useAuthStore();
   const { isDarkMode } = useTheme();
+  const activityTimeoutRef = useRef(null);
+  const lastActivityRef = useRef(Date.now());
+  const appStateRef = useRef(AppState.currentState);
+  const loggingOutRef = useRef(false);
+
+  const clearActivityTimer = useCallback(() => {
+    if (activityTimeoutRef.current) {
+      clearTimeout(activityTimeoutRef.current);
+      activityTimeoutRef.current = null;
+    }
+  }, []);
+
+  const triggerLogout = useCallback(async () => {
+    if (loggingOutRef.current) return;
+    loggingOutRef.current = true;
+    try {
+      await logout();
+    } finally {
+      loggingOutRef.current = false;
+    }
+  }, [logout]);
+
+  const scheduleLogout = useCallback(() => {
+    clearActivityTimer();
+
+    if (!user || !token) return;
+
+    activityTimeoutRef.current = setTimeout(() => {
+      triggerLogout();
+    }, SESSION_TIMEOUT_MS);
+  }, [clearActivityTimer, token, triggerLogout, user]);
+
+  const markActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    if (user && token) {
+      scheduleLogout();
+    }
+  }, [scheduleLogout, token, user]);
 
   useEffect(() => {
     let isActive = true;
@@ -30,6 +71,51 @@ function AppContent() {
       isActive = false;
     };
   }, [checkAuth]);
+
+  useEffect(() => {
+    clearActivityTimer();
+
+    if (user && token) {
+      markActivity();
+    }
+
+    return clearActivityTimer;
+  }, [clearActivityTimer, markActivity, token, user]);
+
+  useEffect(() => {
+    if (!mounted || !authReady || !user || !token) return;
+
+    if (Platform.OS === "web") {
+      const activityEvents = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"];
+      const handleWebActivity = () => markActivity();
+
+      activityEvents.forEach((eventName) => {
+        window.addEventListener(eventName, handleWebActivity, { passive: true });
+      });
+
+      return () => {
+        activityEvents.forEach((eventName) => {
+          window.removeEventListener(eventName, handleWebActivity);
+        });
+      };
+    }
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (nextState === "active") {
+        const elapsed = Date.now() - lastActivityRef.current;
+        if (elapsed >= SESSION_TIMEOUT_MS) {
+          triggerLogout();
+        } else if (previousState !== "active") {
+          markActivity();
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [authReady, markActivity, mounted, token, triggerLogout, user]);
 
   useEffect(() => {
     // Don't run redirect logic until the component is mounted AND auth is ready
@@ -52,7 +138,12 @@ function AppContent() {
 
   return (
     <>
-      <Slot />
+      <View
+        style={{ flex: 1 }}
+        onTouchStart={Platform.OS === "web" ? undefined : markActivity}
+      >
+        <Slot />
+      </View>
       <StatusBar style={isDarkMode ? "light" : "dark"} />
     </>
   );

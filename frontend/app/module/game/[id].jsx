@@ -75,6 +75,8 @@ export default function ModuleGameQuest() {
   // Score tracking
   const [score, setScore] = useState(0);
   const [questProgress, setQuestProgress] = useState(0);
+  const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
+  const [incorrectAnswerCount, setIncorrectAnswerCount] = useState(0);
 
   // XP and Level tracking
   const [xpEarned, setXpEarned] = useState(0);
@@ -637,6 +639,8 @@ function hashPassword(password) {
     setGameStarted(true);
     setAnswerLocked(false); // Ensure answers are unlocked when starting
     setBattleMessage("The quest begins! Prepare for battle!");
+    setCorrectAnswerCount(0);
+    setIncorrectAnswerCount(0);
 
     // Ensure animations are at full visibility for game content
     fadeAnim.setValue(1);
@@ -672,6 +676,11 @@ function hashPassword(password) {
       [answerKey]: { answer: selectedAnswer, isCorrect },
     };
     setUserAnswers(updatedAnswers);
+    if (isCorrect) {
+      setCorrectAnswerCount((prev) => prev + 1);
+    } else {
+      setIncorrectAnswerCount((prev) => prev + 1);
+    }
 
     // Haptic feedback
     if (Platform.OS !== "web") {
@@ -807,7 +816,12 @@ function hashPassword(password) {
             const failedScore = Math.round(
               (correctAnswers / totalQuestions) * 100
             );
-            await markModuleCompleted(id, failedScore, updatedAnswers);
+            await markModuleCompleted(id, failedScore, updatedAnswers, {
+              correctAnswers,
+              incorrectAnswers: Math.max(totalQuestions - correctAnswers, 0),
+              totalQuestions,
+              questLevel: module?.level || module?.questLevel || 1,
+            });
             setGameCompleted(true);
           }, 2500);
         }, 800);
@@ -1080,6 +1094,10 @@ function hashPassword(password) {
       (acc, quiz) => acc + quiz.questions.length,
       0
     );
+    const incorrectAnswers = Math.max(totalQuestions - correctAnswers, 0);
+
+    setCorrectAnswerCount(correctAnswers);
+    setIncorrectAnswerCount(incorrectAnswers);
 
     console.log(
       `📊 Score Calculation in completeQuest: ${correctAnswers} correct / ${totalQuestions} total questions`
@@ -1137,7 +1155,12 @@ function hashPassword(password) {
           setCompletionInProgress(true);
 
           // Record completion and XP with final answers
-          await markModuleCompleted(id, finalScore, finalAnswers);
+          await markModuleCompleted(id, finalScore, finalAnswers, {
+            correctAnswers,
+            incorrectAnswers,
+            totalQuestions,
+            questLevel: module?.level || module?.questLevel || 1,
+          });
 
           // Hide loading and show completion screen
           setCompletionInProgress(false);
@@ -1165,7 +1188,12 @@ function hashPassword(password) {
           setCompletionInProgress(true);
 
           // Record completion and XP even for failed attempts with final answers
-          await markModuleCompleted(id, finalScore, finalAnswers);
+          await markModuleCompleted(id, finalScore, finalAnswers, {
+            correctAnswers,
+            incorrectAnswers,
+            totalQuestions,
+            questLevel: module?.level || module?.questLevel || 1,
+          });
 
           // Hide loading and show completion screen
           setCompletionInProgress(false);
@@ -1176,7 +1204,12 @@ function hashPassword(password) {
   };
 
   // Function to mark module as completed and unlock next one
-  const markModuleCompleted = async (moduleId, score, answersToUse = null) => {
+  const markModuleCompleted = async (
+    moduleId,
+    score,
+    answersToUse = null,
+    attemptSummary = null
+  ) => {
     try {
       // Use provided answers or fall back to state
       const finalAnswers = answersToUse || userAnswers;
@@ -1186,6 +1219,9 @@ function hashPassword(password) {
         const completionData = {
           moduleId,
           score,
+          correctAnswers: attemptSummary?.correctAnswers ?? null,
+          incorrectAnswers: attemptSummary?.incorrectAnswers ?? null,
+          questLevel: attemptSummary?.questLevel ?? module?.level ?? module?.questLevel ?? null,
           completedAt: new Date().toISOString(),
         };
 
@@ -1216,6 +1252,17 @@ function hashPassword(password) {
         console.log("Submitting cyber-quest:", module._id);
         console.log("Module data:", module);
         console.log("User answers object:", finalAnswers);
+        const questLevel =
+          attemptSummary?.questLevel || module?.level || module?.questLevel || 1;
+        const correctAnswers =
+          attemptSummary?.correctAnswers ??
+          Object.values(finalAnswers).filter((answer) => answer.isCorrect).length;
+        const totalQuestions =
+          attemptSummary?.totalQuestions ??
+          quizzes.reduce((acc, quiz) => acc + quiz.questions.length, 0);
+        const incorrectAnswers =
+          attemptSummary?.incorrectAnswers ??
+          Math.max(totalQuestions - correctAnswers, 0);
 
         // Check if this is dummy data (ID starts with "dummy-")
         if (moduleId.includes("dummy-")) {
@@ -1392,7 +1439,13 @@ function hashPassword(password) {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ answers }),
+            body: JSON.stringify({
+              answers,
+              correctAnswers,
+              incorrectAnswers,
+              questLevel,
+              totalQuestions,
+            }),
           }
         );
 
@@ -1428,6 +1481,9 @@ function hashPassword(password) {
 
           console.log(
             `🎯 XP Earned: ${earned}, Total XP: ${total}, Current Level: ${level}`
+          );
+          console.log(
+            `📊 CyberQuest attempt summary: Correct ${correctAnswers}, Incorrect ${incorrectAnswers}, Level ${questLevel}`
           );
         }
 
@@ -1995,6 +2051,11 @@ function hashPassword(password) {
             <Text style={styles.questProgressText}>
               Quest Progress: {formatProgress()}
             </Text>
+            {module?.type === "cyber-quest" && (
+              <Text style={styles.questProgressText}>
+                Correct: {correctAnswerCount} • Incorrect: {incorrectAnswerCount} • Level: {module?.level || module?.questLevel || 1}
+              </Text>
+            )}
             <View style={styles.progressBar}>
               <View
                 style={[styles.progressFill, { width: `${questProgress}%` }]}
