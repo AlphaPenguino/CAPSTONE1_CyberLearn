@@ -79,6 +79,27 @@ export default function InstructorAnalytics() {
   const formatCount = (value) =>
     typeof value === "number" ? value : "N/A";
 
+  const getSubjectDisplayName = (game) => {
+    if (typeof game?.subjectName === "string" && game.subjectName.trim()) {
+      return game.subjectName;
+    }
+
+    if (game?.subject && typeof game.subject === "object") {
+      return (
+        game.subject.name ||
+        game.subject.sectionCode ||
+        game.subject.subjectCode ||
+        "N/A"
+      );
+    }
+
+    if (typeof game?.subject === "string" && game.subject.trim()) {
+      return game.subject;
+    }
+
+    return "N/A";
+  };
+
   const toNum = (value) => {
     if (typeof value === "number") return value;
     if (typeof value === "string" && value.trim()) {
@@ -694,6 +715,10 @@ export default function InstructorAnalytics() {
                                     >
                                       <Text style={styles.historyTitle}>
                                         {game.title}
+                                      </Text>
+
+                                      <Text style={styles.historyDetails}>
+                                        Subject: {getSubjectDisplayName(game)}
                                       </Text>
 
                                       <Text style={styles.historyDetails}>
