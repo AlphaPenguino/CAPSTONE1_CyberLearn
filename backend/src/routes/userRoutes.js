@@ -11,6 +11,7 @@ import fs from "fs";
 import Module from "../models/Module.js";
 import Quiz from "../models/Quiz.js";
 import Section from "../models/Section.js";
+import CyberQuest from "../models/CyberQuest.js";
 
 const router = express.Router();
 
@@ -688,6 +689,123 @@ router.get("/level-progress", protectRoute, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch level progress",
+      error: error.message,
+    });
+  }
+});
+
+router.get("/cyberlearn-history", protectRoute, async (req, res) => {
+  try {
+    const normalizedRole = String(
+      req.user?.privilege || req.user?.role || ""
+    ).toLowerCase();
+
+    if (normalizedRole !== "student") {
+      return res.status(403).json({
+        success: false,
+        message: "Only students can access CyberLearn history",
+      });
+    }
+
+    const progress = await Progress.findOne({ user: req.user.id })
+      .select("cyberQuestProgress")
+      .lean();
+
+    if (!progress?.cyberQuestProgress?.length) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const toNum = (value) => {
+      if (typeof value === "number") return value;
+      if (typeof value === "string" && value.trim()) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    };
+
+    const questIds = [
+      ...new Set(
+        progress.cyberQuestProgress
+          .map((entry) => entry.cyberQuest?.toString())
+          .filter(Boolean)
+      ),
+    ];
+
+    const quests = await CyberQuest.find({ _id: { $in: questIds } })
+      .select("_id title subject level difficulty questions")
+      .populate("subject", "name sectionCode")
+      .lean();
+    const questMap = new Map(quests.map((q) => [q._id.toString(), q]));
+
+    const history = [];
+
+    for (const entry of progress.cyberQuestProgress) {
+      const questId = entry.cyberQuest?.toString();
+      if (!questId) continue;
+
+      const quest = questMap.get(questId);
+      const fallbackTotal = Array.isArray(quest?.questions)
+        ? quest.questions.length
+        : null;
+
+      if (Array.isArray(entry.attempts) && entry.attempts.length) {
+        entry.attempts.forEach((attempt, index) => {
+          const score = toNum(attempt.score) ?? toNum(entry.bestScore);
+          const totalQuestions =
+            toNum(attempt.totalQuestions) ??
+            (Array.isArray(attempt.answers)
+              ? attempt.answers.length
+              : fallbackTotal);
+          const correctAnswers =
+            toNum(attempt.correctAnswers) ??
+            (Array.isArray(attempt.answers)
+              ? attempt.answers.filter((a) => a?.isCorrect).length
+              : typeof score === "number" && typeof totalQuestions === "number"
+              ? Math.max(
+                  Math.min(Math.round((score / 100) * totalQuestions), totalQuestions),
+                  0
+                )
+              : null);
+          const incorrectAnswers =
+            toNum(attempt.incorrectAnswers) ??
+            (typeof correctAnswers === "number" && typeof totalQuestions === "number"
+              ? Math.max(totalQuestions - correctAnswers, 0)
+              : null);
+
+          history.push({
+            id: `${questId}-${attempt.attemptNumber || index + 1}`,
+            title: quest?.title || "CyberQuest",
+            subjectName: quest?.subject?.name || quest?.subject?.sectionCode || "N/A",
+            level: toNum(attempt.level) ?? toNum(quest?.level),
+            attemptNumber: toNum(attempt.attemptNumber) ?? index + 1,
+            score,
+            correctAnswers,
+            incorrectAnswers,
+            totalQuestions,
+            difficulty: quest?.difficulty || "medium",
+            completedAt:
+              attempt.completedAt || attempt.startedAt || entry.lastAttemptAt || null,
+          });
+        });
+      }
+    }
+
+    history.sort(
+      (a, b) =>
+        new Date(b.completedAt || 0).getTime() -
+        new Date(a.completedAt || 0).getTime()
+    );
+
+    return res.json({
+      success: true,
+      data: history,
+    });
+  } catch (error) {
+    console.error("Error fetching cyberlearn history:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch CyberLearn history",
       error: error.message,
     });
   }

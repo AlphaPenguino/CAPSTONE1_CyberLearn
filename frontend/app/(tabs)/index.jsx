@@ -1299,13 +1299,25 @@ const handleImportCyberQuestsWeb = () => {
               </TouchableOpacity>
             )}
 
-            {!isinstructor && (
-              <TouchableOpacity
-                style={styles.joinButton}
-                onPress={() => router.push("/join-subject")}
-              >
-                <Ionicons name="enter" size={20} color={colors.primary} />
-              </TouchableOpacity>
+            {user?.privilege === "student" && (
+              <>
+                <TouchableOpacity
+                  style={styles.joinButton}
+                  onPress={() => router.push("/join-subject")}
+                >
+                  <Ionicons name="enter" size={20} color={colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.historyHeaderButton}
+                  onPress={() => router.push("/cyberlearn-history")}
+                >
+                  <Ionicons
+                    name="time-outline"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </View>
@@ -3352,6 +3364,16 @@ const styles = StyleSheet.create({
     borderColor: "#1976d2",
   },
   joinButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(25, 118, 210, 0.1)",
+    borderWidth: 1,
+    borderColor: "#1976d2",
+  },
+  historyHeaderButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
