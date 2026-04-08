@@ -694,6 +694,219 @@ router.get("/level-progress", protectRoute, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/users/cyberlearn-history
+ * @desc    Get current authenticated user's CyberLearn/CyberQuest history
+ * @access  Private
+ */
+router.get("/cyberlearn-history", protectRoute, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user.id)
+      .select("analytics")
+      .lean();
+
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const progress = await Progress.findOne({ user: req.user.id })
+      .select("cyberQuestProgress")
+      .lean();
+
+    const cyberQuestIds = [
+      ...new Set(
+        (progress?.cyberQuestProgress || [])
+          .map((entry) => entry?.cyberQuest?.toString())
+          .filter(Boolean)
+      ),
+    ];
+
+    const toNum = (value) => {
+      if (typeof value === "number") return value;
+      if (typeof value === "string" && value.trim()) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    };
+
+    const CyberQuest = await import("../models/CyberQuest.js").then(
+      (m) => m.default
+    );
+
+    const quests = cyberQuestIds.length
+      ? await CyberQuest.find({ _id: { $in: cyberQuestIds } })
+          .select("_id title subject level difficulty questions")
+          .lean()
+      : [];
+
+    const subjectIds = [
+      ...new Set(
+        quests.map((q) => q?.subject?.toString()).filter(Boolean)
+      ),
+    ];
+
+    const subjects = subjectIds.length
+      ? await Section.find({ _id: { $in: subjectIds } })
+          .select("_id name")
+          .lean()
+      : [];
+
+    const subjectNameMap = new Map(
+      subjects.map((s) => [s._id.toString(), s.name || "N/A"])
+    );
+    const questMap = new Map(quests.map((q) => [q._id.toString(), q]));
+
+    const history = [];
+
+    for (const cqp of progress?.cyberQuestProgress || []) {
+      const questId = cqp?.cyberQuest?.toString();
+      if (!questId) continue;
+
+      const quest = questMap.get(questId);
+      const title = quest?.title || "Untitled CyberQuest";
+      const level = toNum(quest?.level);
+      const difficulty = quest?.difficulty || "medium";
+      const totalFromQuest = Array.isArray(quest?.questions)
+        ? quest.questions.length
+        : null;
+      const subjectName = quest?.subject
+        ? subjectNameMap.get(quest.subject.toString()) || "N/A"
+        : "N/A";
+
+      if (Array.isArray(cqp.attempts) && cqp.attempts.length) {
+        cqp.attempts.forEach((attempt, index) => {
+          const totalQuestions =
+            toNum(attempt?.totalQuestions) ??
+            (Array.isArray(attempt?.answers) ? attempt.answers.length : null) ??
+            totalFromQuest;
+          const correctAnswers =
+            toNum(attempt?.correctAnswers) ??
+            (Array.isArray(attempt?.answers)
+              ? attempt.answers.filter((ans) => ans?.isCorrect).length
+              : null);
+          const incorrectAnswers =
+            toNum(attempt?.incorrectAnswers) ??
+            (typeof totalQuestions === "number" &&
+            typeof correctAnswers === "number"
+              ? Math.max(totalQuestions - correctAnswers, 0)
+              : null);
+
+          history.push({
+            id: `${questId}-${attempt?._id?.toString() || index}`,
+            title,
+            subjectName,
+            level,
+            attemptNumber: toNum(attempt?.attemptNumber) ?? index + 1,
+            score: toNum(attempt?.score),
+            totalQuestions,
+            correctAnswers,
+            incorrectAnswers,
+            difficulty,
+            completedAt:
+              attempt?.completedAt || attempt?.startedAt || cqp?.lastAttemptAt,
+          });
+        });
+      } else if (typeof toNum(cqp?.bestScore) === "number") {
+        const totalQuestions = totalFromQuest;
+        const derivedCorrect =
+          typeof totalQuestions === "number"
+            ? Math.max(
+                Math.min(
+                  Math.round((toNum(cqp.bestScore) / 100) * totalQuestions),
+                  totalQuestions
+                ),
+                0
+              )
+            : null;
+        history.push({
+          id: `${questId}-best-${new Date(
+            cqp?.lastAttemptAt || Date.now()
+          ).getTime()}`,
+          title,
+          subjectName,
+          level,
+          attemptNumber: 1,
+          score: toNum(cqp?.bestScore),
+          totalQuestions,
+          correctAnswers: derivedCorrect,
+          incorrectAnswers:
+            typeof totalQuestions === "number" && typeof derivedCorrect === "number"
+              ? Math.max(totalQuestions - derivedCorrect, 0)
+              : null,
+          difficulty,
+          completedAt: cqp?.lastAttemptAt,
+        });
+      }
+    }
+
+    if (!history.length && Array.isArray(currentUser.analytics?.gameLog)) {
+      currentUser.analytics.gameLog.forEach((log, idx) => {
+        if (log?.gameType !== "cyberQuest") return;
+        const meta = log?.meta || {};
+        const totalQuestions =
+          toNum(meta.totalQuestions) ?? toNum(meta?.result?.totalQuestions);
+        const correctAnswers =
+          toNum(meta.correctAnswers) ?? toNum(meta?.result?.correctAnswers);
+        const incorrectAnswers =
+          toNum(meta.incorrectAnswers) ??
+          (typeof totalQuestions === "number" &&
+          typeof correctAnswers === "number"
+            ? Math.max(totalQuestions - correctAnswers, 0)
+            : null);
+
+        history.push({
+          id: `alog-cq-${idx}-${new Date(log?.completedAt || Date.now()).getTime()}`,
+          title:
+            log?.title ||
+            meta?.title ||
+            meta?.cyberQuestTitle ||
+            meta?.questTitle ||
+            "CyberQuest",
+          subjectName:
+            meta?.subjectName ||
+            (typeof meta?.subject === "string" ? meta.subject : "N/A"),
+          level:
+            toNum(meta.level) ??
+            toNum(meta.questLevel) ??
+            toNum(meta?.result?.level) ??
+            toNum(meta?.result?.questLevel),
+          attemptNumber: toNum(meta.attemptNumber) ?? idx + 1,
+          score:
+            typeof log?.score === "number"
+              ? log.score
+              : toNum(meta.score) ?? toNum(meta?.result?.score),
+          totalQuestions,
+          correctAnswers,
+          incorrectAnswers,
+          difficulty: meta?.difficulty || "medium",
+          completedAt: log?.completedAt,
+        });
+      });
+    }
+
+    history.sort(
+      (a, b) =>
+        new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime()
+    );
+
+    return res.json({
+      success: true,
+      data: history,
+    });
+  } catch (error) {
+    console.error("Error fetching cyberlearn history:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch cyberlearn history",
+      error: error.message,
+    });
+  }
+});
+
+/**
  * @route   GET /api/users/:id
  * * @desc    Get user by ID
  * @access  Private/instructor

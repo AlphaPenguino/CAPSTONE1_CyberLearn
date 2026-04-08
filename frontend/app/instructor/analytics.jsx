@@ -219,6 +219,37 @@ export default function InstructorAnalytics() {
     return null;
   };
 
+  const selectedSubjectName =
+    selectedSubjectId !== "all"
+      ? availableSubjects.find((subject) => subject._id === selectedSubjectId)
+          ?.name || null
+      : null;
+
+  const normalizeText = (value) =>
+    typeof value === "string" && value.trim() ? value.trim().toLowerCase() : null;
+
+  const matchesSelectedSubject = (game) => {
+    if (!selectedSubjectId || selectedSubjectId === "all") return true;
+
+    const gameSubjectId =
+      game?.subjectId != null ? String(game.subjectId).trim() : null;
+    if (gameSubjectId && gameSubjectId === selectedSubjectId) {
+      return true;
+    }
+
+    const normalizedGameSubject = normalizeText(game?.subject);
+    const normalizedSelectedName = normalizeText(selectedSubjectName);
+    if (
+      normalizedGameSubject &&
+      normalizedSelectedName &&
+      normalizedGameSubject === normalizedSelectedName
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
   // Load data on component mount
   useEffect(() => {
     fetchAvailableSubjects();
@@ -817,17 +848,18 @@ export default function InstructorAnalytics() {
 
                         {expandedStudent === student.id && (
                           <View style={styles.historyContainer}>
-                            {(student.cyberQuestHistory?.length > 0
+                            {((student.cyberQuestHistory?.length > 0
                               ? student.cyberQuestHistory
                               : student.gameHistory?.filter(
                                   (game) => game.type === "cyberQuest"
                                 ) || [])
-                              .length > 0 ? (
+                              .filter(matchesSelectedSubject)).length > 0 ? (
                               (student.cyberQuestHistory?.length > 0
                                 ? student.cyberQuestHistory
                                 : student.gameHistory?.filter(
                                     (game) => game.type === "cyberQuest"
                                   ) || [])
+                                .filter(matchesSelectedSubject)
                                 .map((game, index) => {
                                   const resolvedTitle = resolveGameTitle(game);
                                   const resolvedLevelLabel = resolveGameLevelLabel(game);

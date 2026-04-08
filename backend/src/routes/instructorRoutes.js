@@ -117,6 +117,46 @@ router.get(
         userFilter._id = { $in: scopedStudentIds };
       }
 
+      const normalizedSelectedSubjectName =
+        typeof selectedSubjectName === "string" && selectedSubjectName.trim()
+          ? selectedSubjectName.trim().toLowerCase()
+          : null;
+      const isObjectIdLike = (value) =>
+        typeof value === "string" && /^[0-9a-fA-F]{24}$/.test(value.trim());
+      const normalizeSubjectId = (value) => {
+        if (!value) return null;
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          return trimmed || null;
+        }
+        if (typeof value === "object" && value?.toString) {
+          const parsed = value.toString().trim();
+          return parsed || null;
+        }
+        return null;
+      };
+      const normalizeSubjectName = (value) =>
+        typeof value === "string" && value.trim()
+          ? value.trim().toLowerCase()
+          : null;
+      const matchesSelectedSubject = (subjectIdCandidate, subjectNameCandidate) => {
+        if (!normalizedSubjectId) return true;
+
+        const normalizedCandidateId = normalizeSubjectId(subjectIdCandidate);
+        if (normalizedCandidateId === normalizedSubjectId) return true;
+
+        const normalizedCandidateName = normalizeSubjectName(subjectNameCandidate);
+        if (
+          normalizedCandidateName &&
+          normalizedSelectedSubjectName &&
+          normalizedCandidateName === normalizedSelectedSubjectName
+        ) {
+          return true;
+        }
+
+        return false;
+      };
+
       const students = await User.find(userFilter)
         // Include gamification for leaderboard-style combined score
         .select("_id fullName email section analytics gamification")
@@ -321,6 +361,15 @@ router.get(
               subject: "N/A",
               level: null,
             };
+            const resolvedSubjectId = normalizeSubjectId(resolvedQuestInfo.subject);
+            const hasResolvedSubjectSignal = !!resolvedSubjectId;
+            if (
+              normalizedSubjectId &&
+              hasResolvedSubjectSignal &&
+              !matchesSelectedSubject(resolvedSubjectId, null)
+            ) {
+              continue;
+            }
             if (cyberQuestId) {
               // Push EACH attempt (if attempts array exists) otherwise fallback to bestScore summary
                if (Array.isArray(cqp.attempts) && cqp.attempts.length) {
@@ -359,7 +408,10 @@ router.get(
                    cyberQuestHistory.push({
                      id: `${cyberQuestId}-attempt-${attemptStamp}`,
                      title: resolvedQuestInfo.title,
-                     subject: resolvedQuestInfo.subject || "N/A",
+                     subjectId: resolvedSubjectId || normalizedSubjectId || null,
+                     subject:
+                       resolvedQuestInfo.subject ||
+                       (normalizedSubjectId ? selectedSubjectName : "N/A"),
                      score: toNum(attempt.score) ?? toNum(cqp.bestScore) ?? 0,
                      completedAt:
                        attempt.completedAt ||
@@ -381,7 +433,10 @@ router.get(
                  cyberQuestHistory.push({
                    id: `${cyberQuestId}-best-${attemptStamp}`,
                    title: resolvedQuestInfo.title,
-                   subject: resolvedQuestInfo.subject || "N/A",
+                   subjectId: resolvedSubjectId || normalizedSubjectId || null,
+                   subject:
+                     resolvedQuestInfo.subject ||
+                     (normalizedSubjectId ? selectedSubjectName : "N/A"),
                    score: toNum(cqp.bestScore),
                    completedAt: cqp.lastAttemptAt || new Date().toISOString(),
                    type: "cyberQuest",
@@ -459,6 +514,37 @@ router.get(
 
              if (gameType === "cyberQuest") {
                const completedAt = log.completedAt || new Date().toISOString();
+               const metaSubjectIdSource =
+                 meta.subjectId ||
+                 meta.sectionId ||
+                 meta.subject?.id ||
+                 meta.subject?._id ||
+                 meta?.result?.subjectId ||
+                 meta?.result?.sectionId;
+               const metaSubjectCandidate =
+                 typeof meta.subject === "string" ? meta.subject : null;
+               const metaSubjectName =
+                 metaSubjectCandidate && !isObjectIdLike(metaSubjectCandidate)
+                   ? metaSubjectCandidate
+                   : typeof meta.subjectName === "string"
+                   ? meta.subjectName
+                   : typeof meta?.result?.subjectName === "string"
+                   ? meta?.result?.subjectName
+                   : null;
+               const parsedMetaSubjectId = normalizeSubjectId(metaSubjectIdSource);
+               const metaSubjectId = isObjectIdLike(parsedMetaSubjectId)
+                 ? parsedMetaSubjectId
+                 : isObjectIdLike(metaSubjectCandidate)
+                 ? metaSubjectCandidate.trim()
+                 : null;
+               const hasMetaSubjectSignal = !!(metaSubjectId || metaSubjectName);
+               if (
+                 normalizedSubjectId &&
+                 hasMetaSubjectSignal &&
+                 !matchesSelectedSubject(metaSubjectId, metaSubjectName)
+               ) {
+                 return;
+               }
                const level =
                  toNum(meta.level) ??
                  toNum(meta.questLevel) ??
@@ -480,7 +566,10 @@ router.get(
                cyberQuestLogHistory.push({
                  id: `alog-cq-${stamp}-${idx}`,
                  title: rawTitle,
-                 subject: meta.subject || "N/A",
+                 subjectId: metaSubjectId || normalizedSubjectId || null,
+                 subject:
+                   metaSubjectName ||
+                   (normalizedSubjectId ? selectedSubjectName : "N/A"),
                  score:
                    typeof log.score === "number"
                      ? log.score
@@ -498,7 +587,19 @@ router.get(
               gameHistory.push({
                id: `alog-${stamp}-${gameType}`,
                title: rawTitle,
-               subject: gameType,
+               subject:
+                 gameType === "cyberQuest"
+                   ? meta.subjectName || meta.subject || "N/A"
+                   : gameType,
+               subjectId:
+                 gameType === "cyberQuest"
+                   ? normalizeSubjectId(
+                       meta.subjectId ||
+                         meta.sectionId ||
+                         meta.subject?.id ||
+                         meta.subject?._id
+                     )
+                   : null,
                score: typeof log.score === "number" ? log.score : toNum(meta.score),
                completedAt: log.completedAt || new Date().toISOString(),
                type: gameType,
