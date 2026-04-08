@@ -2006,6 +2006,20 @@ router.post(
         ...requestInfo,
       });
 
+      // Provide stable metadata so analytics middleware can persist quest title/level in gameLog.
+      res.locals.gameMeta = {
+        title: cyberQuest.title,
+        cyberQuestTitle: cyberQuest.title,
+        questTitle: cyberQuest.title,
+        questLevel: cyberQuest.level,
+        level: cyberQuest.level,
+        score,
+        passed: score >= 34,
+        correctAnswers: correctCount,
+        totalQuestions: cyberQuest.questions.length,
+        incorrectAnswers: Math.max(cyberQuest.questions.length - correctCount, 0),
+      };
+
       res.json({
         success: true,
         result: {

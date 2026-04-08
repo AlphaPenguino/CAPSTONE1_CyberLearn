@@ -2,6 +2,7 @@ import express from "express";
 import User from "../models/Users.js";
 import Progress from "../models/Progress.js";
 import Quiz from "../models/Quiz.js";
+import Section from "../models/Section.js";
 import { protectRoute, authorizeRole } from "../middleware/auth.middleware.js";
 import {
   logActivity,
@@ -16,6 +17,7 @@ const router = express.Router();
  * @route   GET /api/instructor/analytics/students
  * @desc    Get per-student performance analytics for an instructor (or admin)
  * @query   section (optional) - filter students by section name
+ * @query   subjectId (optional) - filter by enrolled subject
  * @access  Private (Instructor/Admin)
  * @returns {
  *  success: boolean,
@@ -37,11 +39,83 @@ router.get(
   authorizeRole(["instructor", "admin"]),
   async (req, res) => {
     try {
-      const { section } = req.query;
+      const { section, subjectId } = req.query;
+      const userRole = req.user?.privilege;
+      const userId = req.user?.id;
+
+      const normalizedSubjectId =
+        typeof subjectId === "string" && subjectId.trim()
+          ? subjectId.trim()
+          : null;
+
+      if (
+        normalizedSubjectId &&
+        !/^[0-9a-fA-F]{24}$/.test(normalizedSubjectId)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid subjectId format",
+        });
+      }
+
+      // Resolve which student IDs are accessible to the requesting role.
+      let scopedStudentIds = null;
+      let selectedSubjectName = "all_subjects";
+
+      if (normalizedSubjectId) {
+        const subjectQuery = {
+          _id: normalizedSubjectId,
+          archived: { $ne: true },
+          isActive: { $ne: false },
+        };
+
+        if (userRole === "instructor") {
+          subjectQuery.$or = [{ instructor: userId }, { instructors: userId }];
+        }
+
+        const selectedSubject = await Section.findOne(subjectQuery)
+          .select("_id name students")
+          .lean();
+
+        if (!selectedSubject) {
+          return res.status(userRole === "admin" ? 404 : 403).json({
+            success: false,
+            message:
+              userRole === "admin"
+                ? "Subject not found"
+                : "You do not have access to this subject",
+          });
+        }
+
+        selectedSubjectName = selectedSubject.name || "selected_subject";
+        scopedStudentIds = Array.isArray(selectedSubject.students)
+          ? [...new Set(selectedSubject.students.map((id) => id.toString()))]
+          : [];
+      } else if (userRole === "instructor") {
+        const instructorSubjects = await Section.find({
+          $or: [{ instructor: userId }, { instructors: userId }],
+          archived: { $ne: true },
+          isActive: { $ne: false },
+        })
+          .select("students")
+          .lean();
+
+        const uniqueStudentIds = new Set();
+        instructorSubjects.forEach((subjectDoc) => {
+          (subjectDoc.students || []).forEach((studentId) => {
+            uniqueStudentIds.add(studentId.toString());
+          });
+        });
+
+        scopedStudentIds = [...uniqueStudentIds];
+      }
 
       // Fetch students (optionally filter by section)
       const userFilter = { privilege: "student" };
       if (section) userFilter.section = section;
+      if (Array.isArray(scopedStudentIds)) {
+        userFilter._id = { $in: scopedStudentIds };
+      }
 
       const students = await User.find(userFilter)
         // Include gamification for leaderboard-style combined score
@@ -160,6 +234,7 @@ router.get(
         // recentAttempts removed
         const gameHistory = [];
         const cyberQuestHistory = [];
+        const cyberQuestLogHistory = [];
 
         // If we have progress data, also count from there (for backward compatibility)
         if (prog) {
@@ -359,7 +434,13 @@ router.get(
               ? new Date(log.completedAt).getTime()
               : Date.now() + idx;
             const gameType = log.gameType || "game";
-            const rawTitle = log.title || `${gameType} play`;
+            const meta = log.meta || {};
+            const rawTitle =
+              log.title ||
+              meta.title ||
+              meta.cyberQuestTitle ||
+              meta.questTitle ||
+              `${gameType} play`;
             const isGenericTitle =
               rawTitle === `${gameType} game` ||
               rawTitle === `${gameType} play`;
@@ -371,14 +452,50 @@ router.get(
                return;
              }
 
-             // Extract CyberQuest metadata enriched by trackGameCompletion
-             const meta = log.meta || {};
              const toNum = (v) =>
                typeof v === "number" ? v :
                typeof v === "string" && v.trim() ? Number(v) || null :
                null;
 
-             gameHistory.push({
+             if (gameType === "cyberQuest") {
+               const completedAt = log.completedAt || new Date().toISOString();
+               const level =
+                 toNum(meta.level) ??
+                 toNum(meta.questLevel) ??
+                 toNum(meta?.result?.level) ??
+                 toNum(meta?.result?.questLevel);
+               const totalQuestions =
+                 toNum(meta.totalQuestions) ??
+                 toNum(meta?.result?.totalQuestions);
+               const correctAnswers =
+                 toNum(meta.correctAnswers) ??
+                 toNum(meta?.result?.correctAnswers);
+               const incorrectAnswers =
+                 toNum(meta.incorrectAnswers) ??
+                 (typeof totalQuestions === "number" &&
+                 typeof correctAnswers === "number"
+                   ? Math.max(totalQuestions - correctAnswers, 0)
+                   : null);
+
+               cyberQuestLogHistory.push({
+                 id: `alog-cq-${stamp}-${idx}`,
+                 title: rawTitle,
+                 subject: meta.subject || "N/A",
+                 score:
+                   typeof log.score === "number"
+                     ? log.score
+                     : toNum(meta.score) ?? toNum(meta?.result?.score) ?? 0,
+                 completedAt,
+                 type: "cyberQuest",
+                 level,
+                 levelTitle: meta.levelTitle || meta.questLevelTitle,
+                 totalQuestions,
+                 correctAnswers,
+                 incorrectAnswers,
+               });
+             }
+
+              gameHistory.push({
                id: `alog-${stamp}-${gameType}`,
                title: rawTitle,
                subject: gameType,
@@ -387,6 +504,11 @@ router.get(
                type: gameType,
              });
           });
+        }
+
+        // Backfill CyberQuest history from analytics gameLog for legacy users without progress entries.
+        if (!cyberQuestHistory.length && cyberQuestLogHistory.length) {
+          cyberQuestHistory.push(...cyberQuestLogHistory);
         }
 
         const averageScore = scoreCount
@@ -500,6 +622,7 @@ router.get(
           analyticsType: "student_performance",
           studentsAnalyzed: studentStats.length,
           sectionFilter: section || "all_sections",
+          subjectFilter: normalizedSubjectId || selectedSubjectName,
           averageScore: averageScore,
           totalGames: totalGames,
         },

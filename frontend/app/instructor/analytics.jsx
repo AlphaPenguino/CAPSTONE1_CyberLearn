@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { Picker } from "@react-native-picker/picker";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore";
 import { API_URL } from "../../constants/api";
@@ -28,6 +29,9 @@ export default function InstructorAnalytics() {
   const [error, setError] = useState(null);
   const [expandedStudent, setExpandedStudent] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState("all");
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [subjectsLoaded, setSubjectsLoaded] = useState(false);
   // Removed card expansion state (recent game results hidden)
 
   // Compute average leaderboard (combined) score across students
@@ -41,6 +45,52 @@ export default function InstructorAnalytics() {
       )
     : 0;
 
+  const fetchAvailableSubjects = useCallback(async () => {
+    if (!token) {
+      setAvailableSubjects([]);
+      setSelectedSubjectId("all");
+      setSubjectsLoaded(true);
+      return;
+    }
+
+    try {
+      setSubjectsLoaded(false);
+      const response = await fetch(`${API_URL}/subjects/user-subjects`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch subjects: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const subjects = (data.subjects || []).map((subject) => ({
+        _id: String(subject._id || subject.id || ""),
+        name: subject.name || "Unnamed Subject",
+      }));
+
+      const normalizedSubjects = subjects.filter((subject) => subject._id);
+      setAvailableSubjects(normalizedSubjects);
+      setSelectedSubjectId((previous) => {
+        if (previous === "all") return "all";
+        const stillExists = normalizedSubjects.some(
+          (subject) => subject._id === previous
+        );
+        return stillExists ? previous : "all";
+      });
+    } catch (err) {
+      console.error("Error fetching subjects for analytics:", err);
+      setAvailableSubjects([]);
+      setSelectedSubjectId("all");
+    } finally {
+      setSubjectsLoaded(true);
+    }
+  }, [token]);
+
   // Fetch student analytics data
   const fetchStudentAnalytics = useCallback(async () => {
     if (!token) return;
@@ -49,13 +99,23 @@ export default function InstructorAnalytics() {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_URL}/instructor/analytics/students`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const params = new URLSearchParams();
+      if (selectedSubjectId && selectedSubjectId !== "all") {
+        params.set("subjectId", selectedSubjectId);
+      }
+
+      const response = await fetch(
+        `${API_URL}/instructor/analytics/students${
+          params.toString() ? `?${params.toString()}` : ""
+        }`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to fetch analytics: ${response.status}`);
@@ -74,7 +134,7 @@ export default function InstructorAnalytics() {
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, [selectedSubjectId, token]);
 
   const formatCount = (value) =>
     typeof value === "number" ? value : "N/A";
@@ -86,6 +146,48 @@ export default function InstructorAnalytics() {
       return Number.isFinite(parsed) ? parsed : null;
     }
     return null;
+  };
+
+  const toNonEmptyText = (...values) => {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+    return null;
+  };
+
+  const resolveGameTitle = (game) =>
+    toNonEmptyText(
+      game?.title,
+      game?.cyberQuestTitle,
+      game?.questTitle,
+      game?.quizTitle,
+      game?.moduleTitle,
+      game?.name,
+      game?.meta?.title,
+      game?.meta?.cyberQuestTitle,
+      game?.meta?.questTitle
+    ) || "Untitled CyberQuest";
+
+  const resolveGameLevelLabel = (game) => {
+    const levelTitle = toNonEmptyText(
+      game?.levelTitle,
+      game?.questLevelTitle,
+      game?.cyberQuestLevelTitle,
+      game?.moduleLevelTitle,
+      game?.meta?.levelTitle,
+      game?.meta?.questLevelTitle
+    );
+
+    if (levelTitle) return levelTitle;
+
+    const levelNumber =
+      toNum(game?.level) ??
+      toNum(game?.questLevel) ??
+      toNum(game?.cyberQuestLevel);
+
+    return typeof levelNumber === "number" ? `Level ${levelNumber}` : "N/A";
   };
 
   const getCyberQuestCount = (game, key) => {
@@ -119,8 +221,17 @@ export default function InstructorAnalytics() {
 
   // Load data on component mount
   useEffect(() => {
+    fetchAvailableSubjects();
+  }, [fetchAvailableSubjects]);
+
+  useEffect(() => {
+    if (!subjectsLoaded) return;
     fetchStudentAnalytics();
-  }, [fetchStudentAnalytics]);
+  }, [subjectsLoaded, fetchStudentAnalytics]);
+
+  useEffect(() => {
+    setExpandedStudent(null);
+  }, [selectedSubjectId]);
 
   const createStyles = () => {
     const screenWidth =
@@ -229,6 +340,24 @@ export default function InstructorAnalytics() {
         paddingVertical: 8,
         marginBottom: 16,
         gap: 8,
+      },
+      filterContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: colors.surface,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: colors.border,
+        paddingHorizontal: 12,
+        marginBottom: 12,
+      },
+      filterIcon: {
+        marginRight: 8,
+      },
+      picker: {
+        flex: 1,
+        height: Platform.OS === "ios" ? 160 : 50,
+        color: colors.text,
       },
       searchInput: {
         flex: 1,
@@ -530,6 +659,34 @@ export default function InstructorAnalytics() {
               <View style={styles.studentsContainer}>
                 <Text style={styles.sectionTitle}>Student Performance</Text>
 
+                {/* Subject Filter */}
+                {availableSubjects.length > 0 && (
+                  <View style={styles.filterContainer}>
+                    <MaterialCommunityIcons
+                      name="filter-variant"
+                      size={18}
+                      color={colors.textSecondary}
+                      style={styles.filterIcon}
+                    />
+                    <Picker
+                      selectedValue={selectedSubjectId}
+                      onValueChange={(value) => setSelectedSubjectId(value)}
+                      style={styles.picker}
+                      dropdownIconColor={colors.textSecondary}
+                      mode="dropdown"
+                    >
+                      <Picker.Item label="All Subjects" value="all" />
+                      {availableSubjects.map((subject) => (
+                        <Picker.Item
+                          key={subject._id}
+                          label={subject.name}
+                          value={subject._id}
+                        />
+                      ))}
+                    </Picker>
+                  </View>
+                )}
+
                 {/* Search Bar */}
                 <View style={styles.searchBarContainer}>
                   <MaterialCommunityIcons
@@ -672,11 +829,13 @@ export default function InstructorAnalytics() {
                                     (game) => game.type === "cyberQuest"
                                   ) || [])
                                 .map((game, index) => {
-                                  const resolvedCorrect = getCyberQuestCount(
-                                    game,
-                                    "correctAnswers"
-                                  );
-                                  const resolvedIncorrect =
+                                  const resolvedTitle = resolveGameTitle(game);
+                                  const resolvedLevelLabel = resolveGameLevelLabel(game);
+                                   const resolvedCorrect = getCyberQuestCount(
+                                     game,
+                                     "correctAnswers"
+                                   );
+                                   const resolvedIncorrect =
                                     typeof game.incorrectAnswers === "number"
                                       ? game.incorrectAnswers
                                       : typeof game.totalQuestions === "number" &&
@@ -687,42 +846,42 @@ export default function InstructorAnalytics() {
                                         )
                                       : null;
 
-                                  return (
-                                    <View
-                                      key={game.id || index}
-                                      style={styles.historyItem}
-                                    >
-                                      <Text style={styles.historyTitle}>
-                                        {game.title}
-                                      </Text>
-
-                                      <Text style={styles.historyDetails}>
-                                        Level: {toNum(game.level) ?? toNum(game.questLevel) ?? toNum(game.cyberQuestLevel) ?? "N/A"} • Attempt: {game.attemptNumber ?? index + 1}
-                                      </Text>
-                                      <Text style={styles.historyDetails}>
-                                        Score: {" "}
+                                   return (
+                                     <View
+                                       key={game.id || index}
+                                       style={styles.historyItem}
+                                     >
+                                       <Text style={styles.historyTitle}>
+                                        {resolvedTitle}
+                                       </Text>
+ 
+                                       <Text style={styles.historyDetails}>
+                                        Level: {resolvedLevelLabel} • Attempt: {game.attemptNumber ?? index + 1}
+                                       </Text>
+                                       <Text style={styles.historyDetails}>
+                                         Score: {" "}
                                         {typeof toNum(game.score) === "number"
                                           ? `${toNum(game.score)}%`
                                           : "N/A"}
                                         {typeof game.passed === "boolean"
                                           ? ` • ${game.passed ? "Passed" : "In progress"}`
                                           : ""}
-                                      </Text>
-                                      <Text style={styles.historyDetails}>
+                                       </Text>
+                                       <Text style={styles.historyDetails}>
                                         Correct: {formatCount(resolvedCorrect)} • Incorrect: {formatCount(resolvedIncorrect)}
                                         {typeof toNum(game.totalQuestions) === "number"
                                           ? ` • Total: ${toNum(game.totalQuestions)}`
                                           : ""}
-                                      </Text>
-                                      <Text style={styles.historyDetails}>
+                                       </Text>
+                                       <Text style={styles.historyDetails}>
                                         Difficulty: {game.difficulty || "medium"}
-                                      </Text>
-                                      <Text style={styles.historyDetails}>
+                                       </Text>
+                                       <Text style={styles.historyDetails}>
                                         Finished: {" "}
                                         {game.completedAt
                                           ? new Date(game.completedAt).toLocaleString()
                                           : "N/A"}
-                                      </Text>
+                                       </Text>
                                     </View>
                                   );
                                 })
