@@ -668,7 +668,7 @@ export default function InstructorAnalytics() {
                     </Text>
                     <Text style={styles.statLabel}>Students</Text>
                   </View>
-                  
+
                   <View style={styles.statCard}>
                     <MaterialCommunityIcons
                       name="gamepad-variant"

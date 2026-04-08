@@ -20,6 +20,8 @@ import COLORS from "@/constants/custom-colors"; // role/accent mapping (static)
 import { useTheme } from "@/contexts/ThemeContext";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 
 export default function UsersScreen({ hideHeader = false }) {
   const { token, user } = useAuthStore();
@@ -81,6 +83,8 @@ export default function UsersScreen({ hideHeader = false }) {
   const [analyticsModalVisible, setAnalyticsModalVisible] = useState(false);
   const [studentAnalytics, setStudentAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [backupModalVisible, setBackupModalVisible] = useState(false);
+  const [backupInProgress, setBackupInProgress] = useState(false);
   // Pagination state (server-side)
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -166,6 +170,145 @@ export default function UsersScreen({ hideHeader = false }) {
       setFetching(false);
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const triggerBackup = async (scope, label) => {
+    try {
+      setBackupInProgress(true);
+      setBackupModalVisible(false);
+
+      const response = await fetch(
+        `${API_URL}/admin/backups/export?scope=${encodeURIComponent(scope)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to export backup");
+      }
+
+      if (Platform.OS === "web") {
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get("content-disposition") || "";
+        const fileNameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+        const filename =
+          fileNameMatch?.[1] ||
+          `cyberlearn-backup-${scope}-${new Date()
+            .toISOString()
+            .replace(/[:.]/g, "-")}.json`;
+
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+      } else {
+        // Native fallback: show success and summary (download flow can be added with FileSystem/Sharing later)
+        const payload = await response.json();
+        const collectionsCount = Object.keys(payload?.counts || {}).length;
+        showAlert(
+          "Backup Ready",
+          `${label} backup exported successfully (${collectionsCount} collections).`
+        );
+      }
+
+      if (Platform.OS === "web") {
+        showAlert("Backup Ready", `${label} backup downloaded successfully.`);
+      }
+    } catch (err) {
+      showAlert("Backup Failed", err.message || "Failed to export backup");
+    } finally {
+      setBackupInProgress(false);
+    }
+  };
+
+  const pickAndParseBackupJson = async () => {
+    if (Platform.OS === "web") {
+      return await new Promise((resolve, reject) => {
+        try {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "application/json,.json";
+          input.onchange = async (event) => {
+            try {
+              const file = event.target.files?.[0];
+              if (!file) {
+                resolve(null);
+                return;
+              }
+              const text = await file.text();
+              resolve(JSON.parse(text));
+            } catch (error) {
+              reject(error);
+            }
+          };
+          input.click();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }
+
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/json", "text/json"],
+      multiple: false,
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.uri) {
+      return null;
+    }
+
+    const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    return JSON.parse(fileContent);
+  };
+
+  const triggerBackupImport = async () => {
+    try {
+      setBackupInProgress(true);
+      setBackupModalVisible(false);
+
+      const parsedBackup = await pickAndParseBackupJson();
+      if (!parsedBackup) {
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/admin/backups/import`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ backup: parsedBackup }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || "Failed to import backup");
+      }
+
+      const totals = payload.totals || {};
+      showAlert(
+        "Backup Import Completed",
+        `Inserted: ${totals.inserted || 0}\nIgnored Existing: ${totals.skippedExisting || 0}\nIgnored Duplicate in File: ${totals.skippedDuplicateInFile || 0}\nInvalid: ${totals.invalid || 0}\nFailed: ${totals.failed || 0}`
+      );
+
+      fetchUsers(1, false);
+    } catch (err) {
+      showAlert("Backup Import Failed", err.message || "Failed to import backup");
+    } finally {
+      setBackupInProgress(false);
     }
   };
 
@@ -597,6 +740,22 @@ export default function UsersScreen({ hideHeader = false }) {
                   />
                   <Text style={styles.addButtonText}>Add User</Text>
                 </TouchableOpacity>
+                {user?.privilege === "admin" && (
+                  <TouchableOpacity
+                    style={styles.backupButton}
+                    onPress={() => setBackupModalVisible(true)}
+                    disabled={backupInProgress}
+                  >
+                    <MaterialCommunityIcons
+                      name="database-export"
+                      size={20}
+                      color="#FFF"
+                    />
+                    <Text style={styles.backupButtonText}>
+                      {backupInProgress ? "Backing up..." : "Backup"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           )}
@@ -678,6 +837,22 @@ export default function UsersScreen({ hideHeader = false }) {
                 />
                 <Text style={styles.addButtonText}>Add User</Text>
               </TouchableOpacity>
+              {user?.privilege === "admin" && (
+                <TouchableOpacity
+                  style={styles.backupButton}
+                  onPress={() => setBackupModalVisible(true)}
+                  disabled={backupInProgress}
+                >
+                  <MaterialCommunityIcons
+                    name="database-export"
+                    size={20}
+                    color="#FFF"
+                  />
+                  <Text style={styles.backupButtonText}>
+                    {backupInProgress ? "Backing up..." : "Backup"}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -906,6 +1081,116 @@ export default function UsersScreen({ hideHeader = false }) {
                     size={20}
                     color="#FFF"
                   />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Backup Options Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={backupModalVisible}
+            onRequestClose={() => setBackupModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { maxWidth: 560 }]}> 
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Backup Options</Text>
+                  <TouchableOpacity onPress={() => setBackupModalVisible(false)}>
+                    <MaterialCommunityIcons
+                      name="close"
+                      size={24}
+                      color={colors.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.backupHintText}>
+                  Choose what data to include in this backup export.
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.backupOptionButton}
+                  onPress={() => triggerBackup("all", "Full database")}
+                  disabled={backupInProgress}
+                >
+                  <MaterialCommunityIcons
+                    name="database"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <View style={styles.backupOptionTextWrap}>
+                    <Text style={styles.backupOptionTitle}>Full Database</Text>
+                    <Text style={styles.backupOptionDescription}>
+                      Backup all collections and records in the database.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.backupOptionButton}
+                  onPress={() => triggerBackup("users", "Users and related data")}
+                  disabled={backupInProgress}
+                >
+                  <MaterialCommunityIcons
+                    name="account-group"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <View style={styles.backupOptionTextWrap}>
+                    <Text style={styles.backupOptionTitle}>Users and Their Data</Text>
+                    <Text style={styles.backupOptionDescription}>
+                      Backup users, progress, levels, and audit logs.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.backupOptionButton}
+                  onPress={() => triggerBackup("subjects", "Subjects and CyberQuests")}
+                  disabled={backupInProgress}
+                >
+                  <MaterialCommunityIcons
+                    name="book-open-page-variant"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <View style={styles.backupOptionTextWrap}>
+                    <Text style={styles.backupOptionTitle}>Subjects and CyberQuests</Text>
+                    <Text style={styles.backupOptionDescription}>
+                      Backup subject records and cyber quest content.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.backupImportButton}
+                  onPress={triggerBackupImport}
+                  disabled={backupInProgress}
+                >
+                  <MaterialCommunityIcons
+                    name="database-import"
+                    size={20}
+                    color="#FFF"
+                  />
+                  <Text style={styles.backupImportButtonText}>
+                    {backupInProgress
+                      ? "Processing Import..."
+                      : "Import Backup (Merge Only)"}
+                  </Text>
+                </TouchableOpacity>
+
+                <Text style={styles.backupImportHint}>
+                  Existing data is preserved. Matching records are ignored; only new records are added.
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.clearFiltersButton}
+                  onPress={() => setBackupModalVisible(false)}
+                  disabled={backupInProgress}
+                >
+                  <Text style={styles.clearFiltersText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1613,6 +1898,45 @@ const createStyles = (colors) =>
       marginLeft: 6,
       fontSize: 15,
     },
+    backupButton: {
+      flexDirection: "row",
+      backgroundColor: colors.success || "#4CAF50",
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      alignItems: "center",
+      minHeight: 44,
+      flexShrink: 1,
+    },
+    backupButtonText: {
+      color: "#FFFFFF",
+      fontWeight: "600",
+      marginLeft: 6,
+      fontSize: 15,
+    },
+    backupImportButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      marginTop: 6,
+      marginBottom: 6,
+    },
+    backupImportButtonText: {
+      color: "#FFF",
+      fontWeight: "700",
+      marginLeft: 8,
+      fontSize: 14,
+    },
+    backupImportHint: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginBottom: 10,
+      lineHeight: 17,
+    },
 
     listContainer: {
       paddingVertical: 16,
@@ -1768,6 +2092,37 @@ const createStyles = (colors) =>
       borderBottomColor: colors.border,
     },
     modalTitle: { fontSize: 22, fontWeight: "bold", color: colors.text },
+    backupHintText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginBottom: 14,
+    },
+    backupOptionButton: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      marginBottom: 10,
+    },
+    backupOptionTextWrap: {
+      flex: 1,
+    },
+    backupOptionTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 2,
+    },
+    backupOptionDescription: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
     input: {
       backgroundColor: colors.surface,
       borderRadius: 8,

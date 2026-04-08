@@ -5,6 +5,8 @@ import Module from "../models/Module.js";
 import Quiz from "../models/Quiz.js";
 import Progress from "../models/Progress.js";
 import Section from "../models/Section.js";
+import CyberQuest from "../models/CyberQuest.js";
+import UserLevel from "../models/UserLevel.js";
 import AuditLog from "../models/AuditLog.js";
 import { protectRoute, authorizeRole } from "../middleware/auth.middleware.js";
 import fs from "fs";
@@ -313,6 +315,413 @@ router.get(
       res.status(500).json({
         success: false,
         message: "Failed to export users",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/admin/backups/export
+ * @desc    Export backup data by scope (all|users|subjects)
+ * @query   scope=all|users|subjects (default: all)
+ * @access  Private/Admin
+ */
+router.get(
+  "/backups/export",
+  protectRoute,
+  authorizeRole(["admin"]),
+  async (req, res) => {
+    try {
+      const requestedScope =
+        typeof req.query.scope === "string" && req.query.scope.trim()
+          ? req.query.scope.trim().toLowerCase()
+          : "all";
+
+      const allowedScopes = new Set(["all", "users", "subjects"]);
+      if (!allowedScopes.has(requestedScope)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid backup scope. Use all, users, or subjects.",
+        });
+      }
+
+      const snapshot = {};
+      const counts = {};
+
+      if (requestedScope === "all") {
+        const db = mongoose.connection?.db;
+        if (!db) {
+          throw new Error("Database connection is not available");
+        }
+
+        const collections = await db.listCollections({}, { nameOnly: true }).toArray();
+        const collectionNames = collections
+          .map((c) => c.name)
+          .filter((name) => !name.startsWith("system."))
+          .sort();
+
+        for (const collectionName of collectionNames) {
+          const documents = await db.collection(collectionName).find({}).toArray();
+          snapshot[collectionName] = documents;
+          counts[collectionName] = documents.length;
+        }
+      }
+
+      if (requestedScope === "users") {
+        const [users, progresses, userLevels, auditLogs] = await Promise.all([
+          User.find({}).lean(),
+          Progress.find({}).lean(),
+          UserLevel.find({}).lean(),
+          AuditLog.find({}).lean(),
+        ]);
+
+        snapshot.users = users;
+        snapshot.progresses = progresses;
+        snapshot.userLevels = userLevels;
+        snapshot.auditLogs = auditLogs;
+
+        counts.users = users.length;
+        counts.progresses = progresses.length;
+        counts.userLevels = userLevels.length;
+        counts.auditLogs = auditLogs.length;
+      }
+
+      if (requestedScope === "subjects") {
+        const [sections, cyberQuests] = await Promise.all([
+          Section.find({}).lean(),
+          CyberQuest.find({}).lean(),
+        ]);
+
+        snapshot.sections = sections;
+        snapshot.cyberQuests = cyberQuests;
+
+        counts.sections = sections.length;
+        counts.cyberQuests = cyberQuests.length;
+      }
+
+      const exportedAt = new Date().toISOString();
+      const safeStamp = exportedAt.replace(/[:.]/g, "-");
+      const filename = `cyberlearn-backup-${requestedScope}-${safeStamp}.json`;
+
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename=\"${filename}\"`);
+
+      return res.json({
+        success: true,
+        scope: requestedScope,
+        exportedAt,
+        exportedBy: req.user?.id || null,
+        counts,
+        data: snapshot,
+      });
+    } catch (error) {
+      console.error("Error exporting backup:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to export backup",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   POST /api/admin/backups/import
+ * @desc    Import backup data (merge-only; skip existing records)
+ * @access  Private/Admin
+ */
+router.post(
+  "/backups/import",
+  protectRoute,
+  authorizeRole(["admin"]),
+  async (req, res) => {
+    try {
+      const backupPayload = req.body?.backup || req.body;
+      const backupData =
+        backupPayload && typeof backupPayload.data === "object"
+          ? backupPayload.data
+          : backupPayload;
+
+      if (!backupData || typeof backupData !== "object") {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid backup payload",
+        });
+      }
+
+      const firstArray = (...keys) => {
+        for (const key of keys) {
+          if (Array.isArray(backupData[key])) return backupData[key];
+        }
+        return [];
+      };
+
+      const collections = {
+        users: firstArray("users"),
+        progresses: firstArray("progresses", "progress"),
+        userLevels: firstArray("userLevels", "userlevels"),
+        sections: firstArray("sections", "subjects"),
+        cyberQuests: firstArray("cyberQuests", "cyberquests"),
+        auditLogs: firstArray("auditLogs", "auditlogs"),
+      };
+
+      const hasAnyImportRows = Object.values(collections).some(
+        (rows) => Array.isArray(rows) && rows.length > 0
+      );
+
+      if (!hasAnyImportRows) {
+        return res.status(400).json({
+          success: false,
+          message: "No importable collections found in backup file",
+        });
+      }
+
+      const summary = {};
+      const total = {
+        inserted: 0,
+        skippedExisting: 0,
+        skippedDuplicateInFile: 0,
+        invalid: 0,
+        failed: 0,
+      };
+
+      const isDuplicateKeyError = (error) =>
+        error?.code === 11000 ||
+        error?.name === "MongoServerError" ||
+        String(error?.message || "").includes("E11000");
+
+      const processCollection = async ({
+        key,
+        rows,
+        exists,
+        prepare,
+        dedupeKey,
+        insert,
+      }) => {
+        const result = {
+          received: Array.isArray(rows) ? rows.length : 0,
+          inserted: 0,
+          skippedExisting: 0,
+          skippedDuplicateInFile: 0,
+          invalid: 0,
+          failed: 0,
+          errors: [],
+        };
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+          summary[key] = result;
+          return;
+        }
+
+        const seenInFile = new Set();
+
+        for (const rawRow of rows) {
+          try {
+            if (!rawRow || typeof rawRow !== "object") {
+              result.invalid++;
+              continue;
+            }
+
+            const fileKey = dedupeKey(rawRow);
+            if (fileKey) {
+              if (seenInFile.has(fileKey)) {
+                result.skippedDuplicateInFile++;
+                continue;
+              }
+              seenInFile.add(fileKey);
+            }
+
+            const prepared = prepare(rawRow);
+            if (!prepared) {
+              result.invalid++;
+              continue;
+            }
+
+            if (await exists(prepared)) {
+              result.skippedExisting++;
+              continue;
+            }
+
+            await insert(prepared);
+            result.inserted++;
+          } catch (error) {
+            if (isDuplicateKeyError(error)) {
+              result.skippedExisting++;
+              continue;
+            }
+
+            result.failed++;
+            if (result.errors.length < 20) {
+              result.errors.push(error.message);
+            }
+          }
+        }
+
+        summary[key] = result;
+        total.inserted += result.inserted;
+        total.skippedExisting += result.skippedExisting;
+        total.skippedDuplicateInFile += result.skippedDuplicateInFile;
+        total.invalid += result.invalid;
+        total.failed += result.failed;
+      };
+
+      const normalizeText = (value) =>
+        typeof value === "string" && value.trim() ? value.trim() : null;
+
+      await processCollection({
+        key: "users",
+        rows: collections.users,
+        dedupeKey: (row) => {
+          const idPart = row?._id ? String(row._id) : "";
+          const usernamePart = normalizeText(row?.username)?.toLowerCase() || "";
+          const emailPart = normalizeText(row?.email)?.toLowerCase() || "";
+          return `${idPart}|${usernamePart}|${emailPart}`;
+        },
+        prepare: (row) => {
+          if (!normalizeText(row.username) || !normalizeText(row.email)) return null;
+          return {
+            ...row,
+            username: normalizeText(row.username).toLowerCase(),
+            email: normalizeText(row.email).toLowerCase(),
+          };
+        },
+        exists: async (row) => {
+          if (row._id && (await User.exists({ _id: row._id }))) return true;
+          if (row.username && (await User.exists({ username: row.username }))) return true;
+          if (row.email && (await User.exists({ email: row.email }))) return true;
+          return false;
+        },
+        insert: async (row) => {
+          // Use insertMany to avoid re-hashing already-hashed backup passwords.
+          await User.insertMany([row], { ordered: true });
+        },
+      });
+
+      await processCollection({
+        key: "progresses",
+        rows: collections.progresses,
+        dedupeKey: (row) => String(row?._id || row?.user || ""),
+        prepare: (row) => (row?.user ? row : null),
+        exists: async (row) => {
+          if (row._id && (await Progress.exists({ _id: row._id }))) return true;
+          if (row.user && (await Progress.exists({ user: row.user }))) return true;
+          return false;
+        },
+        insert: async (row) => {
+          await Progress.create(row);
+        },
+      });
+
+      await processCollection({
+        key: "userLevels",
+        rows: collections.userLevels,
+        dedupeKey: (row) => String(row?._id || `${row?.user || ""}|${row?.section || ""}`),
+        prepare: (row) => (row?.user && row?.section ? row : null),
+        exists: async (row) => {
+          if (row._id && (await UserLevel.exists({ _id: row._id }))) return true;
+          if (
+            row.user &&
+            row.section &&
+            (await UserLevel.exists({ user: row.user, section: row.section }))
+          ) {
+            return true;
+          }
+          return false;
+        },
+        insert: async (row) => {
+          await UserLevel.create(row);
+        },
+      });
+
+      await processCollection({
+        key: "sections",
+        rows: collections.sections,
+        dedupeKey: (row) =>
+          String(
+            row?._id ||
+              normalizeText(row?.subjectCode) ||
+              normalizeText(row?.sectionCode) ||
+              normalizeText(row?.name) ||
+              ""
+          ).toLowerCase(),
+        prepare: (row) => (normalizeText(row?.name) ? row : null),
+        exists: async (row) => {
+          if (row._id && (await Section.exists({ _id: row._id }))) return true;
+          const sectionCode = normalizeText(row.sectionCode);
+          if (sectionCode && (await Section.exists({ sectionCode }))) return true;
+          const subjectCode = normalizeText(row.subjectCode)?.toUpperCase();
+          if (subjectCode && (await Section.exists({ subjectCode }))) return true;
+          const name = normalizeText(row.name);
+          if (name && (await Section.exists({ name }))) return true;
+          return false;
+        },
+        insert: async (row) => {
+          await Section.create(row);
+        },
+      });
+
+      await processCollection({
+        key: "cyberQuests",
+        rows: collections.cyberQuests,
+        dedupeKey: (row) =>
+          String(
+            row?._id ||
+              `${normalizeText(row?.subject) || ""}|${normalizeText(row?.title) || ""}|${
+                row?.level ?? ""
+              }`
+          ).toLowerCase(),
+        prepare: (row) =>
+          normalizeText(row?.title) && row?.subject && Array.isArray(row?.questions)
+            ? row
+            : null,
+        exists: async (row) => {
+          if (row._id && (await CyberQuest.exists({ _id: row._id }))) return true;
+          if (
+            row.subject &&
+            row.title &&
+            typeof row.level === "number" &&
+            (await CyberQuest.exists({
+              subject: row.subject,
+              title: row.title,
+              level: row.level,
+            }))
+          ) {
+            return true;
+          }
+          return false;
+        },
+        insert: async (row) => {
+          await CyberQuest.create(row);
+        },
+      });
+
+      await processCollection({
+        key: "auditLogs",
+        rows: collections.auditLogs,
+        dedupeKey: (row) => String(row?._id || ""),
+        prepare: (row) => row,
+        exists: async (row) => {
+          if (!row._id) return false;
+          return !!(await AuditLog.exists({ _id: row._id }));
+        },
+        insert: async (row) => {
+          await AuditLog.create(row);
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Backup import completed (merge-only)",
+        mode: "insert-only",
+        summary,
+        totals: total,
+      });
+    } catch (error) {
+      console.error("Error importing backup:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to import backup",
         error: error.message,
       });
     }
