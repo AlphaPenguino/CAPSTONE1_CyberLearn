@@ -715,9 +715,10 @@ router.get(
 
       const cyberQuests = await CyberQuest.findBySubject(id);
 
-      // Strip volatile fields like timestamps to keep JSON simpler
+      // Strip volatile fields like timestamps to keep JSON simpler.
+      // Keep sourceQuestId only for traceability; imports should clone, not mutate originals.
       const exported = cyberQuests.map((q) => ({
-        _id: q._id, // keep _id so we can upsert on import
+        sourceQuestId: q._id,
         title: q.title,
         description: q.description,
         difficulty: q.difficulty,
@@ -748,7 +749,7 @@ router.get(
   }
 );
 
-// Import (merge/upsert) cyber quests JSON for a subject
+// Import cyber quests JSON for a subject by cloning entries
 router.post(
   "/:id/cyber-quests/import",
   protectRoute,
@@ -774,7 +775,6 @@ router.post(
       }
 
       let createdCount = 0;
-      let updatedCount = 0;
       const errors = [];
 
       for (const item of cyberQuests) {
@@ -798,30 +798,8 @@ router.post(
             throw new Error("Each cyber quest must have title and questions");
           }
 
-          // Upsert by _id if present and valid
-          if (item._id) {
-            const existing = await CyberQuest.findById(item._id);
-            if (existing) {
-              existing.title = payload.title;
-              existing.description = payload.description;
-              existing.difficulty = payload.difficulty;
-              existing.level = payload.level;
-              existing.prerequisiteLevel = payload.prerequisiteLevel;
-              existing.subject = payload.subject;
-              existing.questions = payload.questions;
-
-              const validationErrors = existing.validateQuestions();
-              if (validationErrors) {
-                throw new Error(validationErrors.join("; "));
-              }
-
-              await existing.save();
-              updatedCount++;
-              continue;
-            }
-          }
-
-          // Create new cyber quest
+          // Always create a new quest in the target subject.
+          // Ignore incoming identifiers so source subject data stays untouched.
           const cq = new CyberQuest(payload);
           const validationErrors = cq.validateQuestions();
           if (validationErrors) {
@@ -843,7 +821,7 @@ router.post(
         message: "Cyber quests import completed",
         summary: {
           created: createdCount,
-          updated: updatedCount,
+          updated: 0,
           failed: errors.length,
         },
         errors,
