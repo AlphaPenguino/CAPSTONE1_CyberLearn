@@ -668,15 +668,7 @@ export default function InstructorAnalytics() {
                     </Text>
                     <Text style={styles.statLabel}>Students</Text>
                   </View>
-                  <View style={styles.statCard}>
-                    <MaterialCommunityIcons
-                      name="trophy"
-                      size={24}
-                      color="#FFD700"
-                    />
-                    <Text style={styles.statNumber}>{avgLeaderboardScore}</Text>
-                    <Text style={styles.statLabel}>Avg Points</Text>
-                  </View>
+                  
                   <View style={styles.statCard}>
                     <MaterialCommunityIcons
                       name="gamepad-variant"
@@ -686,7 +678,7 @@ export default function InstructorAnalytics() {
                     <Text style={styles.statNumber}>
                       {studentData.summary.totalGames}
                     </Text>
-                    <Text style={styles.statLabel}>Total Games</Text>
+                    <Text style={styles.statLabel}>Total Games Recorded</Text>
                   </View>
                 </View>
               </View>

@@ -16,7 +16,7 @@ import {
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { API_URL, constructProfileImageUrl } from "../../constants/api";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import COLORS from "@/constants/custom-colors";
@@ -124,6 +124,13 @@ const BACKGROUND_OPTIONS = [
 ];
 
 export default function Home() {
+  const routeParams = useLocalSearchParams();
+  const returnSubjectIdParam = Array.isArray(routeParams?.subjectId)
+    ? routeParams.subjectId[0]
+    : routeParams?.subjectId;
+  const focusModuleIdParam = Array.isArray(routeParams?.focusModuleId)
+    ? routeParams.focusModuleId[0]
+    : routeParams?.focusModuleId;
   const { user, token, checkAuth, logout } = useAuthStore();
   const { colors } = useTheme();
   const isinstructor =
@@ -152,7 +159,14 @@ const [importing, setImporting] = React.useState(false);
   );
   const [levelProgress, setLevelProgress] = useState(null);
   const levelProgressLoadedRef = useRef(false); // Track if level progress has been loaded
+  const hasAppliedReturnSubjectRef = useRef(false);
+  const hasAppliedReturnFocusRef = useRef(false);
   const router = useRouter();
+
+  useEffect(() => {
+    hasAppliedReturnSubjectRef.current = false;
+    hasAppliedReturnFocusRef.current = false;
+  }, [returnSubjectIdParam, focusModuleIdParam]);
 
 const downloadJsonWeb = (data, filename) => {
   try {
@@ -971,6 +985,60 @@ const handleImportCyberQuestsWeb = () => {
       scrollViewRef,
     ]
   );
+
+  useEffect(() => {
+    if (hasAppliedReturnSubjectRef.current) return;
+    if (!returnSubjectIdParam || !Array.isArray(userSubjects) || !userSubjects.length) {
+      return;
+    }
+
+    const matchedSubject = userSubjects.find((subject) => {
+      const subjectId = subject?._id || subject?.id;
+      return String(subjectId) === String(returnSubjectIdParam);
+    });
+
+    if (!matchedSubject) {
+      hasAppliedReturnSubjectRef.current = true;
+      return;
+    }
+
+    const currentSubjectId = selectedSubject?._id || selectedSubject?.id;
+    if (String(currentSubjectId || "") !== String(returnSubjectIdParam)) {
+      setSelectedSubject(matchedSubject);
+    }
+    hasAppliedReturnSubjectRef.current = true;
+  }, [returnSubjectIdParam, userSubjects, selectedSubject]);
+
+  useEffect(() => {
+    if (hasAppliedReturnFocusRef.current) return;
+    if (!focusModuleIdParam || !Array.isArray(modules) || !modules.length) return;
+
+    const currentSubjectId = selectedSubject?._id || selectedSubject?.id;
+    if (
+      returnSubjectIdParam &&
+      String(currentSubjectId || "") !== String(returnSubjectIdParam)
+    ) {
+      return;
+    }
+
+    const moduleIndex = modules.findIndex(
+      (module) => String(module?._id || module?.id) === String(focusModuleIdParam)
+    );
+
+    if (moduleIndex < 0) {
+      hasAppliedReturnFocusRef.current = true;
+      return;
+    }
+
+    movePlayerToModule(modules[moduleIndex], moduleIndex);
+    hasAppliedReturnFocusRef.current = true;
+  }, [
+    focusModuleIdParam,
+    modules,
+    movePlayerToModule,
+    selectedSubject,
+    returnSubjectIdParam,
+  ]);
 
   const createDummyModules = async () => {
     const dummyModules = [];
@@ -2814,7 +2882,14 @@ const handleImportCyberQuestsWeb = () => {
               onPress={() => {
                 // Always use the module/game route for all quests (cyber-quest and regular modules)
                 // This route has the full game experience with animations, sprites, and backgrounds
-                router.push(`/module/game/${selectedModule._id}`);
+                router.push({
+                  pathname: `/module/game/${selectedModule._id}`,
+                  params: {
+                    returnSubjectId:
+                      selectedSubject?._id || selectedSubject?.id || "",
+                    returnModuleId: selectedModule?._id || selectedModule?.id || "",
+                  },
+                });
               }}
             >
               <Ionicons name="play" size={20} color="#FFFFFF" />

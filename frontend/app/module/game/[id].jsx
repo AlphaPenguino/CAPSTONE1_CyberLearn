@@ -40,9 +40,43 @@ const battlefieldImages = [
 const USE_DUMMY_GAME_DATA = false;
 
 export default function ModuleGameQuest() {
-  const { id } = useLocalSearchParams(); // Module ID
+  const { id, returnSubjectId, returnModuleId } = useLocalSearchParams(); // Module ID + map return context
   const { token } = useAuthStore();
   const router = useRouter();
+  const normalizedReturnSubjectId = Array.isArray(returnSubjectId)
+    ? returnSubjectId[0]
+    : returnSubjectId;
+  const normalizedReturnModuleId = Array.isArray(returnModuleId)
+    ? returnModuleId[0]
+    : returnModuleId;
+  const normalizedCurrentModuleId = Array.isArray(id) ? id[0] : id;
+
+  const navigateToAdventureMap = useCallback(() => {
+    const focusModuleId = normalizedReturnModuleId || normalizedCurrentModuleId;
+
+    if (normalizedReturnSubjectId) {
+      router.replace({
+        pathname: "/(tabs)/",
+        params: {
+          subjectId: normalizedReturnSubjectId,
+          focusModuleId: focusModuleId || "",
+        },
+      });
+      return;
+    }
+
+    router.replace({
+      pathname: "/(tabs)/",
+      params: {
+        focusModuleId: focusModuleId || "",
+      },
+    });
+  }, [
+    router,
+    normalizedReturnSubjectId,
+    normalizedReturnModuleId,
+    normalizedCurrentModuleId,
+  ]);
 
   // Game state
   const [module, setModule] = useState(null);
@@ -1672,7 +1706,7 @@ function hashPassword(password) {
 
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.push("/(tabs)/")}
+              onPress={navigateToAdventureMap}
             >
               <Text style={styles.backButtonText}>← Back to Adventure Map</Text>
             </TouchableOpacity>
@@ -1910,7 +1944,7 @@ function hashPassword(password) {
 
                   <TouchableOpacity
                     style={styles.backToMapButton}
-                    onPress={() => router.push("/(tabs)/")}
+                    onPress={navigateToAdventureMap}
                   >
                     <Text style={styles.backToMapButtonText}>
                       ← Back to Adventure Map
@@ -1930,14 +1964,20 @@ function hashPassword(password) {
 
                         // Check if next level exists (assuming we have up to 20 levels)
                         if (currentLevelNumber < 19) {
-                          router.push(`/module/game/${nextLevelId}`);
+                          router.push({
+                            pathname: `/module/game/${nextLevelId}`,
+                            params: {
+                              returnSubjectId: normalizedReturnSubjectId || "",
+                              returnModuleId: nextLevelId,
+                            },
+                          });
                         } else {
-                          router.push("/(tabs)/");
+                          navigateToAdventureMap();
                         }
                       } else {
                         // Real data navigation - just go back to map
                         // The map will show the updated progress and next available level
-                        router.push("/(tabs)/");
+                        navigateToAdventureMap();
                       }
                     }}
                   >
@@ -1971,7 +2011,7 @@ function hashPassword(password) {
 
                   <TouchableOpacity
                     style={styles.backToMapButton}
-                    onPress={() => router.push("/(tabs)/")}
+                    onPress={navigateToAdventureMap}
                   >
                     <Text style={styles.backToMapButtonText}>
                       ← Back to Adventure Map
