@@ -598,7 +598,12 @@ export default function InstructorAnalytics() {
         <View style={styles.header}>
           <TouchableOpacity
             // Navigate explicitly to the instructor dashboard instead of relying on history
-            onPress={() => router.replace("/(tabs)/instructor")}
+            onPress={() =>
+              router.replace({
+                pathname: "/(tabs)/instructor",
+                params: { tab: "tools" },
+              })
+            }
             style={styles.backButton}
           >
             <MaterialCommunityIcons

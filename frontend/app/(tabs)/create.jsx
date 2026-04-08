@@ -63,7 +63,7 @@ const migrateSortingItems = (questions) => {
 };
 
 export default function Create() {
-  const { edit } = useLocalSearchParams();
+  const { edit, from } = useLocalSearchParams();
   const router = useRouter();
   const { colors, isDarkMode } = useTheme();
   // Use dark blue in light mode instead of yellow for text & icon accents
@@ -80,6 +80,9 @@ export default function Create() {
   // Simply check: if we have edit param, we're in edit mode
   // If user clicks Create tab directly, they can click "Create New" to start fresh
   const isEditMode = !!edit;
+  const fromSource = Array.isArray(from) ? from[0] : from;
+  const openedFromInstructorTools = fromSource === "instructor-tools";
+  const openedFromIndex = fromSource === "index";
   console.log("🔍 Create Component - isEditMode:", isEditMode);
 
   // Internal UI state to track which creator is active
@@ -6470,11 +6473,42 @@ export default function Create() {
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
               <View style={styles.headerTitleRow}>
+                {openedFromInstructorTools || openedFromIndex ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (openedFromInstructorTools) {
+                        router.replace({
+                          pathname: "/(tabs)/instructor",
+                          params: { tab: "tools" },
+                        });
+                        return;
+                      }
+
+                      router.replace("/(tabs)");
+                    }}
+                    style={[
+                      styles.headerBackButton,
+                      {
+                        backgroundColor: `${highlightColor}20`,
+                        borderColor: `${highlightColor}60`,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="arrow-back"
+                      size={18}
+                      color={highlightColor}
+                    />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.headerBackSpacer} />
+                )}
                 <Text
                   style={[styles.headerTitle, { color: colors.textSecondary }]}
                 >
                   🎮 Creator&apos;s Workshop
                 </Text>
+                <View style={styles.headerBackSpacer} />
               </View>
               <Text
                 style={[styles.headerSubtitle, { color: colors.textSecondary }]}
@@ -6586,8 +6620,21 @@ const styles = StyleSheet.create({
   headerTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     marginBottom: 8,
+    width: "100%",
+  },
+  headerBackButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerBackSpacer: {
+    width: 34,
+    height: 34,
   },
   headerTitle: {
     fontSize: 28,

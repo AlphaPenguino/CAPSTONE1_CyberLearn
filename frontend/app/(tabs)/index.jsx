@@ -1300,7 +1300,12 @@ const handleImportCyberQuestsWeb = () => {
             {isinstructor && (
               <TouchableOpacity
                 style={styles.instructorButton}
-                onPress={() => router.push("/(tabs)/create")}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(tabs)/create",
+                    params: { from: "index" },
+                  })
+                }
               >
                 <Ionicons name="add-circle" size={24} color={colors.primary} />
               </TouchableOpacity>
@@ -1873,7 +1878,12 @@ const handleImportCyberQuestsWeb = () => {
                     styles.actionButton,
                     { backgroundColor: COLORS.success },
                   ]}
-                  onPress={() => router.push("/(tabs)/create")}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(tabs)/create",
+                      params: { from: "index" },
+                    })
+                  }
                 >
                   <Ionicons name="add" size={20} color={COLORS.white} />
                   <Text
@@ -1941,6 +1951,7 @@ const handleImportCyberQuestsWeb = () => {
                     router.push({
                       pathname: "/(tabs)/create",
                       params: {
+                        from: "index",
                         subject: selectedSubject._id || selectedSubject.id,
                       },
                     })

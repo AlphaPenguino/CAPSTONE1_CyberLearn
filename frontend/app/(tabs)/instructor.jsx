@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
 import { API_URL } from "../../constants/api";
@@ -22,7 +22,13 @@ const isWeb = Platform.OS === "web";
 const isLargeScreen = isWeb && screenWidth > 768;
 
 export default function InstructorDashboard() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const params = useLocalSearchParams();
+  const requestedTab = Array.isArray(params?.tab) ? params.tab[0] : params?.tab;
+  const normalizedRequestedTab =
+    typeof requestedTab === "string" ? requestedTab.toLowerCase() : null;
+  const [activeTab, setActiveTab] = useState(
+    normalizedRequestedTab === "tools" ? "tools" : "dashboard"
+  );
   const [summary, setSummary] = useState({
     totalStudents: 0,
     averageScore: 0,
@@ -34,6 +40,16 @@ export default function InstructorDashboard() {
   // Dark blue override for light mode (replacing yellow accents)
   const highlightColor = colors.textPrimary;
   const router = useRouter();
+
+  useEffect(() => {
+    if (normalizedRequestedTab === "tools") {
+      setActiveTab("tools");
+      return;
+    }
+    if (normalizedRequestedTab === "dashboard") {
+      setActiveTab("dashboard");
+    }
+  }, [normalizedRequestedTab]);
 
   // Fetch dashboard summary from backend
   const fetchSummary = useCallback(async () => {
@@ -161,12 +177,7 @@ export default function InstructorDashboard() {
             icon="account-group"
             color={highlightColor}
           />
-          <StatCard
-            title="Average Score"
-            value={`${Math.round(summary.averageScore)}%`}
-            icon="chart-line"
-            color={colors.warning}
-          />
+
         </View>
       </View>
 
@@ -244,7 +255,12 @@ export default function InstructorDashboard() {
           description="Create levels, quizzes, and manage classes"
           icon="plus-circle"
           color={highlightColor}
-          onPress={() => router.push("/(tabs)/create")}
+          onPress={() =>
+            router.push({
+              pathname: "/(tabs)/create",
+              params: { from: "instructor-tools" },
+            })
+          }
         />
       </View>
     </ScrollView>
