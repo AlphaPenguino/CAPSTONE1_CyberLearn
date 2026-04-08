@@ -1197,6 +1197,13 @@ const handleImportCyberQuestsWeb = () => {
     }, [selectedModule, infoPanelAnimation])
   );
 
+  const hidePlayerStatsForEmptySelectedSubject =
+    user?.privilege === "student" &&
+    !!selectedSubject &&
+    !loading &&
+    !error &&
+    modules.length === 0;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Enhanced Header with Mobile-Optimized Layout */}
@@ -1323,7 +1330,9 @@ const handleImportCyberQuestsWeb = () => {
         </View>
 
         {/* Level Progress Display for Students - Mobile optimized */}
-        {!isinstructor && levelProgress && (
+        {!isinstructor &&
+          levelProgress &&
+          !hidePlayerStatsForEmptySelectedSubject && (
           <View
             style={[
               styles.levelProgressContainer,

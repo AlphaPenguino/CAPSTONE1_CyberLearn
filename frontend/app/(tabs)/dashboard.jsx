@@ -110,6 +110,7 @@ export default function Dashboard() {
   const { colors } = useTheme();
   const { width: viewportWidth } = useWindowDimensions();
   const isAndroid = Platform.OS === "android";
+  const isWeb = Platform.OS === "web";
 
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -681,15 +682,28 @@ export default function Dashboard() {
   const contentChartHeight = isAndroid ? 250 : 220;
   const monthlyLabelSpacing = isAndroid ? 104 : 80;
 
-  const pieChartSize = useMemo(
-    () => Math.max(isAndroid ? 210 : 190, Math.min(chartWidth - 8, 320)),
-    [chartWidth, isAndroid]
-  );
+  const pieChartSize = useMemo(() => {
+    const cardPadding = isAndroid ? 36 : 40;
+    const viewportPadding = isAndroid ? 52 : 56;
+    const maxSize = Math.min(
+      320,
+      chartWidth - cardPadding,
+      viewportWidth - viewportPadding
+    );
+    return Math.max(isAndroid ? 156 : 190, maxSize);
+  }, [chartWidth, isAndroid, viewportWidth]);
 
-  const pieChartCanvasWidth = useMemo(
-    () => Math.max(pieChartSize, chartWidth - 16),
-    [chartWidth, pieChartSize]
-  );
+  // Web needs extra canvas room; mobile keeps a square canvas for stable centering.
+  const pieChartWebInset = Platform.OS === "web" ? 100 : 0;
+  const pieChartAndroidInset = isAndroid ? 100 : 0;
+  const pieChartCanvasWidth = isWeb
+    ? pieChartSize + pieChartWebInset * 2
+    : isAndroid
+    ? pieChartSize + pieChartAndroidInset * 2
+    : pieChartSize;
+  const pieChartPaddingLeft = isAndroid ? String(pieChartAndroidInset) : "0";
+  const pieChartCenter = isAndroid ? [8, 0] : [0, 0];
+  const showAbsolutePieLabels = !isAndroid && !isWeb;
 
   const chartConfig = {
     backgroundGradientFrom: colors.card,
@@ -1121,7 +1135,11 @@ export default function Dashboard() {
                   <View
                     style={[
                       styles.chartCard,
-                      { backgroundColor: colors.card, alignItems: "center" },
+                      {
+                        backgroundColor: colors.card,
+                        alignItems: "center",
+                        overflow: "visible",
+                      },
                     ]}
                   >
                     <View style={styles.pieChartContainer}>
@@ -1132,14 +1150,22 @@ export default function Dashboard() {
                         chartConfig={{
                           ...chartConfig,
                           color: (opacity = 1) => `rgba(0,0,0,${opacity})`,
+                          propsForLabels: {
+                            fontSize: isAndroid ? 10 : 11,
+                            fontWeight: "700",
+                          },
                         }}
                         accessor="population"
                         backgroundColor="transparent"
-                        paddingLeft={"0"}
-                        center={[0, 0]}
-                        absolute
+                        paddingLeft={pieChartPaddingLeft}
+                        center={pieChartCenter}
+                        absolute={showAbsolutePieLabels}
                         hasLegend={false}
-                        style={{ marginVertical: 4, borderRadius: 16 }}
+                        style={{
+                          marginVertical: 4,
+                          borderRadius: 16,
+                          alignSelf: "center",
+                        }}
                         onDataPointClick={(slice) => {
                           togglePieRole(slice.name);
                           handleDataPointClick({
@@ -2002,7 +2028,8 @@ const styles = StyleSheet.create({
   pieChartContainer: {
     width: "100%",
     alignItems: "center",
-    maxWidth: 300,
+    justifyContent: "center",
+    paddingHorizontal: Platform.OS === "android" ? 8 : 0,
   },
   container: {
     flex: 1,
