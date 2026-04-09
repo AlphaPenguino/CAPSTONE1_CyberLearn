@@ -1,5 +1,74 @@
 import mongoose from "mongoose";
 
+export const AUDIT_CATEGORIES = [
+  "all",
+  "auth",
+  "user_management",
+  "content_creation",
+  "content_modification",
+  "content_deletion",
+  "learning_activity",
+  "admin_action",
+];
+
+export const getAuditCategoryFromResourceAction = (resource, action = "") => {
+  const normalizedAction = String(action || "").toLowerCase();
+  const isAdminUserAction = /create|add|delete|remove|archive|unarchive/.test(
+    normalizedAction
+  );
+  const categoryByResource = {
+    user:
+      normalizedAction.includes("login") ||
+      normalizedAction.includes("register") ||
+      normalizedAction.includes("signup")
+        ? "auth"
+        : isAdminUserAction
+          ? "admin_action"
+          : "user_management",
+    module: normalizedAction.includes("create")
+      ? "content_creation"
+      : normalizedAction.includes("update")
+      ? "content_modification"
+      : normalizedAction.includes("access") || normalizedAction.includes("view")
+      ? "learning_activity"
+      : "content_deletion",
+    quiz: normalizedAction.includes("create")
+      ? "content_creation"
+      : normalizedAction.includes("update")
+      ? "content_modification"
+      : normalizedAction.includes("attempt") || normalizedAction.includes("complete")
+      ? "learning_activity"
+      : "content_deletion",
+    section: "user_management",
+    subject: normalizedAction.includes("create")
+      ? "content_creation"
+      : normalizedAction.includes("student")
+      ? "user_management"
+      : "content_modification",
+    cyberquest: normalizedAction.includes("create")
+      ? "content_creation"
+      : normalizedAction.includes("access") || normalizedAction.includes("complete")
+      ? "learning_activity"
+      : "content_modification",
+    question: normalizedAction.includes("create")
+      ? "content_creation"
+      : normalizedAction.includes("import")
+      ? "content_modification"
+      : "content_modification",
+    multiplayer_game: "learning_activity",
+    digital_defenders: "learning_activity",
+    quiz_showdown: "learning_activity",
+    knowledge_relay: "learning_activity",
+    game: "learning_activity",
+    file: "content_modification",
+    system: "admin_action",
+    analytics: "admin_action",
+    dashboard: "admin_action",
+  };
+
+  return categoryByResource[resource] || "admin_action";
+};
+
 const auditLogSchema = new mongoose.Schema(
   {
     userId: {
@@ -44,7 +113,8 @@ const auditLogSchema = new mongoose.Schema(
       required: false,
     },
     resourceId: {
-      type: mongoose.Schema.Types.ObjectId,
+      // Room codes and external identifiers are not always ObjectIds.
+      type: String,
       required: false,
     },
     details: {
@@ -85,53 +155,7 @@ auditLogSchema.index({ userRole: 1, createdAt: -1 });
 
 // Virtual for compatibility with frontend expecting 'category'
 auditLogSchema.virtual("category").get(function () {
-  const resourceCategoryMap = {
-    user:
-      this.action.includes("login") || this.action.includes("register")
-        ? "auth"
-        : "user_management",
-    module: this.action.includes("create")
-      ? "content_creation"
-      : this.action.includes("update")
-      ? "content_modification"
-      : this.action.includes("access") || this.action.includes("view")
-      ? "learning_activity"
-      : "content_deletion",
-    quiz: this.action.includes("create")
-      ? "content_creation"
-      : this.action.includes("update")
-      ? "content_modification"
-      : this.action.includes("attempt") || this.action.includes("complete")
-      ? "learning_activity"
-      : "content_deletion",
-    section: "user_management",
-    subject: this.action.includes("create")
-      ? "content_creation"
-      : this.action.includes("student")
-      ? "user_management"
-      : "content_modification",
-    cyberquest: this.action.includes("create")
-      ? "content_creation"
-      : this.action.includes("access") || this.action.includes("complete")
-      ? "learning_activity"
-      : "content_modification",
-    question: this.action.includes("create")
-      ? "content_creation"
-      : this.action.includes("import")
-      ? "content_management"
-      : "content_modification",
-    multiplayer_game: "game_activity",
-    digital_defenders: "game_activity",
-    quiz_showdown: "game_activity",
-    knowledge_relay: "game_activity",
-    game: "game_activity",
-    file: "content_management",
-    system: "admin_action",
-    analytics: "analytics_access",
-    dashboard: "dashboard_access",
-  };
-
-  return resourceCategoryMap[this.resource] || "system_access";
+  return getAuditCategoryFromResourceAction(this.resource, this.action);
 });
 
 // Virtual for compatibility with frontend expecting 'timestamp'

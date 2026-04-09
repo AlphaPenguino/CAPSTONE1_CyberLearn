@@ -2648,8 +2648,9 @@ export default function Create() {
         </Modal>
 
         <ScrollView
-          style={styles.formScroll}
-          showsVerticalScrollIndicator={Platform.OS === 'web' ? true : true}
+          style={[styles.formScroll, Platform.OS === "web" && styles.webScrollableForm]}
+          showsVerticalScrollIndicator={true}
+          persistentScrollbar={Platform.OS === "web"}
           contentContainerStyle={{ paddingBottom: 20 }}
         >
           {loadingQuestData ? (
@@ -2944,7 +2945,7 @@ export default function Create() {
                 <Text
                   style={[styles.inputLabel, { color: colors.textSecondary }]}
                 >
-                  Difficulty Level
+                  Difficulty Levels
                 </Text>
                 <View style={styles.difficultyContainer}>
                   {difficulties.map((diff) => (
@@ -4230,10 +4231,19 @@ export default function Create() {
         </View>
 
         <ScrollView
-              style={styles.scrollContainer}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={Platform.OS === 'web' ? true : true}
-            >
+          style={[
+            styles.scrollContainer,
+            Platform.OS === "web" &&
+              activeSection === "manage" &&
+              styles.webScrollableManageSubjects,
+            Platform.OS === "web" &&
+              activeSection === "assign" &&
+              styles.webScrollableAssignStudents,
+          ]}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={true}
+          persistentScrollbar={Platform.OS === "web"}
+        >
           {activeSection === "create" ? (
             // CREATE SUBJECT DIVISION
             <>
@@ -4651,7 +4661,7 @@ export default function Create() {
                             placeholderTextColor="#4a7c59"
                             style={[
                               styles.textInput,
-                              { backgroundColor: "#92eacc" },
+                              { backgroundColor: "#ffffff" },
                             ]}
                             mode="outlined"
                             theme={{
@@ -6519,9 +6529,11 @@ export default function Create() {
             </View>
             {/* Content */}
             <ScrollView
-              style={styles.scrollContainer}
+              style={styles.outerScrollContainer}
               contentContainerStyle={styles.scrollContent}
               showsVerticalScrollIndicator={false}
+              persistentScrollbar={false}
+              scrollEnabled={Platform.OS !== "web" || !activeCreator}
             >
               {renderContent()}
             </ScrollView>
@@ -6648,27 +6660,19 @@ const styles = StyleSheet.create({
     textAlign: "center",
     opacity: 0.9,
   },
-  scrollContainer: {
+  outerScrollContainer: {
     flex: 1,
-    ...(Platform.OS === 'web' && {
-      '::-webkit-scrollbar': {
-        width: '8px',
-      },
-      '::-webkit-scrollbar-track': {
-        background: 'rgba(0,0,0,0.1)',
-        borderRadius: '4px',
-      },
-      '::-webkit-scrollbar-thumb': {
-        background: 'rgba(0,0,0,0.3)',
-        borderRadius: '4px',
-      },
-      '::-webkit-scrollbar-thumb:hover': {
-        background: 'rgba(0,0,0,0.5)',
-      },
-      scrollbarWidth: 'auto',
-      scrollbarColor: 'rgba(0,0,0,0.3) rgba(0,0,0,0.1)',
+    ...(Platform.OS === "web" && {
+      overflow: "hidden",
     }),
   },
+    scrollContainer: {
+    flex: 1,
+    ...(Platform.OS === "web" && {
+      overflowY: "auto",
+      scrollbarWidth: "thin",
+    }),
+    },
 
   scrollContent: {
     paddingTop: 20,
@@ -6790,28 +6794,32 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 4,
   },
- formScroll: {
+   formScroll: {
     flex: 1,
     paddingHorizontal: 4,
-    ...(Platform.OS === 'web' && {
-      '::-webkit-scrollbar': {
-        width: '8px',
-      },
-      '::-webkit-scrollbar-track': {
-        background: 'rgba(0,0,0,0.1)',
-        borderRadius: '4px',
-      },
-      '::-webkit-scrollbar-thumb': {
-        background: 'rgba(0,0,0,0.3)',
-        borderRadius: '4px',
-      },
-      '::-webkit-scrollbar-thumb:hover': {
-        background: 'rgba(0,0,0,0.5)',
-      },
-      scrollbarWidth: 'auto',
-      scrollbarColor: 'rgba(0,0,0,0.3) rgba(0,0,0,0.1)',
+    ...(Platform.OS === "web" && {
+      overflowY: "auto",
+      scrollbarWidth: "thin",
+      paddingRight: 6,
     }),
-  },
+   },
+    webScrollableForm: {
+      ...(Platform.OS === "web" && {
+        maxHeight: "calc(100vh - 260px)",
+      }),
+    },
+    webScrollableManageSubjects: {
+      ...(Platform.OS === "web" && {
+        maxHeight: "calc(100vh - 320px)",
+        paddingRight: 6,
+      }),
+    },
+    webScrollableAssignStudents: {
+      ...(Platform.OS === "web" && {
+        maxHeight: "calc(100vh - 320px)",
+        paddingRight: 6,
+      }),
+    },
   inputGroup: {
     marginBottom: Platform.OS === "web" ? 24 : 20,
   },

@@ -218,6 +218,23 @@ const initializeQuizShowdownSocket = (io) => {
       }, 3000); // 3 second countdown
 
       console.log(`Quiz Showdown game started in room ${roomId}`);
+      logActivity({
+        userId: null,
+        username: player.playerName,
+        userRole: "unknown",
+        action: AUDIT_ACTIONS.MULTIPLAYER_GAME_START,
+        resource: AUDIT_RESOURCES.QUIZ_SHOWDOWN,
+        resourceId: roomId,
+        details: {
+          gameType: "quiz_showdown",
+          roomId,
+          startedBy: player.playerName,
+        },
+        ipAddress: socket.handshake.address,
+        userAgent: socket.handshake.headers["user-agent"],
+      }).catch((error) =>
+        console.error("Failed to log Quiz Showdown game start:", error)
+      );
     });
 
     // Handle buzzer press
@@ -300,6 +317,26 @@ const initializeQuizShowdownSocket = (io) => {
             finalScores: result.finalScores,
             game: game.getPublicGameState(),
           });
+
+          logActivity({
+            userId: null,
+            username: player.playerName,
+            userRole: "unknown",
+            action: AUDIT_ACTIONS.MULTIPLAYER_GAME_END,
+            resource: AUDIT_RESOURCES.QUIZ_SHOWDOWN,
+            resourceId: roomId,
+            details: {
+              gameType: "quiz_showdown",
+              roomId,
+              endedBy: player.playerName,
+              winner: result.winner || null,
+              finalScores: result.finalScores || null,
+            },
+            ipAddress: socket.handshake.address,
+            userAgent: socket.handshake.headers["user-agent"],
+          }).catch((error) =>
+            console.error("Failed to log Quiz Showdown game end:", error)
+          );
         } else if (result.nextQuestion) {
           // Move to next question after a delay
           setTimeout(() => {
@@ -347,6 +384,25 @@ const initializeQuizShowdownSocket = (io) => {
       const player = quizShowdownPlayers.get(socket.id);
 
       if (player) {
+        logActivity({
+          userId: null,
+          username: player.playerName,
+          userRole: "unknown",
+          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_LEAVE,
+          resource: AUDIT_RESOURCES.QUIZ_SHOWDOWN,
+          resourceId: player.gameId,
+          details: {
+            gameType: "quiz_showdown",
+            roomId: player.gameId,
+            leaveType: "disconnect",
+            teamName: player.teamName,
+          },
+          ipAddress: socket.handshake.address,
+          userAgent: socket.handshake.headers["user-agent"],
+        }).catch((error) =>
+          console.error("Failed to log Quiz Showdown room leave:", error)
+        );
+
         const game = quizShowdownGames.get(player.gameId);
 
         if (game) {

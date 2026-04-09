@@ -4,6 +4,11 @@ import {
   knowledgeRelayQuestions,
 } from "../models/KnowledgeRelay.js";
 import {
+  logActivity,
+  AUDIT_ACTIONS,
+  AUDIT_RESOURCES,
+} from "../lib/auditLogger.js";
+import {
   knowledgeRelayGames,
   knowledgeRelayPlayers,
   knowledgeRelayGameTimers,
@@ -11,6 +16,26 @@ import {
 
 // This array will hold globally loaded questions (volatile in-memory)
 let globalKnowledgeRelayQuestions = [...knowledgeRelayQuestions];
+
+const logKnowledgeRelayActivity = ({ socket, action, playerName, roomId, details = {} }) => {
+  logActivity({
+    userId: null,
+    username: playerName || "Unknown Player",
+    userRole: "unknown",
+    action,
+    resource: AUDIT_RESOURCES.KNOWLEDGE_RELAY,
+    resourceId: roomId,
+    details: {
+      gameType: "knowledge_relay",
+      roomId,
+      ...details,
+    },
+    ipAddress: socket?.handshake?.address,
+    userAgent: socket?.handshake?.headers?.["user-agent"],
+  }).catch((error) => {
+    console.error("Failed to write Knowledge Relay audit log:", error);
+  });
+};
 
 // Expose a setter so routes can update global questions
 export const setGlobalKnowledgeRelayQuestions = (questions) => {
@@ -94,6 +119,13 @@ const initializeKnowledgeRelaySocket = (io) => {
         game.questions = [...globalKnowledgeRelayQuestions];
         knowledgeRelayGames.set(roomId, game);
         console.log(`Knowledge Relay - Created new game: ${roomId}`);
+        logKnowledgeRelayActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_CREATE,
+          playerName,
+          roomId,
+          details: { isCreator: true },
+        });
       }
 
       // Check if player was previously disconnected
@@ -130,6 +162,13 @@ const initializeKnowledgeRelaySocket = (io) => {
       console.log(
         `Knowledge Relay - Player ${playerName} joined room ${roomId}`
       );
+      logKnowledgeRelayActivity({
+        socket,
+        action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_JOIN,
+        playerName,
+        roomId,
+        details: { isCreator: game.isCreator(socket.id) },
+      });
     });
 
     // Select team
@@ -219,6 +258,13 @@ const initializeKnowledgeRelaySocket = (io) => {
         });
 
         console.log(`Knowledge Relay - Game ${playerInfo.gameId} started`);
+        logKnowledgeRelayActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_GAME_START,
+          playerName: playerInfo.playerName,
+          roomId: playerInfo.gameId,
+          details: { phase: PHASES.PLAYING },
+        });
       } else {
         socket.emit("kr-error", { message: result.message });
       }
@@ -267,6 +313,19 @@ const initializeKnowledgeRelaySocket = (io) => {
             result.correct ? "Correct" : "Incorrect"
           }`
         );
+        if (result.gameFinished) {
+          logKnowledgeRelayActivity({
+            socket,
+            action: AUDIT_ACTIONS.MULTIPLAYER_GAME_END,
+            playerName: playerInfo.playerName,
+            roomId: playerInfo.gameId,
+            details: {
+              reason: "questions_completed",
+              correct: result.correct,
+              winnerTeam: result.winnerTeam || null,
+            },
+          });
+        }
       } else {
         socket.emit("kr-error", { message: result.message });
       }
@@ -451,6 +510,13 @@ const initializeKnowledgeRelaySocket = (io) => {
 
       const playerInfo = knowledgeRelayPlayers.get(socket.id);
       if (playerInfo) {
+        logKnowledgeRelayActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_LEAVE,
+          playerName: playerInfo.playerName,
+          roomId: playerInfo.gameId,
+          details: { leaveType: "disconnect" },
+        });
         const game = knowledgeRelayGames.get(playerInfo.gameId);
         if (game) {
           // Mark player as disconnected (permanent removal)
@@ -490,6 +556,13 @@ const initializeKnowledgeRelaySocket = (io) => {
       const playerInfo = knowledgeRelayPlayers.get(socket.id);
 
       if (playerInfo) {
+        logKnowledgeRelayActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_LEAVE,
+          playerName: playerInfo.playerName,
+          roomId: playerInfo.gameId,
+          details: { leaveType: "manual" },
+        });
         const game = knowledgeRelayGames.get(playerInfo.gameId);
         if (game) {
           const leaveResult = game.removePlayer(socket.id);

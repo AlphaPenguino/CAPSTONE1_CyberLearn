@@ -20,6 +20,34 @@ import { useAuthStore } from "../../store/authStore";
 import { SafeScreen } from "../../components/SafeScreen";
 import { API_URL } from "../../constants/api";
 
+const CATEGORY_LABELS = {
+  all: "All Categories",
+  auth: "Authentication",
+  user_management: "User Management",
+  content_creation: "Content Creation",
+  content_modification: "Content Modification",
+  content_deletion: "Content Deletion",
+  learning_activity: "Game Activity",
+  admin_action: "Admin Actions",
+};
+
+const CATEGORY_GROUPS = [
+  { label: "Access", values: ["auth"] },
+  { label: "Content", values: ["content_creation", "content_modification", "content_deletion"] },
+  { label: "Activity", values: ["learning_activity"] },
+  { label: "Administration", values: ["user_management", "admin_action"] },
+];
+
+const getCategoryLabel = (category) => {
+  if (CATEGORY_LABELS[category]) return CATEGORY_LABELS[category];
+  return String(category || "")
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
+const SUPPORTED_CATEGORY_SET = new Set(Object.keys(CATEGORY_LABELS));
+
 export default function LogsScreen() {
   const { colors } = useTheme();
   const { token } = useAuthStore(); // user not needed
@@ -29,43 +57,15 @@ export default function LogsScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [filters, setFilters] = useState({
-    userId: "",
     userSearch: "",
+    category: "all",
   });
-  const [users, setUsers] = useState([]);
-  const [, setLoadingUsers] = useState(false); // future enhancement spinner placeholder
   const [summary, setSummary] = useState(null);
+  const [availableCategories, setAvailableCategories] = useState(["all", ...Object.keys(CATEGORY_LABELS).filter((key) => key !== "all")]);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [loadingSubjectDetails, setLoadingSubjectDetails] = useState(false);
-
-  const fetchUsers = useCallback(async () => {
-    if (!token) return;
-    try {
-      setLoadingUsers(true);
-      const response = await fetch(`${API_URL}/admin/users`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setUsers(data.data.users || []);
-        }
-      }
-    } catch (_err) {
-      console.error("Error fetching users:", _err);
-    } finally {
-      setLoadingUsers(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
 
   const fetchSubjectName = useCallback(
     async (subjectId) => {
@@ -183,6 +183,14 @@ export default function LogsScreen() {
             });
           }
           setSummary(data.data.summary);
+          const apiCategories = data.data?.summary?.availableCategories;
+          if (Array.isArray(apiCategories) && apiCategories.length > 0) {
+            setAvailableCategories(
+              apiCategories.filter((category) =>
+                SUPPORTED_CATEGORY_SET.has(category)
+              )
+            );
+          }
           setHasMore(
             data.data.pagination ? data.data.pagination.hasNextPage : false
           );
@@ -391,6 +399,86 @@ export default function LogsScreen() {
       )}
     </View>
   );
+
+  const allCategories =
+    availableCategories && availableCategories.length > 0
+      ? availableCategories.filter((category) =>
+          SUPPORTED_CATEGORY_SET.has(category)
+        )
+      : ["all", ...Object.keys(CATEGORY_LABELS).filter((key) => key !== "all")];
+
+  const groupedCategoryOptions = CATEGORY_GROUPS.map((group) => ({
+    ...group,
+    values: group.values.filter((value) => allCategories.includes(value)),
+  })).filter((group) => group.values.length > 0);
+
+  const uncategorizedOptions = allCategories.filter(
+    (value) =>
+      value !== "all" &&
+      !CATEGORY_GROUPS.some((group) => group.values.includes(value))
+  );
+
+  const renderCategorySelect = () => {
+    if (Platform.OS !== "web") {
+      return (
+        <View
+          style={[
+            styles.filterPicker,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.filterValue, { color: colors.text }]}>
+            {getCategoryLabel(filters.category)}
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <select
+        value={filters.category}
+        onChange={(e) =>
+          setFilters((prev) => ({
+            ...prev,
+            category: e.target.value,
+          }))
+        }
+        style={{
+          width: "100%",
+          padding: 8,
+          borderRadius: 6,
+          borderWidth: 1,
+          fontSize: 14,
+          backgroundColor: colors.surface,
+          color: colors.text,
+          borderColor: colors.border,
+        }}
+      >
+        <option value="all">All Categories</option>
+        {groupedCategoryOptions.map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.values.map((value) => (
+              <option key={value} value={value}>
+                {getCategoryLabel(value)}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+        {uncategorizedOptions.length > 0 && (
+          <optgroup label="Other">
+            {uncategorizedOptions.map((value) => (
+              <option key={value} value={value}>
+                {getCategoryLabel(value)}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+    );
+  };
 
   const renderSubjectModal = () => (
     <Modal
@@ -886,53 +974,9 @@ export default function LogsScreen() {
               <View style={styles.filterRow}>
                 <View style={styles.filterGroup}>
                   <Text style={[styles.filterLabel, { color: colors.text }]}>
-                    Specific User
+                    Category
                   </Text>
-                  {Platform.OS === "web" ? (
-                    <select
-                      value={filters.userId}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          userId: e.target.value,
-                        }))
-                      }
-                      style={[
-                        styles.filterSelect,
-                        {
-                          backgroundColor: colors.surface,
-                          color: colors.text,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      <option value="">All Users</option>
-                      {users.map((user) => (
-                        <option key={user._id} value={user._id}>
-                          {user.username} ({user.fullName})
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <View
-                      style={[
-                        styles.filterPicker,
-                        {
-                          backgroundColor: colors.surface,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.filterValue, { color: colors.text }]}
-                      >
-                        {filters.userId
-                          ? users.find((u) => u._id === filters.userId)
-                              ?.username || "Select User"
-                          : "All Users"}
-                      </Text>
-                    </View>
-                  )}
+                  {renderCategorySelect()}
                 </View>
               </View>
             </View>
@@ -976,8 +1020,8 @@ export default function LogsScreen() {
                       { color: colors.textSecondary },
                     ]}
                   >
-                    {Object.values(filters).some((f) => f !== "")
-                      ? "Try adjusting your user filters to see more results"
+                    {Object.values(filters).some((f) => f !== "" && f !== "all")
+                      ? "Try adjusting your filters to see more results"
                       : "No audit logs have been recorded yet"}
                   </Text>
                 </View>

@@ -4,6 +4,11 @@ import {
   DigitalDefendersAnswer,
   DigitalDefendersStats,
 } from "../models/DigitalDefenders.js";
+import {
+  logActivity,
+  AUDIT_ACTIONS,
+  AUDIT_RESOURCES,
+} from "../lib/auditLogger.js";
 
 // Game state storage
 const digitalDefendersGames = new Map();
@@ -17,6 +22,26 @@ const generateRoomCode = () => {
     roomCode += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return roomCode;
+};
+
+const logDigitalDefendersActivity = ({ socket, action, playerName, roomCode, details = {} }) => {
+  logActivity({
+    userId: null,
+    username: playerName || "Unknown Player",
+    userRole: "unknown",
+    action,
+    resource: AUDIT_RESOURCES.DIGITAL_DEFENDERS,
+    resourceId: roomCode,
+    details: {
+      gameType: "digital_defenders",
+      roomCode,
+      ...details,
+    },
+    ipAddress: socket?.handshake?.address,
+    userAgent: socket?.handshake?.headers?.["user-agent"],
+  }).catch((error) => {
+    console.error("Failed to write Digital Defenders audit log:", error);
+  });
 };
 
 // Initialize Socket.IO for Digital Defenders
@@ -109,6 +134,13 @@ const initializeDigitalDefendersSocket = (io) => {
         console.log(
           `Digital Defenders room ${roomCode} created by ${playerName.trim()}`
         );
+        logDigitalDefendersActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_CREATE,
+          playerName: playerName.trim(),
+          roomCode,
+          details: { isCreator: true, maxPlayers: game.maxPlayers },
+        });
         console.log(
           `Room stored in games map:`,
           digitalDefendersGames.has(roomCode)
@@ -223,6 +255,13 @@ const initializeDigitalDefendersSocket = (io) => {
         console.log(
           `${playerName} joined Digital Defenders room ${trimmedRoomCode}`
         );
+        logDigitalDefendersActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_JOIN,
+          playerName,
+          roomCode: trimmedRoomCode,
+          details: { isCreator: false, playersInRoom: game.players.size },
+        });
       } catch (error) {
         console.error(`Error joining room:`, error);
         socket.emit("error", { message: "Failed to join room" });
@@ -277,6 +316,13 @@ const initializeDigitalDefendersSocket = (io) => {
       console.log(
         `Digital Defenders turn order selection started in room ${roomCode}`
       );
+      logDigitalDefendersActivity({
+        socket,
+        action: AUDIT_ACTIONS.MULTIPLAYER_GAME_START,
+        playerName: player.playerName,
+        roomCode,
+        details: { phase: "turn_order_selection", playersInRoom: game.players.size },
+      });
     });
 
     // Play a card
@@ -308,6 +354,17 @@ const initializeDigitalDefendersSocket = (io) => {
 
       // Check for game over due to wrong answer
       if (result.effect && result.effect.gameOver) {
+        logDigitalDefendersActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_GAME_END,
+          playerName: player.playerName,
+          roomCode,
+          details: {
+            reason: "health_depleted",
+            finalWave: game.currentWave,
+            finalHealth: game.pcHealth,
+          },
+        });
         digitalDefendersNamespace.to(roomCode).emit("game-over", {
           reason: "health_depleted",
           message: "Game Over! PC Health reached 0 due to wrong answer.",
@@ -379,12 +436,30 @@ const initializeDigitalDefendersSocket = (io) => {
 
       // Check for game end conditions
       if (game.gameState === "gameOver") {
+        logDigitalDefendersActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_GAME_END,
+          playerName: player.playerName,
+          roomCode,
+          details: { reason: "pc_health_zero", finalWave: game.currentWave },
+        });
         digitalDefendersNamespace.to(roomCode).emit("game-over", {
           reason: "PC Health reached 0",
           finalWave: game.currentWave,
           gameState: game.getPublicGameState(),
         });
       } else if (game.gameState === "victory") {
+        logDigitalDefendersActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_GAME_END,
+          playerName: player.playerName,
+          roomCode,
+          details: {
+            reason: "victory",
+            finalWave: game.currentWave,
+            finalHealth: game.pcHealth,
+          },
+        });
         digitalDefendersNamespace.to(roomCode).emit("victory", {
           message: "Congratulations! You completed all 10 waves!",
           finalHealth: game.pcHealth,
@@ -687,6 +762,13 @@ const initializeDigitalDefendersSocket = (io) => {
       const player = digitalDefendersPlayers.get(socket.id);
 
       if (player) {
+        logDigitalDefendersActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_LEAVE,
+          playerName: player.playerName,
+          roomCode: player.gameId,
+          details: { leaveType: "disconnect", reason },
+        });
         console.log(
           `Player ${player.playerName} disconnected from room ${player.gameId}`
         );
@@ -833,6 +915,13 @@ const initializeDigitalDefendersSocket = (io) => {
         socket.leave(roomCode);
 
         socket.emit("room-left", { success: true });
+        logDigitalDefendersActivity({
+          socket,
+          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_LEAVE,
+          playerName: player.playerName,
+          roomCode,
+          details: { leaveType: "manual" },
+        });
         console.log(
           `${player.playerName} left Digital Defenders room ${roomCode}`
         );

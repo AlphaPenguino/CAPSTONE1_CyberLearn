@@ -331,6 +331,24 @@ router.get("/cyber-quests/:id", protectRoute, async (req, res) => {
       success: true,
       cyberQuest,
     });
+
+
+    const requestInfo = extractRequestInfo(req);
+    await logActivity({
+      userId: req.user.id,
+      username: req.user.username,
+      userRole: req.user.privilege,
+      action: AUDIT_ACTIONS.CYBERQUEST_ACCESS,
+      resource: AUDIT_RESOURCES.CYBERQUEST,
+      resourceId: cyberQuest._id,
+      details: {
+        accessType: "cyberquest_open",
+        questTitle: cyberQuest.title,
+        questLevel: cyberQuest.level,
+        difficulty: cyberQuest.difficulty,
+      },
+      ...requestInfo,
+    });
   } catch (error) {
     console.error("Error fetching cyber quest:", error);
     res.status(500).json({

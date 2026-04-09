@@ -8,7 +8,7 @@ import AuditLog from "../models/AuditLog.js";
  * @param {string} params.userRole - User role (student, instructor, admin)
  * @param {string} params.action - Action performed
  * @param {string} [params.resource] - Resource type (quiz, module, user, etc.)
- * @param {string} [params.resourceId] - Resource ID
+ * @param {string|Object} [params.resourceId] - Resource ID (ObjectId or external ID like room code)
  * @param {Object} [params.details] - Additional details
  * @param {string} [params.ipAddress] - User's IP address
  * @param {string} [params.userAgent] - User's browser/client info
@@ -37,7 +37,7 @@ export const logActivity = async ({
       userRole,
       action,
       resource,
-      resourceId,
+      resourceId: resourceId ? String(resourceId) : undefined,
       details,
       ipAddress,
       userAgent,
