@@ -19,7 +19,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { API_URL } from "../../constants/api";
 import { useRouter } from "expo-router";
 
-export default function BulkImport() {
+export default function BulkImport({ embedded = false, onClose = null } = {}) {
   const { user, token } = useAuthStore();
   const { colors } = useTheme();
   const router = useRouter();
@@ -32,16 +32,17 @@ export default function BulkImport() {
   const createStyles = () => {
     const screenWidth = Dimensions.get("window").width;
     const isSmall = screenWidth < 500; // breakpoint for mobile responsiveness
+    const isMobile = Platform.OS !== "web";
     return StyleSheet.create({
       container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: embedded ? "transparent" : colors.background,
       },
       pageWrapper: {
         width: "100%",
-        maxWidth: 800, // Set maximum width for web platforms
+        maxWidth: Platform.OS === "web" ? 800 : "100%",
         alignSelf: "center", // Center the content
-        paddingHorizontal: Platform.OS === "web" ? 0 : 20,
+        paddingHorizontal: Platform.OS === "web" ? 0 : isSmall ? 12 : 16,
       },
       header: {
         flexDirection: "row",
@@ -54,7 +55,11 @@ export default function BulkImport() {
       },
       content: {
         flex: 1,
-        padding: 20,
+        paddingHorizontal: isMobile ? (isSmall ? 12 : 16) : 20,
+        paddingVertical: isMobile ? 14 : 20,
+      },
+      embeddedContent: {
+        paddingTop: 8,
       },
       backButton: {
         marginRight: 16,
@@ -69,7 +74,7 @@ export default function BulkImport() {
       instructionsCard: {
         backgroundColor: colors.card,
         borderRadius: 12,
-        padding: 16,
+        padding: isSmall ? 12 : 16,
         marginBottom: 20,
         borderWidth: 1,
         borderColor: colors.border,
@@ -100,7 +105,7 @@ export default function BulkImport() {
       inputCard: {
         backgroundColor: colors.card,
         borderRadius: 12,
-        padding: 16,
+        padding: isSmall ? 12 : 16,
         marginBottom: 20,
         borderWidth: 1,
         borderColor: colors.border,
@@ -113,7 +118,7 @@ export default function BulkImport() {
       },
       filePickerContainer: {
         alignItems: "center",
-        padding: 20,
+        padding: isSmall ? 12 : 20,
         borderWidth: 2,
         borderColor: colors.border,
         borderStyle: "dashed",
@@ -165,19 +170,19 @@ export default function BulkImport() {
         fontFamily: "monospace",
       },
       buttonContainer: {
-        flexDirection: isSmall ? "column" : "row",
-        justifyContent: isSmall ? "flex-start" : "space-between",
+        flexDirection: isMobile ? "column" : isSmall ? "column" : "row",
+        justifyContent: isMobile ? "flex-start" : isSmall ? "flex-start" : "space-between",
         marginBottom: 20,
-        flexWrap: isSmall ? "nowrap" : "wrap",
+        flexWrap: isMobile ? "nowrap" : isSmall ? "nowrap" : "wrap",
       },
       button: {
-        flex: isSmall ? 0 : 1,
-        width: isSmall ? "100%" : "auto",
+        flex: isMobile ? 0 : isSmall ? 0 : 1,
+        width: isMobile ? "100%" : isSmall ? "100%" : "auto",
         paddingVertical: 12,
         paddingHorizontal: 16,
         borderRadius: 8,
-        marginHorizontal: isSmall ? 0 : 4,
-        marginVertical: isSmall ? 6 : 0,
+        marginHorizontal: isMobile ? 0 : isSmall ? 0 : 4,
+        marginVertical: isMobile ? 6 : isSmall ? 6 : 0,
         alignItems: "center",
         flexDirection: "row",
         justifyContent: "center",
@@ -199,6 +204,12 @@ export default function BulkImport() {
       },
       buttonText: {
         color: "#000000", // Changed from "#FFFFFF" to black
+        fontSize: 16,
+        fontWeight: "600",
+        marginLeft: 8,
+      },
+      buttonTextWhite: {
+        color: "#FFFFFF",
         fontSize: 16,
         fontWeight: "600",
         marginLeft: 8,
@@ -315,7 +326,13 @@ export default function BulkImport() {
           </Text>
           <TouchableOpacity
             style={[styles.backButton, { backgroundColor: colors.primary }]}
-            onPress={() => router.back()}
+            onPress={() => {
+              if (embedded && typeof onClose === "function") {
+                onClose();
+                return;
+              }
+              router.back();
+            }}
           >
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
@@ -670,22 +687,24 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <MaterialCommunityIcons
-            name="arrow-left"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Bulk User Import</Text>
-      </View>
+      {!embedded && (
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <MaterialCommunityIcons
+              name="arrow-left"
+              size={24}
+              color={colors.text}
+            />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Bulk User Import</Text>
+        </View>
+      )}
 
       <ScrollView
-        style={styles.content}
+        style={[styles.content, embedded && styles.embeddedContent]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.pageWrapper}
       >
@@ -769,9 +788,9 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
             <MaterialCommunityIcons
               name="file-document"
               size={20}
-              color="#000000" // Changed from "#FFFFFF" to black
+              color="#FFFFFF"
             />
-            <Text style={styles.buttonText}>Load Sample</Text>
+            <Text style={styles.buttonTextWhite}>Load Sample</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -782,9 +801,9 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
             <MaterialCommunityIcons
               name="download"
               size={20}
-              color="#000000" // Changed from "#FFFFFF" to black
+              color="#FFFFFF"
             />
-            <Text style={styles.buttonText}>Download Sample</Text>
+            <Text style={styles.buttonTextWhite}>Download Sample</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

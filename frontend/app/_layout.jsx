@@ -11,6 +11,37 @@ import { NotificationProvider } from "../contexts/NotificationContext";
 
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
 
+function ThemedPaperProvider({ children }) {
+  const { colors, isDarkMode, typography } = useTheme();
+
+  const paperTheme = {
+    dark: isDarkMode,
+    roundness: 14,
+    colors: {
+      primary: colors.primary,
+      secondary: colors.accent,
+      background: colors.background,
+      surface: colors.surface,
+      surfaceVariant: colors.surfaceMuted,
+      onPrimary: "#FFFFFF",
+      onSecondary: "#FFFFFF",
+      onBackground: colors.text,
+      onSurface: colors.text,
+      outline: colors.border,
+      error: colors.error,
+    },
+    fonts: {
+      bodyLarge: { ...typography.body, fontFamily: typography.familyRegular },
+      bodyMedium: { ...typography.body, fontFamily: typography.familyRegular },
+      titleLarge: { ...typography.h2, fontFamily: typography.familyBold },
+      titleMedium: { ...typography.h3, fontFamily: typography.familyBold },
+      labelLarge: { fontSize: 14, fontWeight: "700", letterSpacing: 0.2 },
+    },
+  };
+
+  return <PaperProvider theme={paperTheme}>{children}</PaperProvider>;
+}
+
 function AppContent() {
   const [mounted, setMounted] = useState(false);
   // Ensure we don't redirect until auth state is hydrated from storage
@@ -152,15 +183,15 @@ function AppContent() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <PaperProvider>
-        <ThemeProvider>
+      <ThemeProvider>
+        <ThemedPaperProvider>
           <NotificationProvider>
             <SettingsProvider>
               <AppContent />
             </SettingsProvider>
           </NotificationProvider>
-        </ThemeProvider>
-      </PaperProvider>
+        </ThemedPaperProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

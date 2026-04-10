@@ -22,6 +22,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
+import BulkImport from "../admin/bulk-import";
 
 export default function UsersScreen({ hideHeader = false }) {
   const { token, user } = useAuthStore();
@@ -84,6 +85,7 @@ export default function UsersScreen({ hideHeader = false }) {
   const [studentAnalytics, setStudentAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [backupModalVisible, setBackupModalVisible] = useState(false);
+  const [bulkImportModalVisible, setBulkImportModalVisible] = useState(false);
   const [backupInProgress, setBackupInProgress] = useState(false);
   // Pagination state (server-side)
   const [page, setPage] = useState(1);
@@ -719,7 +721,7 @@ export default function UsersScreen({ hideHeader = false }) {
                 {user?.privilege === "admin" && (
                   <TouchableOpacity
                     style={styles.bulkUploadButton}
-                    onPress={() => router.push("/admin/bulk-import")}
+                    onPress={() => setBulkImportModalVisible(true)}
                   >
                     <MaterialCommunityIcons
                       name="upload"
@@ -732,6 +734,7 @@ export default function UsersScreen({ hideHeader = false }) {
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => setModalVisible(true)}
+                  activeOpacity={0.78}
                 >
                   <MaterialCommunityIcons
                     name="account-plus"
@@ -745,6 +748,7 @@ export default function UsersScreen({ hideHeader = false }) {
                     style={styles.backupButton}
                     onPress={() => setBackupModalVisible(true)}
                     disabled={backupInProgress}
+                    activeOpacity={0.78}
                   >
                     <MaterialCommunityIcons
                       name="database-export"
@@ -816,7 +820,7 @@ export default function UsersScreen({ hideHeader = false }) {
               {user?.privilege === "admin" && (
                 <TouchableOpacity
                   style={styles.bulkUploadButton}
-                  onPress={() => router.push("/admin/bulk-import")}
+                  onPress={() => setBulkImportModalVisible(true)}
                 >
                   <MaterialCommunityIcons
                     name="upload"
@@ -829,6 +833,7 @@ export default function UsersScreen({ hideHeader = false }) {
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={() => setModalVisible(true)}
+                  activeOpacity={0.78}
               >
                 <MaterialCommunityIcons
                   name="account-plus"
@@ -842,6 +847,7 @@ export default function UsersScreen({ hideHeader = false }) {
                   style={styles.backupButton}
                   onPress={() => setBackupModalVisible(true)}
                   disabled={backupInProgress}
+                  activeOpacity={0.78}
                 >
                   <MaterialCommunityIcons
                     name="database-export"
@@ -1192,6 +1198,35 @@ export default function UsersScreen({ hideHeader = false }) {
                 >
                   <Text style={styles.clearFiltersText}>Cancel</Text>
                 </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Bulk Upload Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={bulkImportModalVisible}
+            onRequestClose={() => setBulkImportModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.bulkImportModalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Bulk User Import</Text>
+                  <TouchableOpacity onPress={() => setBulkImportModalVisible(false)}>
+                    <MaterialCommunityIcons
+                      name="close"
+                      size={24}
+                      color={colors.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.bulkImportModalBody}>
+                  <BulkImport
+                    embedded={true}
+                    onClose={() => setBulkImportModalVisible(false)}
+                  />
+                </View>
               </View>
             </View>
           </Modal>
@@ -2082,6 +2117,23 @@ const createStyles = (colors) =>
       shadowRadius: 6,
       elevation: 10,
     },
+    bulkImportModalContent: {
+      backgroundColor: colors.card,
+      width: "100%",
+      maxWidth: 920,
+      maxHeight: "88%",
+      borderRadius: 16,
+      padding: 18,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 10,
+    },
+    bulkImportModalBody: {
+      flex: 1,
+      minHeight: 420,
+    },
     modalHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -2193,8 +2245,12 @@ const createStyles = (colors) =>
       paddingHorizontal: 14,
       borderRadius: 6,
     },
+    pageButtonDisabled: {
+      backgroundColor: colors.primary,
+      opacity: 0.65,
+    },
     pageButtonText: { color: "#FFF", fontWeight: "600" },
-    pageButtonTextDisabled: { color: colors.textSecondary },
+    pageButtonTextDisabled: { color: "#E2F7F1" },
     pageNumbersWrapper: { flexDirection: "row", alignItems: "center" },
     pageNumber: {
       paddingVertical: 6,

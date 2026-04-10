@@ -19,6 +19,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore";
 import { SafeScreen } from "../../components/SafeScreen";
 import { API_URL } from "../../constants/api";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const CATEGORY_LABELS = {
   all: "All Categories",
@@ -48,8 +49,8 @@ const getCategoryLabel = (category) => {
 
 const SUPPORTED_CATEGORY_SET = new Set(Object.keys(CATEGORY_LABELS));
 
-export default function LogsScreen() {
-  const { colors } = useTheme();
+export default function LogsScreen({ useDashboardGradient = false } = {}) {
+  const { colors, isDarkMode } = useTheme();
   const { token } = useAuthStore(); // user not needed
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +67,24 @@ export default function LogsScreen() {
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [loadingSubjectDetails, setLoadingSubjectDetails] = useState(false);
+
+  const pageGradient = ["#caf1c8", "#5fd2cd"];
+
+  const glassSurface = useDashboardGradient
+    ? isDarkMode
+      ? "rgba(15, 23, 42, 0.7)"
+      : "rgba(255, 255, 255, 0.82)"
+    : colors.surface;
+  const glassInput = useDashboardGradient
+    ? isDarkMode
+      ? "rgba(15, 23, 42, 0.82)"
+      : "rgba(255, 255, 255, 0.92)"
+    : colors.background;
+  const glassBorder = useDashboardGradient
+    ? isDarkMode
+      ? "rgba(148, 163, 184, 0.35)"
+      : "rgba(100, 116, 139, 0.28)"
+    : colors.border;
 
   const fetchSubjectName = useCallback(
     async (subjectId) => {
@@ -321,7 +340,7 @@ export default function LogsScreen() {
     <View
       style={[
         styles.logItem,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        { backgroundColor: glassSurface, borderColor: glassBorder },
       ]}
     >
       <View style={styles.logHeader}>
@@ -425,8 +444,8 @@ export default function LogsScreen() {
           style={[
             styles.filterPicker,
             {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
+              backgroundColor: glassInput,
+              borderColor: glassBorder,
             },
           ]}
         >
@@ -452,9 +471,9 @@ export default function LogsScreen() {
           borderRadius: 6,
           borderWidth: 1,
           fontSize: 14,
-          backgroundColor: colors.surface,
+          backgroundColor: glassInput,
           color: colors.text,
-          borderColor: colors.border,
+          borderColor: glassBorder,
         }}
       >
         <option value="all">All Categories</option>
@@ -845,31 +864,31 @@ export default function LogsScreen() {
 
   if (loading && logs.length === 0) {
     return (
-      <SafeScreen
-        style={[styles.container, { backgroundColor: colors.background }]}
-      >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.text }]}>
-            Loading audit logs...
-          </Text>
-        </View>
-      </SafeScreen>
+      <LinearGradient colors={pageGradient} style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={["top"]}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.text }]}> 
+              Loading audit logs...
+            </Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
     <>
-      <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
-        <SafeScreen style={styles.safeScreen}>
+      <LinearGradient colors={pageGradient} style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={["top"]}>
           <View style={styles.pageWrapper}>
           {/* Header */}
           <View
             style={[
               styles.header,
               {
-                backgroundColor: colors.surface,
-                borderBottomColor: colors.border,
+                backgroundColor: glassSurface,
+                borderBottomColor: glassBorder,
               },
             ]}
           >
@@ -883,7 +902,7 @@ export default function LogsScreen() {
                   {
                     backgroundColor: showFilters
                       ? colors.primary
-                      : colors.surface,
+                      : glassSurface,
                   },
                 ]}
                 onPress={() => setShowFilters(!showFilters)}
@@ -924,8 +943,8 @@ export default function LogsScreen() {
               style={[
                 styles.summary,
                 {
-                  backgroundColor: colors.surface,
-                  borderBottomColor: colors.border,
+                  backgroundColor: glassSurface,
+                  borderBottomColor: glassBorder,
                 },
               ]}
             >
@@ -949,8 +968,8 @@ export default function LogsScreen() {
               style={[
                 styles.filtersContainer,
                 {
-                  backgroundColor: colors.surface,
-                  borderBottomColor: colors.border,
+                  backgroundColor: glassSurface,
+                  borderBottomColor: glassBorder,
                 },
               ]}
             >
@@ -958,9 +977,9 @@ export default function LogsScreen() {
                 style={[
                   styles.searchInput,
                   {
-                    backgroundColor: colors.background,
+                    backgroundColor: glassInput,
                     color: colors.text,
-                    borderColor: colors.border,
+                    borderColor: glassBorder,
                   },
                 ]}
                 placeholder="Search by username..."
@@ -987,6 +1006,7 @@ export default function LogsScreen() {
             data={logs}
             renderItem={renderLogItem}
             keyExtractor={(item) => item._id}
+            style={styles.transparentList}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
@@ -1029,9 +1049,9 @@ export default function LogsScreen() {
             }
           />
         </View>
-      </SafeScreen>
+      </SafeAreaView>
     </LinearGradient>
-    {renderSubjectModal()}
+      {renderSubjectModal()}
     </>
   );
 }
@@ -1039,6 +1059,16 @@ export default function LogsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  safeArea: {
+    backgroundColor: "transparent",
+    flex: 1,
+  },
+  transparentBackground: {
+    backgroundColor: "transparent",
+  },
+  transparentList: {
+    backgroundColor: "transparent",
   },
   pageWrapper: {
     flex: 1,

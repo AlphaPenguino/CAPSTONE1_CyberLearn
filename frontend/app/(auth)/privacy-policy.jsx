@@ -10,13 +10,17 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../contexts/ThemeContext";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PrivacyPolicyPage() {
   const { colors } = useTheme();
   const router = useRouter();
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={["top"]}
+    >
       {/* Header */}
       <View
         style={[
@@ -50,15 +54,24 @@ export default function PrivacyPolicyPage() {
       {/* Content */}
       <ScrollView
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: 48 }}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={true}
       >
+        <View
+          style={[
+            styles.policyCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Data Privacy Notice
         </Text>
         <Text style={[styles.paragraph, { color: colors.textSecondary }]}>
-          The CyberLearn Gamified Hybrid E-Learning Application ("CyberLearn",
-          "the Application", "we", "our") is developed under the Bachelor of
+          The CyberLearn Gamified Hybrid E-Learning Application (&quot;CyberLearn&quot;,
+          &quot;the Application&quot;, &quot;we&quot;, &quot;our&quot;) is developed under the Bachelor of
           Science in Information Technology program of Lyceum of the Philippines
           University – Cavite. We value your privacy and are committed to
           protecting your personal data while you use our platform.
@@ -68,9 +81,9 @@ export default function PrivacyPolicyPage() {
           Information We Collect
         </Text>
         <Text style={[styles.paragraph, { color: colors.textSecondary }]}>
-          As part of the study entitled "CyberLearn: Development of a Gamified
+          As part of the study entitled &quot;CyberLearn: Development of a Gamified
           Hybrid E-Learning Application for Empowerment Technologies in LPU
-          Cavite," the Application may collect certain basic information from
+          Cavite,&quot; the Application may collect certain basic information from
           you, including:{"\n"}• Your Name{"\n"}• Grade Level/Section{"\n"}•
           Role (Student/Instructor/Administrator){"\n"}• Your interactions or
           responses within the Application (e.g., quiz results, game experience
@@ -136,6 +149,7 @@ export default function PrivacyPolicyPage() {
             {
               color: colors.text,
               backgroundColor: colors.surface,
+              borderColor: colors.border,
               borderLeftColor: colors.primary,
             },
           ]}
@@ -146,16 +160,20 @@ export default function PrivacyPolicyPage() {
 
         {/* Back to login link */}
         <TouchableOpacity
-          style={[styles.backToLogin, { borderColor: colors.primary }]}
+          style={[
+            styles.backToLogin,
+            { borderColor: colors.primary, backgroundColor: colors.primary },
+          ]}
           onPress={() => router.replace("/(auth)")}
         >
-          <Ionicons name="arrow-back-circle" size={20} color={colors.primary} />
-          <Text style={[styles.backToLoginText, { color: colors.primary }]}>
+          <Ionicons name="arrow-back-circle" size={20} color="#FFFFFF" />
+          <Text style={[styles.backToLoginText, { color: "#FFFFFF" }]}> 
             Back to Login
           </Text>
         </TouchableOpacity>
+        </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -164,8 +182,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 20,
-    paddingTop: Platform.OS === "android" ? 40 : 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -178,56 +196,78 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 22,
-    fontWeight: "bold",
+    fontSize: 24,
+    fontWeight: "800",
     textAlign: "center",
+    letterSpacing: 0.2,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 14,
     textAlign: "center",
     marginTop: 4,
+    fontWeight: "600",
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     padding: 20,
+    paddingBottom: 40,
+  },
+  policyCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "700",
     marginTop: 20,
-    marginBottom: 8,
-    textAlign: "center",
+    marginBottom: 10,
+    textAlign: "left",
   },
   paragraph: {
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 14,
-    textAlign: "center",
+    fontSize: 15,
+    lineHeight: 24,
+    marginBottom: 8,
+    textAlign: "left",
+    fontWeight: "500",
   },
   acknowledgment: {
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 24,
     marginTop: 20,
-    marginBottom: 20,
+    marginBottom: 18,
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 12,
+    borderWidth: 1,
     borderLeftWidth: 4,
-    fontWeight: "500",
-    textAlign: "center",
+    fontWeight: "600",
+    textAlign: "left",
   },
   backToLogin: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    marginTop: 8,
+    marginTop: 6,
     gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
   backToLoginText: {
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });

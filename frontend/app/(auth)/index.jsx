@@ -99,8 +99,7 @@ export default function Login() {
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your email"
-                  // Updated placeholder color to darker green for contrast
-                  placeholderTextColor="#4a7c59"
+                  placeholderTextColor={colors.textMuted || "#64748B"}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -123,8 +122,7 @@ export default function Login() {
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your password"
-                  // Updated placeholder color to darker green for contrast
-                  placeholderTextColor="#4a7c59"
+                  placeholderTextColor={colors.textMuted || "#64748B"}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -177,10 +175,14 @@ export default function Login() {
                   <Ionicons name="checkmark" size={16} color="#fff" />
                 )}
               </TouchableOpacity>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              <Text
+                style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }}
+              >
                 I have agreed to the
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              <Text
+                style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "600" }}
+              >
                 {" "}
               </Text>
 

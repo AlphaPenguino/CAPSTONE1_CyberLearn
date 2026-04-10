@@ -46,38 +46,38 @@
 //   error: '#d32f2f',
 // };
 
-// CYBERLEARN NAVY THEME
+// CYBERLEARN PREMIUM THEME
 
 const COLORS = {
-  // 🌱 Primary Theme
-  primary: "#5da65d",       // Deep leafy green – strong action color
-  primaryDark: "#2f3e2f",   // Earthy dark green – for headers/navbars
-  primaryLight: "#9ccf9c",  // Sage green – hover states or soft highlights
+  // Core brand
+  primary: "#0F766E",
+  primaryDark: "#0B3B36",
+  primaryLight: "#2DD4BF",
 
-  // 🎨 Accents
-  accent: "#FF7F50",        // Coral – attention/call-to-action
-  gold: "#FFD700",          // Gold – subtle highlights (borders/icons)
-  beige: "#F5DEB3",         // Warm beige – soft secondary background
-  lightBlue: "#89C2FF",     // Cool blue – links, secondary buttons
+  // Accent helpers
+  accent: "#6366F1",
+  gold: "#EAB308",
+  beige: "#F8FAFC",
+  lightBlue: "#38BDF8",
 
-  // 🖋️ Text
-  textPrimary: "#2f3e2f",   // Dark earthy green – primary text (good contrast on mint)
-  textSecondary: "#5c6f5c", // Muted sage – subtitles, secondary text
-  textDark: "#1a1a1a",      // Rich black – for maximum contrast if needed
-  placeholderText: "#7fa87f", // Soft sage – subtle placeholder color
+  // Text scale
+  textPrimary: "#0F172A",
+  textSecondary: "#334155",
+  textDark: "#020617",
+  placeholderText: "#64748B",
 
-  // 🪴 Surfaces
-  background: "#d1f0d1",    // Mint green – main app background
-  cardBackground: "#e8f9e8",// Slightly lighter mint – cards/panels
-  inputBackground: "#ffffff", // Clean white – input fields for clarity
-  border: "#c8d9c8",        // Soft gray-green – dividers and outlines
+  // Surfaces
+  background: "#F1F5F9",
+  cardBackground: "#FFFFFF",
+  inputBackground: "#FFFFFF",
+  border: "#CBD5E1",
 
-  // ⚡ Status Colors
-  error: "#FF4444",         // Red – errors
-  warning: "#FF7F50",       // Coral – warnings
-  success: "#00BFA5",       // Teal – success
+  // Status
+  error: "#DC2626",
+  warning: "#D97706",
+  success: "#059669",
 
-  // 🎯 Neutrals
+  // Neutrals
   white: "#FFFFFF",
   black: "#000000",
 };

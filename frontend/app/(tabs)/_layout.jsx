@@ -99,11 +99,15 @@ export default function TabLayout() {
           headerTitle: "",
           tabBarPosition: Platform.OS === "web" ? "top" : "bottom",
           tabBarStyle: {
-            backgroundColor: "#0e5f55",
-            borderTopWidth: 0,
-            borderBottomWidth: 0,
-            elevation: 0,
-            shadowOpacity: 0,
+              backgroundColor: "#0e5f55",
+              borderTopWidth: 0,
+              borderBottomWidth: 0,
+              borderColor: "transparent",
+              elevation: 6,
+              shadowOpacity: 0.08,
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: -2 },
+              shadowRadius: 10,
             height:
               Platform.OS === "web"
                 ? 56
@@ -129,20 +133,32 @@ export default function TabLayout() {
           tabBarLabelStyle: {
             paddingBottom: Platform.OS === "android" ? 4 : 0,
             fontSize: 12,
-            color: "#fcfde0",
+            fontWeight: "700",
+            letterSpacing: 0.2,
           },
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.primaryLight,
+          tabBarActiveTintColor: "#ECFDF5",
+          tabBarInactiveTintColor: "#BFE7DA",
+          tabBarActiveBackgroundColor: "rgba(255, 255, 255, 0.16)",
+          tabBarItemStyle: {
+            borderRadius: 12,
+            marginVertical: Platform.OS === "web" ? 8 : 6,
+            marginHorizontal: 4,
+          },
           headerStyle: {
             height: Platform.OS === "android" ? 50 : 56,
-            backgroundColor: colors.background,
-            elevation: 0,
-            shadowOpacity: 0,
-            borderBottomWidth: 0,
+            backgroundColor: colors.surface,
+            elevation: 2,
+            shadowOpacity: 0.08,
+            shadowColor: "#0F172A",
+            shadowOffset: { width: 0, height: 1 },
+            shadowRadius: 4,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
           },
           headerTitleStyle: {
             color: colors.text,
-            fontWeight: "600",
+            fontWeight: "700",
+            letterSpacing: 0.2,
           },
         }}
       >

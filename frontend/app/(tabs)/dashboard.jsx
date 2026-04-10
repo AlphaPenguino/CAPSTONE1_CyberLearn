@@ -120,10 +120,12 @@ export default function Dashboard() {
     totalQuizzes: 0,
     activeSessions: 0,
   });
-  const [topPerformer, setTopPerformer] = useState(null);
+  const [topPerformers, setTopPerformers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [section, setSection] = useState("overview"); // overview | users | logs
+
+
 
   // New analytics state
   const [analyticsPeriod, setAnalyticsPeriod] = useState("daily"); // daily | weekly | monthly
@@ -449,7 +451,7 @@ export default function Dashboard() {
           fetch(`${API_URL}/admin/dashboard/stats`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch(`${API_URL}/users/leaderboard?limit=1`, {
+          fetch(`${API_URL}/users/leaderboard?limit=3`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
@@ -472,11 +474,11 @@ export default function Dashboard() {
 
       if (leaderboardResponse.ok) {
         const leaderboardData = await leaderboardResponse.json();
-        if (
-          leaderboardData.success &&
-          leaderboardData.data.rankings.length > 0
-        ) {
-          setTopPerformer(leaderboardData.data.rankings[0]);
+        if (leaderboardData.success) {
+          const rankings = Array.isArray(leaderboardData?.data?.rankings)
+            ? leaderboardData.data.rankings.slice(0, 3)
+            : [];
+          setTopPerformers(rankings);
         }
       }
     } catch (error) {
@@ -862,7 +864,7 @@ export default function Dashboard() {
                   <Text
                     style={[
                       styles.sectionTabText,
-                      { color: active ? COLORS.navy : colors.text },
+                      { color: active ? "#ECFDF5" : colors.text },
                     ]}
                   >
                     {t.label}
@@ -944,43 +946,53 @@ export default function Dashboard() {
               {/* Top Performer - Admin Only */}
               {isAdmin && (
                 <View style={styles.topPerformerContainer}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    🏆 Top Performing Student
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}> 
+                    🏆 Top Performing Students
                   </Text>
-                  {topPerformer ? (
-                    <View
-                      style={[
-                        styles.topPerformerCard,
-                        { backgroundColor: colors.card },
-                      ]}
-                    >
-                      <View style={styles.crownContainer}>
-                        <MaterialCommunityIcons
-                          name="crown"
-                          size={32}
-                          color="#FFD700"
-                        />
-                      </View>
-                      <View style={styles.performerInfo}>
-                        <Text
-                          style={[styles.performerName, { color: colors.text }]}
-                        >
-                          {topPerformer.username}
-                        </Text>
-                        <Text
-                          style={[styles.performerScore, { color: "#6366F1" }]}
-                        >
-                          {topPerformer.totalXP || 0} XP
-                        </Text>
-                        <Text
-                          style={[
-                            styles.performerLevel,
-                            { color: colors.textSecondary },
-                          ]}
-                        >
-                          Level {topPerformer.level || 1}
-                        </Text>
-                      </View>
+                  {topPerformers.length > 0 ? (
+                    <View style={styles.topPerformerList}>
+                      {topPerformers.map((performer, idx) => {
+                        const medalColor =
+                          idx === 0 ? "#FFD700" : idx === 1 ? "#C0C0C0" : "#CD7F32";
+                        return (
+                          <View
+                            key={performer._id || `${performer.username}-${idx}`}
+                            style={[
+                              styles.topPerformerCard,
+                              { backgroundColor: colors.card },
+                            ]}
+                          >
+                            <View style={styles.crownContainer}>
+                              <MaterialCommunityIcons
+                                name={idx === 0 ? "crown" : "medal"}
+                                size={28}
+                                color={medalColor}
+                              />
+                            </View>
+                            <View style={styles.performerInfo}>
+                              <Text
+                                style={[styles.performerName, { color: colors.text }]}
+                                numberOfLines={1}
+                              >
+                                {idx + 1}. {performer.username}
+                              </Text>
+                              <Text
+                                style={[styles.performerScore, { color: "#6366F1" }]}
+                              >
+                                {performer.totalXP || 0} XP
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.performerLevel,
+                                  { color: colors.textSecondary },
+                                ]}
+                              >
+                                Level {performer.level || 1}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
                     </View>
                   ) : (
                     <View
@@ -1525,7 +1537,7 @@ export default function Dashboard() {
           </View>
         ) : isAdmin && section === "logs" ? (
           <View style={{ flex: 1 }}>
-            <LogsScreen />
+            <LogsScreen useDashboardGradient={true} />
           </View>
         ) : null}
 
@@ -1803,6 +1815,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  topPerformerList: {
+    gap: 12,
   },
   crownContainer: {
     marginRight: 16,

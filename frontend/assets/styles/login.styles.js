@@ -1,7 +1,6 @@
 // styles/login.styles.js
 import { StyleSheet, Dimensions, Platform } from "react-native";
 import COLORS from "../../constants/custom-colors";
-import { FONTS } from "../../constants/fonts";
 
 const { width } = Dimensions.get("window");
 const maxWidth = 500; // Maximum width for larger screens
@@ -10,7 +9,7 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     backgroundColor: COLORS.background,
-    padding: 20,
+    padding: 24,
     justifyContent: "center",
     alignItems: "center", // Center contents horizontally
   },
@@ -28,17 +27,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   brandTitle: {
-    // Switched to generic bold sans-serif system font
     fontFamily: Platform.select({
       ios: "System",
       android: "sans-serif",
       default: "sans-serif",
     }),
-    fontWeight: "700",
-    fontSize: 36,
-    color: COLORS.textPrimary,
+    fontWeight: "800",
+    fontSize: 38,
+    color: COLORS.textDark,
     textAlign: "center",
-    letterSpacing: 1,
+    letterSpacing: 0.4,
+    textShadowColor: "rgba(15, 23, 42, 0.08)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   illustrationImage: {
     width: width * 0.75, // 75% of screen width
@@ -49,14 +50,14 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
-    padding: 24,
+    borderRadius: 20,
+    padding: 26,
     shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 2,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+    borderWidth: 1,
     borderColor: COLORS.border,
     marginTop: -24,
     width: "100%", // Take full width of container
@@ -89,18 +90,22 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     marginBottom: 8,
-    // Updated to lighter blue per request (was COLORS.textPrimary)
-    color: COLORS.primaryDark,
-    fontWeight: "500",
+    color: COLORS.textDark,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#92eacc",
-    borderRadius: 12,
+    backgroundColor: COLORS.inputBackground,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
     paddingHorizontal: 12,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
   },
   inputIcon: {
     marginRight: 10,
@@ -108,7 +113,9 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 48,
-    color: COLORS.textPrimary,
+    color: COLORS.textDark,
+    fontSize: 15,
+    fontWeight: "600",
     // Remove focus outline / highlight especially on web
     ...Platform.select({
       web: {
@@ -122,21 +129,22 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
+    borderRadius: 14,
     height: 50,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 16,
     shadowColor: COLORS.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
   buttonText: {
     color: COLORS.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
   footer: {
     flexDirection: "row",
@@ -161,7 +169,7 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: COLORS.primary,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "700",
     textDecorationLine: "underline",
   },
 });

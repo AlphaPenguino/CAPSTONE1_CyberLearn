@@ -23,6 +23,7 @@ import COLORS from "@/constants/custom-colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
+import { LinearGradient as ExpoLinearGradient } from "expo-linear-gradient";
 import Svg, {
   Path,
   Circle,
@@ -132,7 +133,7 @@ export default function Home() {
     ? routeParams.focusModuleId[0]
     : routeParams?.focusModuleId;
   const { user, token, checkAuth, logout } = useAuthStore();
-  const { colors } = useTheme();
+  const { colors, isDarkMode } = useTheme();
   const isinstructor =
     user?.privilege === "instructor" || user?.privilege === "admin";
 
@@ -1272,8 +1273,12 @@ const handleImportCyberQuestsWeb = () => {
     !error &&
     modules.length === 0;
 
+  const screenGradient = isDarkMode
+    ? ["#020617", "#0B1220"]
+    : ["#F8FAFC", "#E2E8F0"];
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <ExpoLinearGradient colors={screenGradient} style={styles.container}>
       {/* Enhanced Header with Mobile-Optimized Layout */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -1291,7 +1296,7 @@ const handleImportCyberQuestsWeb = () => {
               onPress={() => setShowSubjectSelector(!showSubjectSelector)}
               activeOpacity={0.7}
             >
-              <Ionicons name="people" size={18} color={colors.primary} />
+              <Ionicons name="book-outline" size={18} color={colors.primary} />
               <Text
                 style={[styles.sectionSelectorText, { color: colors.text }]}
                 numberOfLines={1}
@@ -1700,8 +1705,8 @@ const handleImportCyberQuestsWeb = () => {
               }}
               activeOpacity={0.7}
             >
-              <Ionicons
-                name="people"
+                <Ionicons
+                  name="book-outline"
                 size={16}
                 color={!selectedSubject ? colors.primary : colors.textSecondary}
               />
@@ -1747,7 +1752,7 @@ const handleImportCyberQuestsWeb = () => {
                 activeOpacity={0.7}
               >
                 <Ionicons
-                  name="people"
+                  name="book-outline"
                   size={16}
                   color={
                     (selectedSubject?._id || selectedSubject?.id) ===
@@ -1939,28 +1944,6 @@ const handleImportCyberQuestsWeb = () => {
                   Refresh
                 </Text>
               </TouchableOpacity>
-
-              {isinstructor && (
-                <TouchableOpacity
-                  style={[
-                    styles.actionButton,
-                    { backgroundColor: COLORS.success },
-                  ]}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/create",
-                      params: { from: "index" },
-                    })
-                  }
-                >
-                  <Ionicons name="add" size={20} color={COLORS.white} />
-                  <Text
-                    style={[styles.actionButtonText, { color: COLORS.white }]}
-                  >
-                    Create Subject
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
         ) : selectedSubject ? (
@@ -2069,7 +2052,7 @@ const handleImportCyberQuestsWeb = () => {
                 >
                   <View style={styles.sectionListIcon}>
                     <Ionicons
-                      name="school"
+                      name="book"
                       size={28}
                       color={COLORS.primary}
                       style={styles.sectionListIconImage}
@@ -2088,8 +2071,8 @@ const handleImportCyberQuestsWeb = () => {
                   <View style={styles.sectionListInfo}>
                     <Text
                       style={[styles.sectionListName, { color: colors.text }]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
+                      numberOfLines={Platform.OS === "web" ? undefined : 1}
+                      ellipsizeMode={Platform.OS === "web" ? undefined : "tail"}
                     >
                       {section.name}
                     </Text>
@@ -2185,26 +2168,6 @@ const handleImportCyberQuestsWeb = () => {
                   Refresh
                 </Text>
               </TouchableOpacity>
-
-              {isinstructor && (
-                <TouchableOpacity
-                  style={[
-                    styles.createSectionButton,
-                    { backgroundColor: COLORS.success },
-                  ]}
-                  onPress={() => router.push("/(tabs)/create")}
-                >
-                  <Ionicons name="add" size={20} color={COLORS.white} />
-                  <Text
-                    style={[
-                      styles.createSectionButtonText,
-                      { color: COLORS.white },
-                    ]}
-                  >
-                    Create Subject
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
         )
@@ -3025,7 +2988,7 @@ const handleImportCyberQuestsWeb = () => {
           <View style={styles.sectionSelectorOverlay} />
         </TouchableWithoutFeedback>
       )}
-    </View>
+    </ExpoLinearGradient>
   );
 }
 
@@ -3187,10 +3150,10 @@ const styles = StyleSheet.create({
     paddingBottom: 60, // Room for bottom buttons
     ...Platform.select({
       web: {
-        maxWidth: "800px",
+        maxWidth: "1240px",
         marginLeft: "auto",
         marginRight: "auto",
-        paddingHorizontal: 0,
+        paddingHorizontal: 10,
       },
       default: {},
     }),
@@ -3198,26 +3161,42 @@ const styles = StyleSheet.create({
   sectionListContent: {
     paddingVertical: 8,
     paddingBottom: 80, // Extra padding for action buttons
+    ...Platform.select({
+      web: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "stretch",
+        justifyContent: "flex-start",
+        gap: 12,
+      },
+      default: {},
+    }),
   },
   sectionListItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.85)", // Lighter background
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
     borderRadius: 16,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "rgba(25, 118, 210, 0.5)",
+    borderColor: "rgba(148, 163, 184, 0.34)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 3,
     ...Platform.select({
       web: {
-        maxWidth: "760px",
-        marginLeft: "auto",
-        marginRight: "auto",
+        width: "calc(33.333% - 12px)",
+        minWidth: 360,
+        maxWidth: 450,
+        minHeight: 184,
+        maxHeight: 184,
+        marginLeft: 0,
+        marginRight: 0,
+        paddingHorizontal: 18,
+        paddingVertical: 16,
       },
       default: {
         marginHorizontal: 2,
@@ -3226,8 +3205,8 @@ const styles = StyleSheet.create({
   },
   sectionListItemFirst: {
     marginTop: 4, // Add more space for first item
-    backgroundColor: "rgba(232, 244, 253, 0.9)", // Highlight first item with light blue
-    borderColor: "#1976d2",
+    backgroundColor: "rgba(255, 255, 255, 0.98)",
+    borderColor: "rgba(99, 102, 241, 0.45)",
   },
   sectionListIcon: {
     position: "relative",
@@ -3240,6 +3219,14 @@ const styles = StyleSheet.create({
     marginRight: 14,
     borderWidth: 2,
     borderColor: "#1976d2",
+    ...Platform.select({
+      web: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+      },
+      default: {},
+    }),
   },
   sectionListIconImage: {
     textShadowColor: "rgba(25, 118, 210, 0.8)",
@@ -3268,6 +3255,16 @@ const styles = StyleSheet.create({
   sectionListInfo: {
     flex: 1,
     paddingRight: 8,
+    ...Platform.select({
+      web: {
+        minHeight: 136,
+        maxHeight: 136,
+        justifyContent: "flex-start",
+        overflow: "hidden",
+        overflowY: "auto",
+      },
+      default: {},
+    }),
   },
   sectionListName: {
     fontSize: 16,
@@ -3275,6 +3272,13 @@ const styles = StyleSheet.create({
     color: "#0A2647", // Dark blue text for contrast
     marginBottom: 4,
     ...Platform.select({
+      web: {
+        fontSize: 16,
+        lineHeight: "21px",
+        marginBottom: 6,
+        overflowWrap: "break-word",
+        wordBreak: "break-word",
+      },
       ios: {
         fontSize: 17,
       },
@@ -3297,7 +3301,8 @@ const styles = StyleSheet.create({
         maxWidth: "100%", // Ensure it doesn't overflow container
         overflowWrap: "break-word", // Better text wrapping for web
         wordBreak: "break-word", // Handle long words
-        minHeight: "40px", // Ensure minimum height for two lines
+        minHeight: 0,
+        maxHeight: "none",
         display: "block", // Use block display on web
       },
       default: {},
@@ -3332,14 +3337,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(25, 118, 210, 0.4)",
+    ...Platform.select({
+      web: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+      },
+      default: {},
+    }),
   },
   sectionListHeader: {
     padding: 16,
     paddingVertical: 20,
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.1)",
-    backgroundColor: "rgba(10, 25, 41, 0.5)",
+    borderBottomColor: "rgba(148, 163, 184, 0.25)",
+    backgroundColor: "rgba(255, 255, 255, 0.84)",
     borderRadius: 12,
     marginHorizontal: 16,
     marginTop: 8,
@@ -3359,52 +3372,40 @@ const styles = StyleSheet.create({
     }),
   },
   sectionListTitle: {
-    fontSize: 20, // Reduced from 24
-    fontWeight: "bold",
-    color: "#ffffff",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0F172A",
     textAlign: "center",
     marginBottom: 6,
-    ...Platform.select({
-      web: {
-        textShadow: "0px 0px 8px rgba(0, 150, 255, 0.6)",
-      },
-      default: {
-        textShadowColor: "rgba(0, 150, 255, 0.6)",
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 8,
-      },
-    }),
   },
   sectionListSubtitle: {
-    fontSize: 14, // Reduced from 16
-    color: "#cccccc",
+    fontSize: 14,
+    color: "#334155",
     textAlign: "center",
-    lineHeight: 18,
+    lineHeight: 20,
+    fontWeight: "600",
   },
   header: {
     flexDirection: "column",
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingTop: 16,
-    paddingBottom: 12,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#1e3a5f",
+    borderBottomColor: "rgba(148, 163, 184, 0.35)",
+    backgroundColor: "rgba(255,255,255,0.86)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
     gap: 10,
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: "bold",
-    color: "#ffffff",
+    fontWeight: "800",
+    color: "#0F172A",
     marginBottom: 8,
-    ...Platform.select({
-      web: {
-        textShadow: "0px 0px 10px rgba(0, 150, 255, 0.7)",
-      },
-      default: {
-        textShadowColor: "rgba(0, 150, 255, 0.7)",
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 10,
-      },
-    }),
+    letterSpacing: 0.2,
   },
   headerControls: {
     flexDirection: "row",
@@ -3421,16 +3422,21 @@ const styles = StyleSheet.create({
   sectionSelector: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(25, 118, 210, 0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#1976d2",
+    borderColor: "rgba(148, 163, 184, 0.45)",
     gap: 8,
     flex: 1,
     minWidth: 140,
-    maxWidth: 200,
+    maxWidth: 260,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   sectionSelectorText: {
     flex: 1,
@@ -3444,9 +3450,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(25, 118, 210, 0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
     borderWidth: 1,
-    borderColor: "#1976d2",
+    borderColor: "rgba(148, 163, 184, 0.45)",
   },
   instructorButton: {
     width: 36,
@@ -3454,9 +3460,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(25, 118, 210, 0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
     borderWidth: 1,
-    borderColor: "#1976d2",
+    borderColor: "rgba(148, 163, 184, 0.45)",
   },
   joinButton: {
     width: 36,
@@ -3464,9 +3470,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(25, 118, 210, 0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
     borderWidth: 1,
-    borderColor: "#1976d2",
+    borderColor: "rgba(148, 163, 184, 0.45)",
   },
   historyHeaderButton: {
     width: 36,
@@ -3474,9 +3480,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(25, 118, 210, 0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
     borderWidth: 1,
-    borderColor: "#1976d2",
+    borderColor: "rgba(148, 163, 184, 0.45)",
   },
 
   // Updated dropdown styles
@@ -3485,10 +3491,10 @@ const styles = StyleSheet.create({
     top: Platform.OS === "ios" ? 120 : 110,
     left: 16,
     right: 16,
-    backgroundColor: "#0a1929",
-    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.97)",
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#1976d2",
+    borderColor: "rgba(148, 163, 184, 0.45)",
     padding: 0,
     zIndex: 20,
     elevation: 5,
@@ -3512,19 +3518,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+    borderBottomColor: "rgba(148, 163, 184, 0.3)",
     padding: 12,
   },
   dropdownTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
+    fontWeight: "700",
+    color: "#0F172A",
   },
   closeButton: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(148, 163, 184, 0.16)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -3606,7 +3612,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: "#0a1929",
+    backgroundColor: "transparent",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -4571,8 +4577,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     ...Platform.select({
       web: {
-        maxWidth: 900,
+        maxWidth: 1240,
+        width: "calc(100% - 20px)",
         marginHorizontal: "auto",
+        paddingHorizontal: 10,
       },
       default: {},
     }),
@@ -4583,21 +4591,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(25, 118, 210, 0.3)",
     gap: 8,
     ...Platform.select({
       web: {
-        maxWidth: 900,
-        marginHorizontal: "auto",
+        width: "100%",
+        minWidth: 0,
+        maxWidth: "none",
+        marginHorizontal: 0,
       },
       default: {},
     }),
   },
   refreshSectionButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
   },
   createSectionButton: {
     flex: 1,
