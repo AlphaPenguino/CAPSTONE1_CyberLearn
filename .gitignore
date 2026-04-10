@@ -57,3 +57,4 @@ Thumbs.db
 # Backend specific
 uploads/
 temp/
+backend/node_modules/.bin/bcrypt
