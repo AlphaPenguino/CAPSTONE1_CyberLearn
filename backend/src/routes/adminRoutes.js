@@ -22,6 +22,79 @@ const LOGIN_ACTION_REGEX = /(login|register|signup)/i;
 const ADMIN_USER_ACTION_REGEX = /(create|add|delete|remove|archive|unarchive)/i;
 const FAILED_LOGIN_ACTION_REGEX = /(login.*failed|failed.*login|login[_\s-]*attempt[_\s-]*failed)/i;
 
+const BACKUP_SCOPE_COLLECTIONS = {
+  users: ["users", "progresses", "userlevels", "auditlogs"],
+  subjects: [
+    "modules",
+    "quizzes",
+    "sections",
+    "cyberquests",
+    "knowledgerelayquestions",
+    "digitaldefendersquestions",
+  ],
+};
+
+const normalizeExtendedJson = (value) => {
+  if (Array.isArray(value)) {
+    return value.map(normalizeExtendedJson);
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const keys = Object.keys(value);
+  if (keys.length === 1 && keys[0] === "$oid" && typeof value.$oid === "string") {
+    return mongoose.Types.ObjectId.isValid(value.$oid)
+      ? new mongoose.Types.ObjectId(value.$oid)
+      : value.$oid;
+  }
+
+  if (keys.length === 1 && keys[0] === "$date") {
+    const parsedDate = new Date(value.$date);
+    return Number.isNaN(parsedDate.getTime()) ? value.$date : parsedDate;
+  }
+
+  const normalized = {};
+  for (const [k, v] of Object.entries(value)) {
+    normalized[k] = normalizeExtendedJson(v);
+  }
+  return normalized;
+};
+
+const normalizeDocumentForImport = (doc) => {
+  const normalizedDoc = normalizeExtendedJson(doc);
+  if (
+    normalizedDoc &&
+    normalizedDoc._id &&
+    typeof normalizedDoc._id === "string" &&
+    mongoose.Types.ObjectId.isValid(normalizedDoc._id)
+  ) {
+    normalizedDoc._id = new mongoose.Types.ObjectId(normalizedDoc._id);
+  }
+  return normalizedDoc;
+};
+
+const getAvailableCollectionNames = async () => {
+  const collections = await mongoose.connection.db.listCollections().toArray();
+  return collections
+    .map((c) => c.name)
+    .filter((name) => !name.startsWith("system."));
+};
+
+const resolveCollectionsForScope = async (scope = "all") => {
+  const availableCollections = await getAvailableCollectionNames();
+
+  if (scope === "all") {
+    return availableCollections;
+  }
+
+  const scopedCollections = BACKUP_SCOPE_COLLECTIONS[scope];
+  if (!scopedCollections) return null;
+
+  return scopedCollections.filter((name) => availableCollections.includes(name));
+};
+
 const buildCategoryFilter = (category) => {
   if (!category || category === "all") return null;
 
@@ -541,6 +614,201 @@ router.post(
       res.status(500).json({
         success: false,
         message: "Maintenance task failed",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/admin/backups/export?scope=all|users|subjects
+ * @desc    Export selected database collections to a JSON backup file
+ * @access  Private/Admin
+ */
+router.get(
+  "/backups/export",
+  protectRoute,
+  authorizeRole(["admin"]),
+  async (req, res) => {
+    try {
+      const scope = (req.query.scope || "all").toString().toLowerCase();
+      const collectionNames = await resolveCollectionsForScope(scope);
+
+      if (!collectionNames) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid backup scope",
+          allowedScopes: ["all", "users", "subjects"],
+        });
+      }
+
+      const collections = {};
+      const counts = {};
+
+      for (const collectionName of collectionNames) {
+        const docs = await mongoose.connection.db
+          .collection(collectionName)
+          .find({})
+          .toArray();
+        collections[collectionName] = docs;
+        counts[collectionName] = docs.length;
+      }
+
+      const exportedAt = new Date();
+      const backupPayload = {
+        success: true,
+        meta: {
+          scope,
+          exportedAt: exportedAt.toISOString(),
+          exportedBy: req.user?.id || null,
+        },
+        counts,
+        collections,
+      };
+
+      const filename = `cyberlearn-backup-${scope}-${exportedAt
+        .toISOString()
+        .replace(/[:.]/g, "-")}.json`;
+
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.status(200).send(JSON.stringify(backupPayload, null, 2));
+    } catch (error) {
+      console.error("Error exporting backup:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to export backup",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   POST /api/admin/backups/import
+ * @desc    Import backup data in merge-only mode (insert missing docs, keep existing)
+ * @access  Private/Admin
+ */
+router.post(
+  "/backups/import",
+  protectRoute,
+  authorizeRole(["admin"]),
+  async (req, res) => {
+    try {
+      const backup = req.body?.backup;
+      if (!backup || typeof backup !== "object") {
+        return res.status(400).json({
+          success: false,
+          message: "Backup payload is required",
+        });
+      }
+
+      const sourceCollections =
+        backup.collections && typeof backup.collections === "object"
+          ? backup.collections
+          : backup;
+
+      const allowedCollections = new Set(await getAvailableCollectionNames());
+
+      const totals = {
+        inserted: 0,
+        skippedExisting: 0,
+        skippedDuplicateInFile: 0,
+        invalid: 0,
+        failed: 0,
+      };
+
+      for (const [collectionName, rawDocs] of Object.entries(sourceCollections)) {
+        if (
+          ["success", "meta", "counts", "totals", "message"].includes(
+            collectionName
+          )
+        ) {
+          continue;
+        }
+
+        if (!allowedCollections.has(collectionName)) {
+          totals.invalid += Array.isArray(rawDocs) ? rawDocs.length : 1;
+          continue;
+        }
+
+        if (!Array.isArray(rawDocs)) {
+          totals.invalid += 1;
+          continue;
+        }
+
+        const seenInFile = new Set();
+        const docsForCollection = [];
+
+        for (const rawDoc of rawDocs) {
+          if (!rawDoc || typeof rawDoc !== "object") {
+            totals.invalid += 1;
+            continue;
+          }
+
+          const normalizedDoc = normalizeDocumentForImport(rawDoc);
+          if (!normalizedDoc._id) {
+            totals.invalid += 1;
+            continue;
+          }
+
+          const idKey = normalizedDoc._id.toString();
+          if (seenInFile.has(idKey)) {
+            totals.skippedDuplicateInFile += 1;
+            continue;
+          }
+
+          seenInFile.add(idKey);
+          docsForCollection.push(normalizedDoc);
+        }
+
+        if (docsForCollection.length === 0) continue;
+
+        const existingIds = await mongoose.connection.db
+          .collection(collectionName)
+          .find(
+            { _id: { $in: docsForCollection.map((doc) => doc._id) } },
+            { projection: { _id: 1 } }
+          )
+          .toArray();
+
+        const existingIdSet = new Set(existingIds.map((doc) => doc._id.toString()));
+
+        const docsToInsert = docsForCollection.filter(
+          (doc) => !existingIdSet.has(doc._id.toString())
+        );
+
+        totals.skippedExisting += docsForCollection.length - docsToInsert.length;
+
+        if (docsToInsert.length === 0) continue;
+
+        try {
+          const insertResult = await mongoose.connection.db
+            .collection(collectionName)
+            .insertMany(docsToInsert, { ordered: false });
+
+          totals.inserted += Object.keys(insertResult.insertedIds || {}).length;
+        } catch (insertError) {
+          const insertedCount =
+            insertError?.result?.result?.nInserted ||
+            Object.keys(insertError?.insertedIds || {}).length ||
+            0;
+
+          totals.inserted += insertedCount;
+          totals.failed += Math.max(docsToInsert.length - insertedCount, 0);
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: "Backup import completed",
+        totals,
+      });
+    } catch (error) {
+      console.error("Error importing backup:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to import backup",
         error: error.message,
       });
     }
