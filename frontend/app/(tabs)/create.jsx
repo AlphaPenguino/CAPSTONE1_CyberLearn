@@ -31,13 +31,13 @@ import * as Sharing from "expo-sharing";
 
 // Custom Color Palette
 const CREATOR_COLORS = {
-  navyBlue: "#001F3F",
+  navyBlue: "#0F172A",
   white: "#FFFFFF",
-  gold: "#FFD700",
-  warmBeige: "#F5DEB3",
-  coral: "#FF7F50",
-  darkBlue: "#0a1929",
-  lightBlue: "#1976d2",
+  gold: "#14B8A6",
+  warmBeige: "#94A3B8",
+  coral: "#14B8A6",
+  darkBlue: "#111827",
+  lightBlue: "#2A9D8F",
   success: "#4CAF50",
   warning: "#FF9800",
   error: "#f44336",
@@ -208,7 +208,7 @@ export default function Create() {
         title="Cyber Quest Map"
         description="Create instructor-led quizzes with multiple choice questions for subjects"
         icon="map"
-        gradient={["#5da65d", "#2f3e2f"]}
+        gradient={["#3f9f86", "#2f4f46"]}
         onPress={() => {
           // Clear any edit parameters when creating new
           console.log(
@@ -222,7 +222,7 @@ export default function Create() {
         title="Subject"
         description="Create and manage subjects with multi-subject student enrollment"
         icon="people"
-        gradient={["#5da65d", "#9ccf9c"]}
+        gradient={["#5fd2cd", "#3f9f86"]}
         onPress={() => setActiveCreator("section-management")}
       />
     </View>
@@ -2651,7 +2651,9 @@ export default function Create() {
           style={[styles.formScroll, Platform.OS === "web" && styles.webScrollableForm]}
           showsVerticalScrollIndicator={true}
           persistentScrollbar={Platform.OS === "web"}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          contentContainerStyle={{
+            paddingBottom: Platform.OS === "web" ? 24 : 120,
+          }}
         >
           {loadingQuestData ? (
             <View style={styles.loadingContainer}>
@@ -2954,14 +2956,14 @@ export default function Create() {
                       style={[
                         styles.difficultyButton,
                         {
-                          backgroundColor: `${colors.surface}80`,
+                          backgroundColor: "#FFFFFF",
                           borderColor: colors.border,
                         },
                         questData.difficulty === diff.value && [
                           styles.selectedDifficulty,
                           {
-                            backgroundColor: `${diff.color}20`,
-                            borderColor: diff.color,
+                            backgroundColor: "#FFFFFF",
+                            borderColor: colors.primary,
                           },
                         ],
                       ]}
@@ -2974,7 +2976,8 @@ export default function Create() {
                           styles.difficultyText,
                           { color: colors.text },
                           questData.difficulty === diff.value && {
-                            color: diff.color,
+                            color: colors.text,
+                            fontWeight: "700",
                           },
                         ]}
                       >
@@ -4421,7 +4424,7 @@ export default function Create() {
                 style={[styles.infoContainer, { backgroundColor: "#92eacc" }]}
               >
                 <Ionicons name="information-circle" size={20} color="#4a7c59" />
-                <Text style={[styles.infoText, { color: "#4a7c59" }]}>
+                <Text style={[styles.infoText, { color: "#fffff" }]}>
                   Available students: unassigned students + students from other
                   subjects. Students can be enrolled in multiple subjects and
                   switch between them.
@@ -6475,11 +6478,7 @@ export default function Create() {
   return (
     <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <LinearGradient
-          colors={[colors.background, colors.surface]}
-          style={styles.backgroundGradient}
-        >
-          <View style={styles.pageWrapper}>
+        <View style={styles.pageWrapper}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
               <View style={styles.headerTitleRow}>
@@ -6513,6 +6512,8 @@ export default function Create() {
                 ) : (
                   <View style={styles.headerBackSpacer} />
                 )}
+
+
                 <Text
                   style={[styles.headerTitle, { color: colors.textSecondary }]}
                 >
@@ -6533,12 +6534,11 @@ export default function Create() {
               contentContainerStyle={styles.scrollContent}
               showsVerticalScrollIndicator={false}
               persistentScrollbar={false}
-              scrollEnabled={Platform.OS !== "web" || !activeCreator}
+              scrollEnabled={!activeCreator}
             >
               {renderContent()}
             </ScrollView>
           </View>
-        </LinearGradient>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -6548,7 +6548,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#4a7c59",
+    backgroundColor: "#2f5d50",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
@@ -6565,7 +6565,7 @@ const styles = StyleSheet.create({
     position: "fixed", // Use fixed positioning for web
     bottom: 24,
     right: 24,
-    backgroundColor: "#4a7c59",
+    backgroundColor: "#2f5d50",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 30,
@@ -6585,7 +6585,7 @@ const styles = StyleSheet.create({
         transition: "transform 0.2s ease-in-out, background-color 0.2s ease",
         ":hover": {
           transform: "translateY(-3px)",
-          backgroundColor: "#3a6c49", // Slightly darker on hover
+          backgroundColor: "#264b40", // Slightly darker on hover
         },
       },
       default: {
@@ -6613,8 +6613,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 1200,
     alignSelf: "center",
-    // Remove horizontal space on Android mobile
-    paddingHorizontal: Platform.OS === "android" ? 0 : 48,
+    paddingHorizontal: Platform.OS === "android" ? 14 : 42,
     paddingBottom: 32,
     ...(typeof window !== "undefined" &&
     window.innerWidth < 600 &&
@@ -6623,8 +6622,9 @@ const styles = StyleSheet.create({
       : {}),
   },
   header: {
-    padding: 20,
-    paddingTop: Platform.OS === "ios" ? 40 : 20,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    paddingTop: Platform.OS === "ios" ? 34 : 18,
     alignItems: "center",
     borderBottomWidth: 1,
     // borderBottomColor will be set dynamically
@@ -6649,16 +6649,18 @@ const styles = StyleSheet.create({
     height: 34,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
+    fontSize: 30,
+    fontWeight: "800",
     // color will be set dynamically
-    textShadow: "0px 0px 10px rgba(44, 205, 230, 0.5)",
+    letterSpacing: 0.3,
   },
   headerSubtitle: {
     fontSize: 16,
+    fontWeight: "500",
     // color will be set dynamically
     textAlign: "center",
-    opacity: 0.9,
+    opacity: 0.85,
+    lineHeight: 22,
   },
   outerScrollContainer: {
     flex: 1,
@@ -6682,24 +6684,27 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   creatorCard: {
-    borderRadius: 16,
-    elevation: 5,
+    borderRadius: 18,
+    elevation: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    margin: 20,
-    marginBottom: 1,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
   },
   disabledCard: {
     opacity: 0.6,
   },
   cardGradient: {
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 18,
+    padding: 22,
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 100,
+    minHeight: 116,
   },
   cardContent: {
     flex: 1,
@@ -6714,15 +6719,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 21,
+    fontWeight: "800",
     // color will be set dynamically
-    marginBottom: 8,
+    marginBottom: 6,
+    letterSpacing: 0.2,
   },
   cardDescription: {
     fontSize: 14,
+    fontWeight: "500",
     // color will be set dynamically
-    lineHeight: 20,
+    lineHeight: 21,
   },
   cardArrow: {
     marginLeft: 16,
@@ -6736,8 +6743,8 @@ const styles = StyleSheet.create({
   formHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 24,
-    paddingBottom: 16,
+    marginBottom: 20,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     // borderBottomColor will be set dynamically
   },
@@ -6745,16 +6752,18 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#92eacc",
+    backgroundColor: "#2f5d50",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
   },
   cancelButton: {
     paddingHorizontal: 16,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#ffd1d1",
+    backgroundColor: "#fff1f1",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
@@ -6767,8 +6776,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   formTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 25,
+    fontWeight: "800",
     // color will be set dynamically
     flex: 1,
   },
@@ -6781,7 +6790,7 @@ const styles = StyleSheet.create({
   createNewButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#92eacc",
+    backgroundColor: "#d9f5ee",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
@@ -6791,7 +6800,7 @@ const styles = StyleSheet.create({
   createNewText: {
     // color will be set dynamically
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     marginLeft: 4,
   },
    formScroll: {
@@ -6825,9 +6834,10 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: Platform.OS === "web" ? 16 : 15,
-    fontWeight: "600",
+    fontWeight: "700",
     // color will be set dynamically
     marginBottom: 10,
+    letterSpacing: 0.15,
   },
   menuButton: {
     padding: 8,
@@ -6868,9 +6878,10 @@ const styles = StyleSheet.create({
   },
   textInput: {
     // backgroundColor will be handled by react-native-paper theme
-    borderRadius: 12,
-    // Updated per request: make text field white instead of green
-    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#D0DBE8",
   },
   textInputContent: {
     paddingTop: 12,
@@ -6892,8 +6903,8 @@ const styles = StyleSheet.create({
   difficultyButton: {
     flex: 1,
     minWidth: 100,
-    padding: 12,
-    borderRadius: 8,
+    padding: 13,
+    borderRadius: 10,
     borderWidth: 2,
     alignItems: "center",
     // backgroundColor and borderColor will be set dynamically
@@ -6908,8 +6919,8 @@ const styles = StyleSheet.create({
   },
   levelDisplay: {
     // backgroundColor and borderColor will be set dynamically
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    padding: 18,
     borderWidth: 1,
   },
   levelBadge: {
@@ -6938,8 +6949,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
-    borderRadius: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderWidth: 2,
     borderColor: "transparent",
     minWidth: 120,
@@ -6981,6 +6992,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    width: "100%",
+    maxWidth: "100%",
+    alignSelf: "stretch",
   },
   buttonGradient: {
     flexDirection: "row",
@@ -6989,20 +7003,24 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     gap: 8,
+    width: "100%",
+    minWidth: 0,
   },
   buttonText: {
     fontSize: 18,
     fontWeight: "bold",
     // color now set dynamically via inline styles
+    flexShrink: 1,
+    textAlign: "center",
   },
   // Subject Code Styles
   subjectCodeContainer: {
     marginTop: 20,
-    backgroundColor: "#92eacc",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#2acde6",
+    borderColor: "rgba(148, 163, 184, 0.35)",
   },
   subjectCodeHeader: {
     flexDirection: "row",
@@ -7013,7 +7031,7 @@ const styles = StyleSheet.create({
   subjectCodeTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#4a7c59",
+    color: "#0F172A",
   },
   subjectCodeBox: {
     backgroundColor: CREATOR_COLORS.darkBlue,
@@ -7033,20 +7051,22 @@ const styles = StyleSheet.create({
   copyButton: {
     padding: 8,
     borderRadius: 6,
-    backgroundColor: "#2acde6",
+    backgroundColor: "#14B8A6",
   },
   subjectCodeHelp: {
     fontSize: 12,
-    color: "#4a7c59",
+    color: "#64748B",
     textAlign: "center",
     fontStyle: "italic",
   },
   // Student List Styles
   studentList: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 12,
     padding: 16,
     maxHeight: 300,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.25)",
   },
   studentItem: {
     flexDirection: "row",
@@ -7065,7 +7085,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#2acde6",
+    backgroundColor: "#5fd2cd",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -7138,7 +7158,7 @@ const styles = StyleSheet.create({
     backgroundColor: CREATOR_COLORS.darkBlue,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2acde6",
+    borderColor: "rgba(148, 163, 184, 0.35)",
     maxHeight: 200,
     zIndex: 1000,
     elevation: 5,
@@ -7148,18 +7168,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   availableStudentsContainer: {
-    backgroundColor: "#92eacc",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderRadius: 12,
     padding: 18,
     marginTop: 16,
     maxHeight: 400,
     borderWidth: 1,
-    borderColor: "#2acde6",
+    borderColor: "rgba(148, 163, 184, 0.35)",
   },
   availableStudentsTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#4a7c59",
+    color: "#0F172A",
     marginBottom: 16,
   },
   availableStudentsList: {
@@ -7255,23 +7275,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   activeStep: {
-    backgroundColor: "#2acde6",
+    backgroundColor: "#5fd2cd",
   },
   stepNumber: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#4a7c59",
+    color: "#0F172A",
   },
   activeStepText: {
     color: CREATOR_COLORS.navyBlue,
   },
   stepLabel: {
     fontSize: 12,
-    color: "#4a7c59",
+    color: "#0F172A",
     textAlign: "center",
   },
   activeStepLabel: {
-    color: "#4a7c59",
+    color: "#0F172A",
     fontWeight: "600",
   },
   stepConnector: {
@@ -7347,11 +7367,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginHorizontal: 20,
     marginBottom: 20,
-    backgroundColor: "#92eacc",
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
     borderRadius: 12,
     padding: 6,
     borderWidth: 1,
-    borderColor: "#2acde6",
+    borderColor: "rgba(148, 163, 184, 0.35)",
   },
   sectionTab: {
     flex: 1,
@@ -7364,12 +7384,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   activeSectionTab: {
-    backgroundColor: "#4a7c59",
+    backgroundColor: "#2f5d50",
   },
   sectionTabText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#4a7c59",
+    color: "#0F172A",
   },
   activeSectionTabText: {
     color: "#FFFFFF",
@@ -7380,13 +7400,13 @@ const styles = StyleSheet.create({
     marginBottom: 28,
     paddingBottom: 18,
     borderBottomWidth: 2,
-    borderBottomColor: "#2acde6",
+    borderBottomColor: "rgba(148, 163, 184, 0.45)",
     gap: 12,
   },
   divisionTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#4a7c59",
+    color: "#0F172A",
     flex: 1,
   },
   dropdownContainer: {
@@ -7397,8 +7417,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#92eacc",
-    borderColor: "#2acde6",
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    borderColor: "rgba(148, 163, 184, 0.35)",
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 16,
@@ -7456,13 +7476,16 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   // Subject Modal Styles
-  modalBackdrop: {
+    modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
+    alignItems: "center",
     padding: 16,
-  },
-  subjectModalContainer: {
+    },
+    subjectModalContainer: {
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 560 : 720,
     maxHeight: "80%",
     borderRadius: 16,
     paddingVertical: 12,
@@ -7473,7 +7496,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
-  },
+    },
   subjectModalHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -7641,15 +7664,15 @@ const styles = StyleSheet.create({
   },
 
   // Question Type Selection Styles
-  questionTypeModal: {
-    backgroundColor: "rgba(0,0,0,0.8)",
+    questionTypeModal: {
+    backgroundColor: "#FFFFFF",
     padding: 20,
     borderRadius: 16,
     marginVertical: 10,
     borderWidth: 2,
     borderColor: "#2acde6",
-  },
-  questionTypeTitle: {
+    },
+    questionTypeTitle: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#4a7c59",
@@ -7662,32 +7685,32 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
-  questionTypeCard: {
+    questionTypeCard: {
     width: "48%",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#FFFFFF",
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
     borderWidth: 2,
     minHeight: 120,
     justifyContent: "center",
-  },
-  questionTypeIcon: {
+    },
+    questionTypeIcon: {
     marginBottom: 8,
   },
-  questionTypeLabel: {
+    questionTypeLabel: {
     fontSize: 14,
     fontWeight: "bold",
-    color: CREATOR_COLORS.white,
+    color: CREATOR_COLORS.navyBlue,
     textAlign: "center",
     marginBottom: 4,
-  },
-  questionTypeDescription: {
+    },
+    questionTypeDescription: {
     fontSize: 12,
-    color: CREATOR_COLORS.warmBeige,
+    color: "#475569",
     textAlign: "center",
     lineHeight: 16,
-  },
+    },
   cancelQuestionType: {
     backgroundColor: "rgba(244, 67, 54, 0.2)",
     padding: 12,
@@ -7746,11 +7769,18 @@ const styles = StyleSheet.create({
   },
 
   validationMessage: {
-    color: CREATOR_COLORS.coral,
+    color: "#FFFFFF",
     fontSize: 14,
-    textAlign: "center",
+    textAlign: "left",
     marginVertical: 12,
-    fontStyle: "italic",
+    fontWeight: "600",
+    lineHeight: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(248, 113, 113, 0.55)",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
 
   // Modal styles
@@ -7836,7 +7866,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 14,
-    color: "#4a7c59",
+    color: "#fffff",
     flex: 1,
     lineHeight: 20,
   },

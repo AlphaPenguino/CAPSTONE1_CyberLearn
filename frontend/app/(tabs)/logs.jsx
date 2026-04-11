@@ -12,6 +12,7 @@ import {
   Platform,
   Modal,
   ScrollView,
+  Pressable,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -64,6 +65,7 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
   const [summary, setSummary] = useState(null);
   const [availableCategories, setAvailableCategories] = useState(["all", ...Object.keys(CATEGORY_LABELS).filter((key) => key !== "all")]);
   const [showFilters, setShowFilters] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [loadingSubjectDetails, setLoadingSubjectDetails] = useState(false);
@@ -85,6 +87,11 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
       ? "rgba(148, 163, 184, 0.35)"
       : "rgba(100, 116, 139, 0.28)"
     : colors.border;
+
+  const categoryPickerSurface = colors.card;
+  const categoryPickerBorder = colors.border;
+  const categoryModalSurface = colors.card;
+  const categoryModalBorder = colors.border;
 
   const fetchSubjectName = useCallback(
     async (subjectId) => {
@@ -440,19 +447,26 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
   const renderCategorySelect = () => {
     if (Platform.OS !== "web") {
       return (
-        <View
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setShowCategoryModal(true)}
           style={[
             styles.filterPicker,
             {
-              backgroundColor: glassInput,
-              borderColor: glassBorder,
+              backgroundColor: categoryPickerSurface,
+              borderColor: categoryPickerBorder,
             },
           ]}
         >
           <Text style={[styles.filterValue, { color: colors.text }]}>
             {getCategoryLabel(filters.category)}
           </Text>
-        </View>
+          <Ionicons
+            name="chevron-down"
+            size={16}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
       );
     }
 
@@ -862,6 +876,111 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
     </Modal>
   );
 
+  const renderCategoryModal = () => (
+    <Modal
+      visible={showCategoryModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowCategoryModal(false)}
+    >
+      <View style={styles.categoryModalOverlay}>
+        <Pressable
+          style={styles.categoryModalBackdrop}
+          onPress={() => setShowCategoryModal(false)}
+        />
+        <View
+          style={[
+            styles.categoryModalCard,
+            {
+              backgroundColor: categoryModalSurface,
+              borderColor: categoryModalBorder,
+            },
+          ]}
+        >
+          <Text style={[styles.categoryModalTitle, { color: colors.text }]}> 
+            Select Category
+          </Text>
+
+          <ScrollView
+            style={styles.categoryModalList}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+          >
+            <TouchableOpacity
+              style={styles.categoryOptionButton}
+              onPress={() => {
+                setFilters((prev) => ({ ...prev, category: "all" }));
+                setShowCategoryModal(false);
+              }}
+            >
+              <Text style={[styles.categoryOptionText, { color: colors.text }]}> 
+                All Categories
+              </Text>
+            </TouchableOpacity>
+
+            {groupedCategoryOptions.map((group) => (
+              <View key={group.label} style={styles.categoryGroupSection}>
+                <Text
+                  style={[
+                    styles.categoryGroupTitle,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  {group.label}
+                </Text>
+                {group.values.map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={styles.categoryOptionButton}
+                    onPress={() => {
+                      setFilters((prev) => ({ ...prev, category: value }));
+                      setShowCategoryModal(false);
+                    }}
+                  >
+                    <Text
+                      style={[styles.categoryOptionText, { color: colors.text }]}
+                    >
+                      {getCategoryLabel(value)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+
+            {uncategorizedOptions.length > 0 && (
+              <View style={styles.categoryGroupSection}>
+                <Text
+                  style={[
+                    styles.categoryGroupTitle,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Other
+                </Text>
+                {uncategorizedOptions.map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={styles.categoryOptionButton}
+                    onPress={() => {
+                      setFilters((prev) => ({ ...prev, category: value }));
+                      setShowCategoryModal(false);
+                    }}
+                  >
+                    <Text
+                      style={[styles.categoryOptionText, { color: colors.text }]}
+                    >
+                      {getCategoryLabel(value)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (loading && logs.length === 0) {
     return (
       <LinearGradient colors={pageGradient} style={styles.container}>
@@ -1007,6 +1126,8 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
             renderItem={renderLogItem}
             keyExtractor={(item) => item._id}
             style={styles.transparentList}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
@@ -1051,6 +1172,7 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
         </View>
       </SafeAreaView>
     </LinearGradient>
+      {renderCategoryModal()}
       {renderSubjectModal()}
     </>
   );
@@ -1132,6 +1254,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
+    zIndex: 20,
+    elevation: 20,
   },
   searchInput: {
     padding: 12,
@@ -1142,10 +1266,12 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: Platform.OS === "web" ? "row" : "column",
-    gap: 12,
+    marginTop: 2,
   },
   filterGroup: {
     flex: 1,
+    zIndex: 21,
+    elevation: 21,
   },
   filterLabel: {
     fontSize: 14,
@@ -1159,9 +1285,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   filterPicker: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 12,
     borderRadius: 6,
     borderWidth: 1,
+    minHeight: 48,
   },
   filterValue: {
     fontSize: 14,
@@ -1331,5 +1461,52 @@ const styles = StyleSheet.create({
   },
   listItem: {
     marginVertical: 4,
+  },
+  categoryModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  categoryModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+  },
+  categoryModalCard: {
+    width: "100%",
+    maxWidth: 480,
+    maxHeight: "75%",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  categoryModalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  categoryModalList: {
+    width: "100%",
+  },
+  categoryGroupSection: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  categoryGroupTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    marginBottom: 4,
+    paddingHorizontal: 6,
+  },
+  categoryOptionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  categoryOptionText: {
+    fontSize: 14,
+    fontWeight: "500",
   },
 });

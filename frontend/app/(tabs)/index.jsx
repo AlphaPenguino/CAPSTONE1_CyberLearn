@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Dimensions,
   Animated,
+  useWindowDimensions,
 } from "react-native";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuthStore } from "../../store/authStore";
@@ -134,8 +135,10 @@ export default function Home() {
     : routeParams?.focusModuleId;
   const { user, token, checkAuth, logout } = useAuthStore();
   const { colors, isDarkMode } = useTheme();
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const isinstructor =
     user?.privilege === "instructor" || user?.privilege === "admin";
+  const isAdmin = user?.privilege === "admin";
 
     const isInstructorOrAdmin =
   user?.privilege === "instructor" || user?.privilege === "admin";
@@ -352,7 +355,7 @@ const handleImportCyberQuestsWeb = () => {
   // Calculate module position for zigzag path going upward from bottom (Candy Crush style)
   const getModulePosition = useCallback(
     (index) => {
-      const screenWidth = Dimensions.get("window").width;
+      const screenWidth = viewportWidth;
       const verticalSpacing = 190; // Further reduced space between levels
       const baseHeight = 350; // Further increase to move Level 1 much higher
       const horizontalOffset = 60; // How far left/right from center
@@ -378,12 +381,12 @@ const handleImportCyberQuestsWeb = () => {
 
       return { x, y };
     },
-    [modules.length]
+    [modules.length, viewportWidth]
   );
 
   // Initialize player position - will be updated when modules load
   const playerPosition = useRef(
-    new Animated.ValueXY({ x: Dimensions.get("window").width / 2 - 45, y: 200 })
+    new Animated.ValueXY({ x: viewportWidth / 2 - 45, y: 200 })
   ).current;
 
   // Initialize info panel animation
@@ -948,7 +951,7 @@ const handleImportCyberQuestsWeb = () => {
 
       const scrollToY = Math.max(
         0,
-        modulePosition.y - Dimensions.get("window").height / 2 + 100
+        modulePosition.y - viewportHeight / 2 + 100
       );
 
       if (scrollViewRef.current && scrollViewRef.current.scrollTo) {
@@ -984,6 +987,7 @@ const handleImportCyberQuestsWeb = () => {
       setMenuVisible,
       setIsPlayerMoving,
       scrollViewRef,
+      viewportHeight,
     ]
   );
 
@@ -1273,12 +1277,31 @@ const handleImportCyberQuestsWeb = () => {
     !error &&
     modules.length === 0;
 
+  const showWebMapBackdrop =
+    Platform.OS === "web" &&
+    !!selectedBackground?.image &&
+    !(!!selectedSubject && !loading && !error && modules.length === 0);
+
   const screenGradient = isDarkMode
     ? ["#020617", "#0B1220"]
     : ["#F8FAFC", "#E2E8F0"];
 
+  const webMapStripWidth = Platform.OS === "web" ? Math.min(viewportWidth, 800) : viewportWidth;
+  const webMapStripLeft = Platform.OS === "web" ? (viewportWidth - webMapStripWidth) / 2 : 0;
+
   return (
     <ExpoLinearGradient colors={screenGradient} style={styles.container}>
+      {showWebMapBackdrop && (
+        <>
+          <Image
+            source={selectedBackground.image}
+            style={styles.webMapBackdropImage}
+            resizeMode="cover"
+            blurRadius={10}
+          />
+          <View style={styles.webMapBackdropTint} pointerEvents="none" />
+        </>
+      )}
       {/* Enhanced Header with Mobile-Optimized Layout */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -1324,7 +1347,11 @@ const handleImportCyberQuestsWeb = () => {
              {isInstructorOrAdmin && selectedSubject && (
               <>
                 <TouchableOpacity
-                  style={styles.backgroundSelector}
+
+                  style={[
+                    styles.backgroundSelector,
+                    Platform.OS === "web" && styles.webQuestActionButton,
+                  ]}
                   onPress={handleExportCyberQuests}
                   disabled={exporting}
                 >
@@ -1333,10 +1360,16 @@ const handleImportCyberQuestsWeb = () => {
                     size={20}
                     color={colors.primary}
                   />
+                  {Platform.OS === "web" && (
+                    <Text style={styles.webQuestActionText}>Export Quest</Text>
+                  )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.backgroundSelector}
+                  style={[
+                    styles.backgroundSelector,
+                    Platform.OS === "web" && styles.webQuestActionButton,
+                  ]}
                   onPress={handleImportCyberQuestsWeb}
                   disabled={importing}
                 >
@@ -1345,6 +1378,9 @@ const handleImportCyberQuestsWeb = () => {
                     size={20}
                     color={colors.primary}
                   />
+                  {Platform.OS === "web" && (
+                    <Text style={styles.webQuestActionText}>Import Quest</Text>
+                  )}
                 </TouchableOpacity>
               </>
             )}
@@ -1940,7 +1976,7 @@ const handleImportCyberQuestsWeb = () => {
                 onPress={fetchModules}
               >
                 <Ionicons name="refresh" size={20} color={colors.text} />
-                <Text style={[styles.actionButtonText, { color: colors.text }]}>
+                <Text style={[styles.actionButtonText, { color: colors.text }]}> 
                   Refresh
                 </Text>
               </TouchableOpacity>
@@ -1991,31 +2027,6 @@ const handleImportCyberQuestsWeb = () => {
                   Refresh
                 </Text>
               </TouchableOpacity>
-
-              {isinstructor && (
-                <TouchableOpacity
-                  style={[
-                    styles.actionButton,
-                    { backgroundColor: COLORS.success },
-                  ]}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/create",
-                      params: {
-                        from: "index",
-                        subject: selectedSubject._id || selectedSubject.id,
-                      },
-                    })
-                  }
-                >
-                  <Ionicons name="add" size={20} color={COLORS.white} />
-                  <Text
-                    style={[styles.actionButtonText, { color: COLORS.white }]}
-                  >
-                    Create Cyber Quest
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
         ) : (
@@ -2150,11 +2161,17 @@ const handleImportCyberQuestsWeb = () => {
               <TouchableOpacity
                 style={[
                   styles.refreshSectionButton,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                  },
+                  Platform.OS === "web"
+                    ? {
+                        backgroundColor: "transparent",
+                        borderWidth: 0,
+                        borderColor: "transparent",
+                      }
+                    : {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        borderWidth: 1,
+                      },
                 ]}
                 onPress={fetchModules}
               >
@@ -2181,12 +2198,12 @@ const handleImportCyberQuestsWeb = () => {
               // Calculate proper height to prevent scrolling past Level 1
               minHeight: (() => {
                 if (modules.length === 0)
-                  return Dimensions.get("window").height;
+                  return viewportHeight;
 
                 // Get Level 1 (index 0) position
                 const level1Position = getModulePosition(0);
                 const nodeHeight = 120;
-                const screenHeight = Dimensions.get("window").height;
+                const screenHeight = viewportHeight;
 
                 // Make sure Level 1 is at the bottom of the screen
                 // The content height should be: Level 1's Y position + node height
@@ -2206,7 +2223,7 @@ const handleImportCyberQuestsWeb = () => {
               // Calculate initial scroll position to show Level 1 at bottom
               const level1Position = getModulePosition(0);
               const nodeHeight = 90;
-              const screenHeight = Dimensions.get("window").height;
+              const screenHeight = viewportHeight;
               const contentHeight = level1Position.y + nodeHeight;
 
               // If content is taller than screen, scroll to show Level 1 at bottom
@@ -2246,7 +2263,12 @@ const handleImportCyberQuestsWeb = () => {
             const bgHeight = 400; // Match this to the actual image height
             const totalHeight =
               modules.length > 0 ? modules.length * 200 + 600 : 800;
-            const numImages = Math.ceil(totalHeight / (bgHeight - 2)) + 1; // Subtract 2 pixels for slight overlap
+            const overlap = 2;
+            const tileStep = bgHeight - overlap;
+            const topBuffer = bgHeight;
+            const bottomBuffer = Math.max(viewportHeight + bgHeight, bgHeight * 2);
+            const renderSpan = totalHeight + topBuffer + bottomBuffer;
+            const numImages = Math.ceil(renderSpan / tileStep) + 1;
 
             return Array.from({ length: numImages }).map((_, i) => (
               <Animated.Image
@@ -2256,9 +2278,11 @@ const handleImportCyberQuestsWeb = () => {
                   styles.mapBackground,
                   {
                     position: "absolute",
-                    top: i * (bgHeight - 2), // Subtract 2 pixels to create a tiny overlap for seamless appearance
+                    // Start above the map and render beyond bottom so zoom-out never exposes gaps.
+                    top: -topBuffer + i * tileStep,
                     height: bgHeight,
-                    width: Dimensions.get("window").width,
+                    width: webMapStripWidth,
+                    left: webMapStripLeft,
                     zIndex: -1,
                     transform: [
                       {
@@ -2296,7 +2320,7 @@ const handleImportCyberQuestsWeb = () => {
             style={[
               styles.pathNetwork,
               {
-                width: Dimensions.get("window").width,
+                width: viewportWidth,
                 height: modules.length > 0 ? modules.length * 200 + 600 : 800, // Further reduced height
               },
             ]}
@@ -2786,28 +2810,37 @@ const handleImportCyberQuestsWeb = () => {
               </View>
 
               {/* Current Level Counter */}
-              <View style={styles.currentLevelBadge}>
-                <Text style={styles.currentLevelText}>
-                  Level{" "}
-                  {(modules?.findIndex((m) => m._id === selectedModule._id) ||
-                    0) + 1}
-                </Text>
-              </View>
+              {!isAdmin && (
+                <View style={styles.currentLevelBadge}>
+                  <Text style={styles.currentLevelText}>
+                    Level{" "}
+                    {(modules?.findIndex((m) => m._id === selectedModule._id) ||
+                      0) + 1}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
           {/* Stats Section */}
           <View style={styles.statsSection}>
             <View style={styles.statRow}>
-              <View style={styles.enhancedStatItem}>
-                <View style={styles.enhancedStatIcon}>
-                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                </View>
-                <Text style={styles.enhancedStatLabel}>Completed</Text>
+              {!isInstructorOrAdmin && (
+                <View style={styles.enhancedStatItem}>
+                {!isInstructorOrAdmin && (
+                  <View style={styles.enhancedStatIcon}>
+                    <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                  </View>
+                )}
+                {!isInstructorOrAdmin && (
+                  <Text style={styles.enhancedStatLabel}>Completed</Text>
+                )}
                 <Text style={styles.enhancedStatValue}>
-                  {modules?.filter((m) => m.isCompleted)?.length || 0} stages
+                  {modules?.filter((m) => m.isCompleted)?.length || 0}
+                  {!isInstructorOrAdmin ? " stages" : ""}
                 </Text>
-              </View>
+                </View>
+              )}
 
               <View style={styles.enhancedStatItem}>
                 <View style={styles.enhancedStatIcon}>
@@ -2821,15 +2854,22 @@ const handleImportCyberQuestsWeb = () => {
                 </Text>
               </View>
 
-              <View style={styles.enhancedStatItem}>
-                <View style={styles.enhancedStatIcon}>
-                  <Ionicons name="lock-closed" size={16} color="#757575" />
-                </View>
-                <Text style={styles.enhancedStatLabel}>Locked</Text>
+              {!isInstructorOrAdmin && (
+                <View style={styles.enhancedStatItem}>
+                {!isInstructorOrAdmin && (
+                  <View style={styles.enhancedStatIcon}>
+                    <Ionicons name="lock-closed" size={16} color="#757575" />
+                  </View>
+                )}
+                {!isInstructorOrAdmin && (
+                  <Text style={styles.enhancedStatLabel}>Locked</Text>
+                )}
                 <Text style={styles.enhancedStatValue}>
-                  {modules?.filter((m) => !m.isUnlocked)?.length || 0} stages
+                  {modules?.filter((m) => !m.isUnlocked)?.length || 0}
+                  {!isInstructorOrAdmin ? " stages" : ""}
                 </Text>
-              </View>
+                </View>
+              )}
             </View>
           </View>
 
@@ -2954,12 +2994,16 @@ const handleImportCyberQuestsWeb = () => {
 
           {/* Stats Section */}
           <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {modules?.filter((m) => m.isCompleted)?.length || 0}
-              </Text>
-              <Text style={styles.statLabel}>Completed</Text>
-            </View>
+            {!isInstructorOrAdmin && (
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>
+                  {modules?.filter((m) => m.isCompleted)?.length || 0}
+                </Text>
+                {!isInstructorOrAdmin && (
+                  <Text style={styles.statLabel}>Completed</Text>
+                )}
+              </View>
+            )}
             <View style={styles.statItem}>
               <Text style={styles.statValue}>
                 {modules?.filter((m) => m.isUnlocked && !m.isCompleted)
@@ -2967,12 +3011,14 @@ const handleImportCyberQuestsWeb = () => {
               </Text>
               <Text style={styles.statLabel}>Available</Text>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {modules?.filter((m) => !m.isUnlocked)?.length || 0}
-              </Text>
-              <Text style={styles.statLabel}>Locked</Text>
-            </View>
+            {!isInstructorOrAdmin && (
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>
+                  {modules?.filter((m) => !m.isUnlocked)?.length || 0}
+                </Text>
+                {!isInstructorOrAdmin && <Text style={styles.statLabel}>Locked</Text>}
+              </View>
+            )}
           </View>
         </View>
       )}
@@ -3124,11 +3170,7 @@ const styles = StyleSheet.create({
     marginBottom: Platform.OS === "web" ? 6 : 3, // Less margin on mobile
   },
   progressBarContainer: {
-    width: "90%", // Slightly narrower
-    height: 4, // Thinner height (was 6)
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 2,
-    marginTop: Platform.OS === "web" ? 4 : 2,
+    width: "90%" // Slightly narrower
   },
   progressBar: {
     height: "100%",
@@ -3254,7 +3296,7 @@ const styles = StyleSheet.create({
   },
   sectionListInfo: {
     flex: 1,
-    paddingRight: 8,
+    paddingRight: 10,
     ...Platform.select({
       web: {
         minHeight: 136,
@@ -3622,6 +3664,23 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  webMapBackdropImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+    opacity: 2,
+    transform: [{ scale: 1.08 }],
+    ...Platform.select({
+      web: {
+        filter: "blur(12px)",
+      },
+      default: {},
+    }),
+  },
+  webMapBackdropTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(8, 16, 28, 0.25)",
+  },
 
   headerLeft: {
     flex: 1,
@@ -3636,6 +3695,19 @@ const styles = StyleSheet.create({
   backgroundSelectorText: {
     fontSize: 14,
     fontWeight: "500",
+    color: COLORS.primary,
+  },
+  webQuestActionButton: {
+    width: "auto",
+    minWidth: 122,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    gap: 6,
+  },
+  webQuestActionText: {
+    fontSize: 13,
+    fontWeight: "600",
     color: COLORS.primary,
   },
 
@@ -3809,7 +3881,7 @@ const styles = StyleSheet.create({
     borderColor: "#ffffff",
     textAlign: "center",
     minWidth: 50,
-    boxShadow: "0px 2px 4px rgba(45, 90, 160, 0.8)",
+    boxShadow: "0px 2px 4px rgba(25, 118, 210, 0.8)",
     elevation: 5,
   },
 
@@ -4455,6 +4527,18 @@ const styles = StyleSheet.create({
     color: "#cccccc",
     fontSize: 12,
   },
+  adminStatMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  adminStatMetaText: {
+    color: "#cccccc",
+    fontSize: 12,
+    fontWeight: "600",
+  },
 
   pathNetwork: {
     position: "absolute",
@@ -4740,14 +4824,6 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         objectFit: "cover",
-        backgroundSize: "cover",
-        backgroundPosition: "center center",
-        backgroundRepeat: "repeat-y",
-        // Center image properly
-        left: "29%",
-        transform: "translateX(-15%)",
-        width: "100%",
-        maxWidth: 800, // More reasonable width to avoid stretching
         opacity: 0.9, // Slightly reduce opacity to blend better
       },
       default: {

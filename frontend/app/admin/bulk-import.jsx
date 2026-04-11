@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,13 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
 import { API_URL } from "../../constants/api";
@@ -23,6 +24,7 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
   const { user, token } = useAuthStore();
   const { colors } = useTheme();
   const router = useRouter();
+  const { width: viewportWidth } = useWindowDimensions();
   const [csvData, setCsvData] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -30,19 +32,23 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
   const [results, setResults] = useState(null);
 
   const createStyles = () => {
-    const screenWidth = Dimensions.get("window").width;
-    const isSmall = screenWidth < 500; // breakpoint for mobile responsiveness
-    const isMobile = Platform.OS !== "web";
+    const isWeb = Platform.OS === "web";
+    const isSmall = viewportWidth < 500;
+    const isTablet = viewportWidth >= 768;
+    const horizontalPadding = isWeb ? 20 : isSmall ? 12 : 16;
+
     return StyleSheet.create({
       container: {
         flex: 1,
         backgroundColor: embedded ? "transparent" : colors.background,
       },
       pageWrapper: {
+        flexGrow: 1,
         width: "100%",
-        maxWidth: Platform.OS === "web" ? 800 : "100%",
-        alignSelf: "center", // Center the content
-        paddingHorizontal: Platform.OS === "web" ? 0 : isSmall ? 12 : 16,
+        maxWidth: isWeb ? 1200 : "100%",
+        alignSelf: "center",
+        paddingHorizontal: horizontalPadding,
+        paddingBottom: 28,
       },
       header: {
         flexDirection: "row",
@@ -55,11 +61,11 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
       },
       content: {
         flex: 1,
-        paddingHorizontal: isMobile ? (isSmall ? 12 : 16) : 20,
-        paddingVertical: isMobile ? 14 : 20,
+        paddingVertical: isWeb ? 18 : 14,
       },
       embeddedContent: {
-        paddingTop: 8,
+        flex: 1,
+        paddingTop: 6,
       },
       backButton: {
         marginRight: 16,
@@ -170,19 +176,20 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
         fontFamily: "monospace",
       },
       buttonContainer: {
-        flexDirection: isMobile ? "column" : isSmall ? "column" : "row",
-        justifyContent: isMobile ? "flex-start" : isSmall ? "flex-start" : "space-between",
+        flexDirection: isTablet ? "row" : "column",
+        justifyContent: "flex-start",
         marginBottom: 20,
-        flexWrap: isMobile ? "nowrap" : isSmall ? "nowrap" : "wrap",
+        flexWrap: isTablet ? "wrap" : "nowrap",
       },
       button: {
-        flex: isMobile ? 0 : isSmall ? 0 : 1,
-        width: isMobile ? "100%" : isSmall ? "100%" : "auto",
+        flex: isTablet ? 1 : 0,
+        minWidth: isTablet ? 220 : undefined,
+        width: isTablet ? "auto" : "100%",
         paddingVertical: 12,
         paddingHorizontal: 16,
         borderRadius: 8,
-        marginHorizontal: isMobile ? 0 : isSmall ? 0 : 4,
-        marginVertical: isMobile ? 6 : isSmall ? 6 : 0,
+        marginHorizontal: isTablet ? 4 : 0,
+        marginVertical: 6,
         alignItems: "center",
         flexDirection: "row",
         justifyContent: "center",
@@ -302,7 +309,7 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
     });
   };
 
-  const styles = createStyles();
+  const styles = useMemo(createStyles, [colors, embedded, viewportWidth]);
 
   // Check admin access
   if (user?.privilege !== "admin") {
@@ -634,6 +641,8 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
     setResults(null);
   };
 
+  const isImportEnabled = !importing && !!csvData && csvData.length > 0;
+
   const loadSampleData = () => {
     const sampleCsv = `username,email,password,role,fullName
 student6,student6@example.com,password123,student,Student Six
@@ -670,14 +679,25 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
         }, 0);
         Alert.alert("Download Started", "Sample CSV download initiated.");
       } else {
-        const fileUri = FileSystem.documentDirectory + "sample-data.csv";
+        const fileUri = `${FileSystem.cacheDirectory}sample-data.csv`;
         await FileSystem.writeAsStringAsync(fileUri, sampleCsv, {
           encoding: FileSystem.EncodingType.UTF8,
         });
-        Alert.alert(
-          "File Saved",
-          "Sample CSV saved to app documents as sample-data.csv"
-        );
+
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "text/csv",
+            dialogTitle: "Save or share sample-data.csv",
+            UTI: "public.comma-separated-values-text",
+          });
+          Alert.alert(
+            "Sample Ready",
+            "Choose where to save the sample CSV from the share options."
+          );
+        } else {
+          Alert.alert("File Saved", "Sample CSV created: sample-data.csv");
+        }
       }
     } catch (e) {
       console.error("Failed to create sample CSV", e);
@@ -705,7 +725,7 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
 
       <ScrollView
         style={[styles.content, embedded && styles.embeddedContent]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.pageWrapper}
       >
         <View style={styles.instructionsCard}>
@@ -818,12 +838,10 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
           <TouchableOpacity
             style={[
               styles.button,
-              !csvData || csvData.length === 0
-                ? styles.disabledButton
-                : styles.primaryButton,
+              isImportEnabled ? styles.primaryButton : styles.disabledButton,
             ]}
             onPress={handleImport}
-            disabled={importing || !csvData || csvData.length === 0}
+            disabled={!isImportEnabled}
           >
             {importing ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
@@ -831,10 +849,10 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
               <MaterialCommunityIcons
                 name="upload"
                 size={20}
-                color="#000000" // Changed from "#FFFFFF" to black
+                color={isImportEnabled ? "#FFFFFF" : "#000000"}
               />
             )}
-            <Text style={styles.buttonText}>
+            <Text style={isImportEnabled ? styles.buttonTextWhite : styles.buttonText}>
               {importing ? "Importing..." : "Import Users"}
             </Text>
           </TouchableOpacity>

@@ -91,6 +91,8 @@ export default function ModuleGameQuest() {
   const [error, setError] = useState(null);
 
   // Battle animations
+  
+  
   const [playerHealth, setPlayerHealth] = useState(100);
   const [enemyHealth, setEnemyHealth] = useState(100);
   const [playerAttackAnim, setPlayerAttackAnim] = useState(false);

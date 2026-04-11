@@ -1715,8 +1715,12 @@ export default function UsersScreen({ hideHeader = false }) {
 }
 
 // Dynamic styles factory (theme-aware)
-const createStyles = (colors) =>
-  StyleSheet.create({
+const createStyles = (colors) => {
+  const isSmallWeb =
+    typeof window !== "undefined" && window.innerWidth < 600;
+  const horizontalInset = Platform.OS === "android" ? 12 : isSmallWeb ? 12 : 0;
+
+  return StyleSheet.create({
     searchContainer: {
       flexDirection: "row",
       alignItems: "center",
@@ -1752,8 +1756,7 @@ const createStyles = (colors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
-      paddingHorizontal:
-        typeof window !== "undefined" && window.innerWidth < 600 ? 8 : 0,
+      paddingHorizontal: Platform.OS === "android" ? 12 : isSmallWeb ? 8 : 0,
       marginTop: 8,
       marginBottom: 10,
     },
@@ -1865,9 +1868,8 @@ const createStyles = (colors) =>
       width: "100%",
       maxWidth: 1200,
       alignSelf: "center",
-      // Remove horizontal padding on larger viewports; keep small on mobile
-      paddingHorizontal:
-        typeof window !== "undefined" && window.innerWidth < 600 ? 12 : 0,
+      // Keep edge spacing on Android and small web viewports.
+      paddingHorizontal: horizontalInset,
     },
     centered: {
       flex: 1,
@@ -1896,8 +1898,7 @@ const createStyles = (colors) =>
       justifyContent: "space-between",
       alignItems: "center",
       paddingVertical: 20,
-      paddingHorizontal:
-        typeof window !== "undefined" && window.innerWidth < 600 ? 12 : 0,
+      paddingHorizontal: horizontalInset,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
       backgroundColor: colors.card,
@@ -1975,16 +1976,14 @@ const createStyles = (colors) =>
 
     listContainer: {
       paddingVertical: 16,
-      paddingHorizontal:
-        typeof window !== "undefined" && window.innerWidth < 600 ? 12 : 0,
+      paddingHorizontal: horizontalInset,
     },
     inlineActions: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       gap: 12,
-      paddingHorizontal:
-        typeof window !== "undefined" && window.innerWidth < 600 ? 12 : 0,
+      paddingHorizontal: horizontalInset,
       marginBottom: 12,
       width: "100%",
     },
@@ -2103,7 +2102,7 @@ const createStyles = (colors) =>
       justifyContent: "center",
       alignItems: "center",
       backgroundColor: "rgba(0,0,0,0.5)",
-      padding: 20,
+      padding: Platform.OS === "web" ? 20 : 8,
     },
     modalContent: {
       backgroundColor: colors.card,
@@ -2120,10 +2119,13 @@ const createStyles = (colors) =>
     bulkImportModalContent: {
       backgroundColor: colors.card,
       width: "100%",
-      maxWidth: 920,
-      maxHeight: "88%",
-      borderRadius: 16,
-      padding: 18,
+      maxWidth: Platform.OS === "web" ? 1200 : 760,
+      height: Platform.OS === "web" ? "90%" : "94%",
+      minHeight: Platform.OS === "web" ? 520 : 360,
+      maxHeight: Platform.OS === "web" ? "90%" : "96%",
+      borderRadius: Platform.OS === "web" ? 16 : 12,
+      padding: Platform.OS === "web" ? 18 : 12,
+      overflow: "hidden",
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.3,
@@ -2132,7 +2134,9 @@ const createStyles = (colors) =>
     },
     bulkImportModalBody: {
       flex: 1,
-      minHeight: 420,
+      minHeight: Platform.OS === "web" ? 420 : 320,
+      maxHeight: "100%",
+      overflow: "hidden",
     },
     modalHeader: {
       flexDirection: "row",
@@ -2333,6 +2337,7 @@ const createStyles = (colors) =>
       paddingVertical: 10,
     },
   });
+};
 
 const showAlert = (title, message, buttons = [{ text: "OK" }]) => {
   if (Platform.OS === "web") {

@@ -9,7 +9,7 @@ import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
 import { SettingsProvider } from "../contexts/SettingsContext";
 import { NotificationProvider } from "../contexts/NotificationContext";
 
-const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
 
 function ThemedPaperProvider({ children }) {
   const { colors, isDarkMode, typography } = useTheme();
