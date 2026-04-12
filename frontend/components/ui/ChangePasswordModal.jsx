@@ -16,7 +16,6 @@ import COLORS from "../../constants/custom-colors";
 import { useAuthStore } from "../../store/authStore";
 
 export default function ChangePasswordModal({ visible, onClose }) {
-  const [email, setEmail] = useState("");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -24,10 +23,9 @@ export default function ChangePasswordModal({ visible, onClose }) {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const { changePassword, isLoading } = useAuthStore();
+  const { user, changePassword, isLoading } = useAuthStore();
 
   const reset = () => {
-    setEmail("");
     setOldPassword("");
     setNewPassword("");
     setConfirmPassword("");
@@ -36,14 +34,12 @@ export default function ChangePasswordModal({ visible, onClose }) {
     setShowConfirm(false);
   };
 
-  const validateEmail = (value) => /[^\s@]+@[^\s@]+\.[^\s@]+/.test(value);
-
   const handleSubmit = async () => {
-    if (!email || !oldPassword || !newPassword || !confirmPassword) {
+    if (!oldPassword || !newPassword || !confirmPassword) {
       return showMsg("All fields are required");
     }
-    if (!validateEmail(email)) {
-      return showMsg("Please enter a valid email address");
+    if (!user?.email) {
+      return showMsg("No account email found. Please log in again.");
     }
     if (newPassword.length < 8) {
       return showMsg("New password must be at least 8 characters");
@@ -52,7 +48,11 @@ export default function ChangePasswordModal({ visible, onClose }) {
       return showMsg("New passwords do not match");
     }
 
-    const res = await changePassword({ email, oldPassword, newPassword });
+    const res = await changePassword({
+      email: user.email,
+      oldPassword,
+      newPassword,
+    });
     if (!res.success) {
       return showMsg(res.error || "Failed to change password");
     }
@@ -86,26 +86,6 @@ export default function ChangePasswordModal({ visible, onClose }) {
           </View>
 
           <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="mail-outline"
-                  size={20}
-                  color={COLORS.primary}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  placeholderTextColor={COLORS.placeholderText}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-            </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Old Password</Text>
@@ -118,7 +98,7 @@ export default function ChangePasswordModal({ visible, onClose }) {
                 />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter old password (default set by admin)"
+                  placeholder="Enter old password"
                   placeholderTextColor={COLORS.placeholderText}
                   value={oldPassword}
                   onChangeText={setOldPassword}

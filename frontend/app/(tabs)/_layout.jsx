@@ -215,7 +215,9 @@ export default function TabLayout() {
           options={{
             href: null, // hide from tab navigation
             title: "Creator's Workshop",
-            headerShown: Platform.OS !== "web",
+            // Android uses the in-screen Creator header/back button.
+            // Keep native header off there to avoid duplicate blue back controls.
+            headerShown: Platform.OS !== "web" && Platform.OS !== "android",
             headerLeft: () => (
               <TouchableOpacity
                 accessibilityRole="button"
@@ -299,6 +301,24 @@ export default function TabLayout() {
             // Hide from nav (accessible via arcade page) but ensure no access restrictions
             href: null,
             headerShown: false, // Changed to false to remove any potential header restrictions
+          }}
+        />
+
+        <Tabs.Screen
+          name="quick-play"
+          options={{
+            href: null,
+            title: "Quick Play",
+            headerShown: Platform.OS !== "web",
+          }}
+        />
+
+        <Tabs.Screen
+          name="knowledge-relay"
+          options={{
+            href: null,
+            title: "Knowledge Relay",
+            headerShown: Platform.OS !== "web",
           }}
         />
 

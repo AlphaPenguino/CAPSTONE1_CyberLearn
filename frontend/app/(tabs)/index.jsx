@@ -5,6 +5,7 @@ import {
   TouchableWithoutFeedback,
   Image,
   ScrollView,
+  Modal,
   ActivityIndicator,
   RefreshControl,
   Alert,
@@ -13,6 +14,7 @@ import {
   Dimensions,
   Animated,
   useWindowDimensions,
+  TextInput,
 } from "react-native";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuthStore } from "../../store/authStore";
@@ -158,6 +160,14 @@ const [importing, setImporting] = React.useState(false);
   const [userSubjects, setUserSubjects] = useState([]);
   const [showSubjectSelector, setShowSubjectSelector] = useState(false);
   const [showBackgroundSelector, setShowBackgroundSelector] = useState(false);
+  const [showJoinSubjectModal, setShowJoinSubjectModal] = useState(false);
+  const [joinSubjectCode, setJoinSubjectCode] = useState("");
+  const [joinSubjectSubmitting, setJoinSubjectSubmitting] = useState(false);
+  const [joinSubjectError, setJoinSubjectError] = useState("");
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyItems, setHistoryItems] = useState([]);
   const [selectedBackground, setSelectedBackground] = useState(
     BACKGROUND_OPTIONS[0]
   );
@@ -1289,6 +1299,133 @@ const handleImportCyberQuestsWeb = () => {
   const webMapStripWidth = Platform.OS === "web" ? Math.min(viewportWidth, 800) : viewportWidth;
   const webMapStripLeft = Platform.OS === "web" ? (viewportWidth - webMapStripWidth) / 2 : 0;
 
+  const handleOpenJoinSubject = useCallback(() => {
+    if (Platform.OS === "web") {
+      setJoinSubjectCode("");
+      setJoinSubjectError("");
+      setShowJoinSubjectModal(true);
+      return;
+    }
+    router.push("/join-subject");
+  }, [router]);
+
+  const handleCloseJoinSubjectModal = useCallback(() => {
+    setShowJoinSubjectModal(false);
+    setJoinSubjectSubmitting(false);
+    setJoinSubjectError("");
+  }, []);
+
+  const handleSubmitJoinSubjectWeb = useCallback(async () => {
+    const code = joinSubjectCode.trim();
+    if (!code) {
+      setJoinSubjectError("Please enter a subject code.");
+      return;
+    }
+    if (!token) {
+      setJoinSubjectError("Authentication required. Please log in again.");
+      return;
+    }
+
+    try {
+      setJoinSubjectSubmitting(true);
+      setJoinSubjectError("");
+
+      const response = await fetch(`${API_URL}/subjects/join`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ subjectCode: code }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      const message = data?.message || "";
+      const backendError = data?.error || "";
+      const legacySectionValidation =
+        /no_section is not a valid section|User validation failed/i.test(
+          backendError || message
+        );
+
+      if ((response.ok && data.success) || legacySectionValidation) {
+        handleCloseJoinSubjectModal();
+        await fetchUserSubjects();
+        await fetchModules();
+        if (typeof window !== "undefined") {
+          window.alert("Successfully joined subject.");
+        }
+        return;
+      }
+
+      setJoinSubjectError(data?.message || "Failed to join subject.");
+      setJoinSubjectCode("");
+    } catch (error) {
+      console.error("Error joining subject:", error);
+      setJoinSubjectError("Failed to join subject. Please try again.");
+      setJoinSubjectCode("");
+    } finally {
+      setJoinSubjectSubmitting(false);
+    }
+  }, [
+    joinSubjectCode,
+    token,
+    handleCloseJoinSubjectModal,
+    fetchUserSubjects,
+    fetchModules,
+  ]);
+
+  const fetchCyberlearnHistoryWeb = useCallback(async () => {
+    if (!token) {
+      setHistoryError("Authentication required. Please log in again.");
+      return;
+    }
+
+    try {
+      setHistoryLoading(true);
+      setHistoryError("");
+
+      const response = await fetch(`${API_URL}/users/cyberlearn-history`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch history (${response.status})`);
+      }
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.message || "Failed to fetch history");
+      }
+
+      setHistoryItems(Array.isArray(data.data) ? data.data : []);
+    } catch (err) {
+      console.error("Error fetching cyberlearn history:", err);
+      setHistoryError(err?.message || "Failed to load history");
+      setHistoryItems([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [token]);
+
+  const handleOpenHistory = useCallback(() => {
+    if (Platform.OS === "web") {
+      setShowHistoryModal(true);
+      fetchCyberlearnHistoryWeb();
+      return;
+    }
+    router.push("/cyberlearn-history");
+  }, [fetchCyberlearnHistoryWeb, router]);
+
+  const handleCloseHistoryModal = useCallback(() => {
+    setShowHistoryModal(false);
+  }, []);
+
+  const formatHistoryCount = (value) =>
+    typeof value === "number" ? value : "N/A";
+
   return (
     <ExpoLinearGradient colors={screenGradient} style={styles.container}>
       {showWebMapBackdrop && (
@@ -1424,13 +1561,13 @@ const handleImportCyberQuestsWeb = () => {
               <>
                 <TouchableOpacity
                   style={styles.joinButton}
-                  onPress={() => router.push("/join-subject")}
+                  onPress={handleOpenJoinSubject}
                 >
                   <Ionicons name="enter" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.historyHeaderButton}
-                  onPress={() => router.push("/cyberlearn-history")}
+                  onPress={handleOpenHistory}
                 >
                   <Ionicons
                     name="time-outline"
@@ -3021,6 +3158,190 @@ const handleImportCyberQuestsWeb = () => {
             )}
           </View>
         </View>
+      )}
+
+      {Platform.OS === "web" && showJoinSubjectModal && (
+        <Modal
+          visible={showJoinSubjectModal}
+          transparent
+          animationType="fade"
+          onRequestClose={handleCloseJoinSubjectModal}
+        >
+          <View style={styles.joinSubjectModalOverlay}>
+            <TouchableWithoutFeedback onPress={handleCloseJoinSubjectModal}>
+              <View style={styles.joinSubjectModalBackdrop} />
+            </TouchableWithoutFeedback>
+            <View
+              style={[
+                styles.joinSubjectModalCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <View style={styles.joinSubjectModalHeader}>
+                <Text style={[styles.joinSubjectModalTitle, { color: colors.text }]}> 
+                  Join Subject
+                </Text>
+                <TouchableOpacity
+                  style={styles.joinSubjectModalCloseBtn}
+                  onPress={handleCloseJoinSubjectModal}
+                >
+                  <Ionicons name="close" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <TextInput
+                value={joinSubjectCode}
+                onChangeText={setJoinSubjectCode}
+                placeholder="Enter subject code"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="characters"
+                style={[
+                  styles.joinSubjectModalInput,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+              />
+
+              {joinSubjectError ? (
+                <Text style={styles.joinSubjectModalError}>{joinSubjectError}</Text>
+              ) : null}
+
+              <View style={styles.joinSubjectModalActions}>
+                <TouchableOpacity
+                  style={[styles.joinSubjectModalActionBtn, styles.joinSubjectModalCancelBtn]}
+                  onPress={handleCloseJoinSubjectModal}
+                  disabled={joinSubjectSubmitting}
+                >
+                  <Text style={styles.joinSubjectModalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.joinSubjectModalActionBtn, styles.joinSubjectModalJoinBtn]}
+                  onPress={handleSubmitJoinSubjectWeb}
+                  disabled={joinSubjectSubmitting}
+                >
+                  <Text style={styles.joinSubjectModalJoinText}>
+                    {joinSubjectSubmitting ? "Joining..." : "Join"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {Platform.OS === "web" && showHistoryModal && (
+        <Modal
+          visible={showHistoryModal}
+          transparent
+          animationType="fade"
+          onRequestClose={handleCloseHistoryModal}
+        >
+          <View style={styles.historyModalOverlay}>
+            <TouchableWithoutFeedback onPress={handleCloseHistoryModal}>
+              <View style={styles.historyModalBackdrop} />
+            </TouchableWithoutFeedback>
+
+            <View
+              style={[
+                styles.historyModalCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <View style={styles.historyModalHeader}>
+                <Text style={[styles.historyModalTitle, { color: colors.text }]}>
+                  CyberLearn History
+                </Text>
+                <TouchableOpacity
+                  style={styles.historyModalCloseBtn}
+                  onPress={handleCloseHistoryModal}
+                >
+                  <Ionicons name="close" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.historyModalScroll}
+                contentContainerStyle={styles.historyModalScrollContent}
+                showsVerticalScrollIndicator={true}
+                persistentScrollbar={Platform.OS === "web"}
+              >
+                {historyLoading && (
+                  <View style={styles.historyModalCentered}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={[styles.historyModalInfoText, { color: colors.textSecondary }]}>
+                      Loading history...
+                    </Text>
+                  </View>
+                )}
+
+                {!historyLoading && historyError ? (
+                  <View style={styles.historyModalCentered}>
+                    <Ionicons name="alert-circle" size={44} color="#EF4444" />
+                    <Text style={styles.historyModalErrorText}>{historyError}</Text>
+                    <TouchableOpacity
+                      style={[styles.historyModalRetryBtn, { backgroundColor: colors.primary }]}
+                      onPress={fetchCyberlearnHistoryWeb}
+                    >
+                      <Text style={styles.historyModalRetryText}>Retry</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                {!historyLoading && !historyError && historyItems.length === 0 ? (
+                  <View style={styles.historyModalCentered}>
+                    <Ionicons name="time-outline" size={42} color={colors.textSecondary} />
+                    <Text style={[styles.historyModalInfoText, { color: colors.textSecondary }]}>
+                      No CyberLearn history yet.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {!historyLoading && !historyError && historyItems.length > 0
+                  ? historyItems.map((item, index) => (
+                      <View
+                        key={item.id || item._id || `${item.title || "history"}-${index}`}
+                        style={[
+                          styles.historyModalItem,
+                          {
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.historyModalItemTitle, { color: colors.text }]}>
+                          {item.title || "CyberLearn Quest"}
+                        </Text>
+                        <Text style={[styles.historyModalItemDetail, { color: colors.textSecondary }]}> 
+                          Subject: {item.subjectName || "N/A"}
+                        </Text>
+                        <Text style={[styles.historyModalItemDetail, { color: colors.textSecondary }]}> 
+                          Level: {item.level ?? "N/A"} • Attempt: {item.attemptNumber ?? "N/A"}
+                        </Text>
+                        <Text style={[styles.historyModalItemDetail, { color: colors.textSecondary }]}> 
+                          Score: {typeof item.score === "number" ? `${item.score}%` : "N/A"}
+                        </Text>
+                        <Text style={[styles.historyModalItemDetail, { color: colors.textSecondary }]}> 
+                          Correct: {formatHistoryCount(item.correctAnswers)} • Incorrect: {formatHistoryCount(item.incorrectAnswers)}
+                          {typeof item.totalQuestions === "number"
+                            ? ` • Total: ${item.totalQuestions}`
+                            : ""}
+                        </Text>
+                        <Text style={[styles.historyModalItemDetail, { color: colors.textSecondary }]}> 
+                          Difficulty: {item.difficulty || "medium"}
+                        </Text>
+                        <Text style={[styles.historyModalItemDetail, { color: colors.textSecondary }]}> 
+                          Finished: {item.completedAt ? new Date(item.completedAt).toLocaleString() : "N/A"}
+                        </Text>
+                      </View>
+                    ))
+                  : null}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       )}
 
       {/* Section/background selector overlay - visible when any dropdown is open */}
@@ -4715,6 +5036,188 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "transparent",
     zIndex: 15, // Lower than dropdown but higher than content
+  },
+  joinSubjectModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  joinSubjectModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(2, 6, 23, 0.58)",
+  },
+  joinSubjectModalCard: {
+    width: "100%",
+    maxWidth: 500,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 20,
+    gap: 14,
+    zIndex: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  joinSubjectModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  joinSubjectModalTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  joinSubjectModalCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(148, 163, 184, 0.16)",
+  },
+  joinSubjectModalInput: {
+    height: 46,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  joinSubjectModalError: {
+    color: "#ef4444",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  joinSubjectModalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+  },
+  joinSubjectModalActionBtn: {
+    minWidth: 96,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  joinSubjectModalCancelBtn: {
+    backgroundColor: "rgba(148, 163, 184, 0.2)",
+  },
+  joinSubjectModalCancelText: {
+    color: "#1f2937",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  joinSubjectModalJoinBtn: {
+    backgroundColor: COLORS.primary,
+  },
+  joinSubjectModalJoinText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  historyModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  historyModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(2, 6, 23, 0.58)",
+  },
+  historyModalCard: {
+    width: "100%",
+    maxWidth: 840,
+    height: "84%",
+    maxHeight: "84%",
+    borderRadius: 14,
+    borderWidth: 1,
+    zIndex: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    overflow: "hidden",
+    display: "flex",
+  },
+  historyModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148, 163, 184, 0.25)",
+  },
+  historyModalTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  historyModalCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(148, 163, 184, 0.16)",
+  },
+  historyModalScroll: {
+    flex: 1,
+    minHeight: 0,
+    ...(Platform.OS === "web" && {
+      overflowY: "scroll",
+      scrollbarWidth: "thin",
+    }),
+  },
+  historyModalScrollContent: {
+    padding: 14,
+    paddingBottom: 20,
+    gap: 10,
+    ...(Platform.OS === "web" && {
+      paddingRight: 16,
+    }),
+  },
+  historyModalCentered: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 22,
+  },
+  historyModalInfoText: {
+    marginTop: 10,
+    fontSize: 14,
+    textAlign: "center",
+  },
+  historyModalErrorText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: "#EF4444",
+    textAlign: "center",
+  },
+  historyModalRetryBtn: {
+    marginTop: 14,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  historyModalRetryText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  historyModalItem: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+  },
+  historyModalItemTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  historyModalItemDetail: {
+    fontSize: 13,
+    marginTop: 2,
   },
   multiSubjectBadge: {
     minWidth: 20,

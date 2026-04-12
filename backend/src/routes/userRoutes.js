@@ -907,6 +907,96 @@ router.get("/cyberlearn-history", protectRoute, async (req, res) => {
 });
 
 /**
+ * @route   PATCH /api/users/me/username
+ * @desc    Update current authenticated user's username
+ * @access  Private
+ */
+router.patch("/me/username", protectRoute, async (req, res) => {
+  try {
+    const rawUsername = typeof req.body?.username === "string" ? req.body.username : "";
+    const nextUsername = rawUsername.trim().toLowerCase();
+
+    if (!nextUsername) {
+      return res.status(400).json({
+        success: false,
+        message: "Username is required",
+      });
+    }
+
+    if (nextUsername.length < 3) {
+      return res.status(400).json({
+        success: false,
+        message: "Username should be at least 3 characters long",
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.username === nextUsername) {
+      return res.json({
+        success: true,
+        message: "Username is already up to date",
+        user: {
+          _id: user._id,
+          id: user._id,
+          username: user.username,
+          fullName: user.fullName,
+          email: user.email,
+          privilege: user.privilege,
+          section: user.section,
+          sections: user.sections,
+          currentSection: user.currentSection,
+          profileImage: constructProfileImageUrl(user.profileImage),
+          profileImageTimestamp: Date.now(),
+        },
+      });
+    }
+
+    const usernameExists = await User.findOne({ username: nextUsername });
+    if (usernameExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Username already taken",
+      });
+    }
+
+    user.username = nextUsername;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Username updated successfully",
+      user: {
+        _id: user._id,
+        id: user._id,
+        username: user.username,
+        fullName: user.fullName,
+        email: user.email,
+        privilege: user.privilege,
+        section: user.section,
+        sections: user.sections,
+        currentSection: user.currentSection,
+        profileImage: constructProfileImageUrl(user.profileImage),
+        profileImageTimestamp: Date.now(),
+      },
+    });
+  } catch (error) {
+    console.error("Error updating current username:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update username",
+      error: error.message,
+    });
+  }
+});
+
+/**
  * @route   GET /api/users/:id
  * * @desc    Get user by ID
  * @access  Private/instructor

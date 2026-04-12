@@ -3,7 +3,6 @@ import {
   Platform,
   View,
   Text,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Animated,
@@ -17,6 +16,10 @@ import {
   TextInput as RNTextInput,
   KeyboardAvoidingView,
 } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { TextInput } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -70,6 +73,7 @@ export default function Create() {
   const highlightColor = isDarkMode ? colors.primary : "#1976d2";
   console.log("🚀 ~ Create ~ edit:", edit);
   const { user, token } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -92,6 +96,7 @@ export default function Create() {
     console.log("🔍 Create Component - Initial activeCreator:", initialState);
     return initialState;
   });
+  const questMenuControlRef = useRef(null);
 
   // Function to clear edit mode and show options
   const resetToCreateMode = useCallback(() => {
@@ -100,6 +105,48 @@ export default function Create() {
     // Clear URL parameters by replacing the current route
     router.replace("/create");
   }, [router]);
+
+  const handleCreatorBack = useCallback(() => {
+    // In creator flows, go back to creator options first and clear edit params when needed.
+    if (activeCreator) {
+      questMenuControlRef.current?.closeMenu?.();
+      if (isEditMode) {
+        resetToCreateMode();
+      } else {
+        setActiveCreator("");
+      }
+      return;
+    }
+
+    if (openedFromInstructorTools) {
+      router.replace({
+        pathname: "/(tabs)/instructor",
+        params: { tab: "tools" },
+      });
+      return;
+    }
+
+    if (openedFromIndex) {
+      router.replace("/(tabs)");
+      return;
+    }
+
+    router.back();
+  }, [
+    activeCreator,
+    isEditMode,
+    openedFromIndex,
+    openedFromInstructorTools,
+    resetToCreateMode,
+    router,
+    questMenuControlRef,
+  ]);
+
+  useEffect(() => {
+    if (activeCreator !== "cyber-quest-map") {
+      questMenuControlRef.current?.closeMenu?.();
+    }
+  }, [activeCreator]);
 
   // Handle URL parameter changes
   useEffect(() => {
@@ -205,7 +252,7 @@ export default function Create() {
   const renderCreateOptions = () => (
     <View style={styles.optionsContainer}>
       <CreatorCard
-        title="Cyber Quest Map"
+        title="Quest"
         description="Create instructor-led quizzes with multiple choice questions for subjects"
         icon="map"
         gradient={["#3f9f86", "#2f4f46"]}
@@ -219,7 +266,7 @@ export default function Create() {
       />
 
       <CreatorCard
-        title="Subject"
+        title="Course"
         description="Create and manage subjects with multi-subject student enrollment"
         icon="people"
         gradient={["#5fd2cd", "#3f9f86"]}
@@ -228,7 +275,11 @@ export default function Create() {
     </View>
   );
 
-  const CyberQuestCreator = ({ isCreateMode = false }) => {
+  const CyberQuestCreator = ({
+    isCreateMode = false,
+    useCompactHeader = false,
+    menuControlRef = null,
+  }) => {
     const params = useLocalSearchParams();
     const router = useRouter();
     const editQuestId = params.edit;
@@ -260,9 +311,24 @@ export default function Create() {
       type: "success", // "success" or "error"
       onConfirm: () => {},
     });
-
-    // State for import/export context menu
     const [showImportExportMenu, setShowImportExportMenu] = useState(false);
+
+    const [showQuestionExamples, setShowQuestionExamples] = useState(true);
+
+    useEffect(() => {
+      if (!menuControlRef) return;
+
+      menuControlRef.current = {
+        toggleMenu: () => setShowImportExportMenu((v) => !v),
+        closeMenu: () => setShowImportExportMenu(false),
+      };
+
+      return () => {
+        if (menuControlRef.current) {
+          menuControlRef.current = null;
+        }
+      };
+    }, [menuControlRef]);
 
     // State for instructions modal
     const [showInstructionsModal, setShowInstructionsModal] = useState(false);
@@ -1107,90 +1173,92 @@ export default function Create() {
               )}
 
               {/* Sample Examples for Instructors */}
-              <View
-                style={[
-                  styles.examplesContainer,
-                  {
-                    backgroundColor: `${colors.primary}10`,
-                    borderColor: colors.primary,
-                    marginTop: 20,
-                  },
-                ]}
-              >
-                <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                  📚 Multiple Choice Question Examples
-                </Text>
+              {showQuestionExamples && (
+                <View
+                  style={[
+                    styles.examplesContainer,
+                    {
+                      backgroundColor: `${colors.primary}10`,
+                      borderColor: colors.primary,
+                      marginTop: 20,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.examplesTitle, { color: colors.primary }]}>
+                    📚 Multiple Choice Question Examples
+                  </Text>
 
-                <View style={styles.exampleItem}>
-                  <Text style={[styles.exampleLabel, { color: colors.text }]}>
-                    Example 1: Network Security
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Question: &ldquo;Which protocol is used for secure web
-                    browsing?&rdquo;
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Choices: A) HTTP, B) HTTPS ✓, C) FTP, D) SMTP
-                  </Text>
-                </View>
+                  <View style={styles.exampleItem}>
+                    <Text style={[styles.exampleLabel, { color: colors.text }]}>
+                      Example 1: Network Security
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Question: &ldquo;Which protocol is used for secure web
+                      browsing?&rdquo;
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Choices: A) HTTP, B) HTTPS ✓, C) FTP, D) SMTP
+                    </Text>
+                  </View>
 
-                <View style={styles.exampleItem}>
-                  <Text style={[styles.exampleLabel, { color: colors.text }]}>
-                    Example 2: Malware Types
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Question: &ldquo;What type of malware replicates itself
-                    across networks?&rdquo;
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Choices: A) Virus, B) Trojan, C) Worm ✓, D) Ransomware
-                  </Text>
-                </View>
+                  <View style={styles.exampleItem}>
+                    <Text style={[styles.exampleLabel, { color: colors.text }]}>
+                      Example 2: Malware Types
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Question: &ldquo;What type of malware replicates itself
+                      across networks?&rdquo;
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Choices: A) Virus, B) Trojan, C) Worm ✓, D) Ransomware
+                    </Text>
+                  </View>
 
-                <View style={styles.exampleItem}>
-                  <Text style={[styles.exampleLabel, { color: colors.text }]}>
-                    Example 3: Authentication
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Question: &ldquo;Which provides the strongest
-                    authentication?&rdquo;
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Choices: A) Password only, B) Two-factor authentication ✓,
-                    C) Username only, D) Biometrics only
-                  </Text>
+                  <View style={styles.exampleItem}>
+                    <Text style={[styles.exampleLabel, { color: colors.text }]}>
+                      Example 3: Authentication
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Question: &ldquo;Which provides the strongest
+                      authentication?&rdquo;
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Choices: A) Password only, B) Two-factor authentication ✓,
+                      C) Username only, D) Biometrics only
+                    </Text>
+                  </View>
                 </View>
-              </View>
+              )}
             </View>
           );
 
@@ -1257,88 +1325,90 @@ export default function Create() {
               />
 
               {/* Sample Examples for Instructors */}
-              <View
-                style={[
-                  styles.examplesContainer,
-                  {
-                    backgroundColor: `${colors.primary}10`,
-                    borderColor: colors.primary,
-                    marginTop: 20,
-                  },
-                ]}
-              >
-                <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                  📚 Code Missing Question Examples
-                </Text>
+              {showQuestionExamples && (
+                <View
+                  style={[
+                    styles.examplesContainer,
+                    {
+                      backgroundColor: `${colors.primary}10`,
+                      borderColor: colors.primary,
+                      marginTop: 20,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.examplesTitle, { color: colors.primary }]}>
+                    📚 Code Missing Question Examples
+                  </Text>
 
-                <View style={styles.exampleItem}>
-                  <Text style={[styles.exampleLabel, { color: colors.text }]}>
-                    Example 1: Python Password Check
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Code Template: &ldquo;if ____ &gt; 8: print(&apos;Strong
-                    password&apos;)&rdquo;
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Correct Answer: len(password)
-                  </Text>
-                </View>
+                  <View style={styles.exampleItem}>
+                    <Text style={[styles.exampleLabel, { color: colors.text }]}>
+                      Example 1: Python Password Check
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Code Template: &ldquo;if ____ &gt; 8: print(&apos;Strong
+                      password&apos;)&rdquo;
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Correct Answer: len(password)
+                    </Text>
+                  </View>
 
-                <View style={styles.exampleItem}>
-                  <Text style={[styles.exampleLabel, { color: colors.text }]}>
-                    Example 2: SQL Injection Prevention
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Code Template: &ldquo;SELECT * FROM users WHERE id =
-                    ____&rdquo;
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Correct Answer: ?
-                  </Text>
-                </View>
+                  <View style={styles.exampleItem}>
+                    <Text style={[styles.exampleLabel, { color: colors.text }]}>
+                      Example 2: SQL Injection Prevention
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Code Template: &ldquo;SELECT * FROM users WHERE id =
+                      ____&rdquo;
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Correct Answer: ?
+                    </Text>
+                  </View>
 
-                <View style={styles.exampleItem}>
-                  <Text style={[styles.exampleLabel, { color: colors.text }]}>
-                    Example 3: JavaScript Input Validation
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Code Template: &ldquo;const sanitized = input.____();&rdquo;
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Correct Answer: trim
-                  </Text>
+                  <View style={styles.exampleItem}>
+                    <Text style={[styles.exampleLabel, { color: colors.text }]}>
+                      Example 3: JavaScript Input Validation
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Code Template: &ldquo;const sanitized = input.____();&rdquo;
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Correct Answer: trim
+                    </Text>
+                  </View>
                 </View>
-              </View>
+              )}
             </View>
           );
 
@@ -1405,91 +1475,93 @@ export default function Create() {
               )}
 
               {/* Sample Examples for Instructors */}
-              <View
-                style={[
-                  styles.examplesContainer,
-                  {
-                    backgroundColor: `${colors.primary}10`,
-                    borderColor: colors.primary,
-                    marginTop: 20,
-                  },
-                ]}
-              >
-                <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                  📚 Fill in Blanks Question Examples
-                </Text>
+              {showQuestionExamples && (
+                <View
+                  style={[
+                    styles.examplesContainer,
+                    {
+                      backgroundColor: `${colors.primary}10`,
+                      borderColor: colors.primary,
+                      marginTop: 20,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.examplesTitle, { color: colors.primary }]}>
+                    📚 Fill in Blanks Question Examples
+                  </Text>
 
-                <View style={styles.exampleItem}>
-                  <Text style={[styles.exampleLabel, { color: colors.text }]}>
-                    Example 1: Network Security Terms
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Question: &ldquo;A ____ is a security system that monitors
-                    network traffic. It can be hardware or ____ based.&rdquo;
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Answers: 1) firewall, 2) software
-                  </Text>
-                </View>
+                  <View style={styles.exampleItem}>
+                    <Text style={[styles.exampleLabel, { color: colors.text }]}>
+                      Example 1: Network Security Terms
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Question: &ldquo;A ____ is a security system that monitors
+                      network traffic. It can be hardware or ____ based.&rdquo;
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Answers: 1) firewall, 2) software
+                    </Text>
+                  </View>
 
-                <View style={styles.exampleItem}>
-                  <Text style={[styles.exampleLabel, { color: colors.text }]}>
-                    Example 2: Encryption Concepts
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Question: &ldquo;____ encryption uses the same key for
-                    encryption and decryption, while ____ encryption uses
-                    different keys.&rdquo;
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Answers: 1) Symmetric, 2) Asymmetric
-                  </Text>
-                </View>
+                  <View style={styles.exampleItem}>
+                    <Text style={[styles.exampleLabel, { color: colors.text }]}>
+                      Example 2: Encryption Concepts
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Question: &ldquo;____ encryption uses the same key for
+                      encryption and decryption, while ____ encryption uses
+                      different keys.&rdquo;
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Answers: 1) Symmetric, 2) Asymmetric
+                    </Text>
+                  </View>
 
-                <View style={styles.exampleItem}>
-                  <Text style={[styles.exampleLabel, { color: colors.text }]}>
-                    Example 3: Authentication Methods
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Question: &ldquo;Multi-factor authentication requires at
-                    least ____ different types of credentials to verify
-                    identity.&rdquo;
-                  </Text>
-                  <Text
-                    style={[
-                      styles.exampleText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Answers: 1) two (or 2)
-                  </Text>
+                  <View style={styles.exampleItem}>
+                    <Text style={[styles.exampleLabel, { color: colors.text }]}>
+                      Example 3: Authentication Methods
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Question: &ldquo;Multi-factor authentication requires at
+                      least ____ different types of credentials to verify
+                      identity.&rdquo;
+                    </Text>
+                    <Text
+                      style={[
+                        styles.exampleText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Answers: 1) two (or 2)
+                    </Text>
+                  </View>
                 </View>
-              </View>
+              )}
             </View>
           );
 
@@ -1565,19 +1637,20 @@ export default function Create() {
               )}
 
               {/* Sample Examples for Instructors */}
-              <View
-                style={[
-                  styles.examplesContainer,
-                  {
-                    backgroundColor: `${colors.primary}10`,
-                    borderColor: colors.primary,
-                    marginTop: 20,
-                  },
-                ]}
-              >
-                <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                  📚 Code Ordering Question Examples
-                </Text>
+              {showQuestionExamples && (
+                <View
+                  style={[
+                    styles.examplesContainer,
+                    {
+                      backgroundColor: `${colors.primary}10`,
+                      borderColor: colors.primary,
+                      marginTop: 20,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.examplesTitle, { color: colors.primary }]}>
+                    📚 Code Ordering Question Examples
+                  </Text>
 
                 <View style={styles.exampleItem}>
                   <Text style={[styles.exampleLabel, { color: colors.text }]}>
@@ -1653,6 +1726,7 @@ export default function Create() {
                   </Text>
                 </View>
               </View>
+              )}
             </View>
           );
 
@@ -1842,19 +1916,20 @@ export default function Create() {
               )}
 
               {/* Sample Examples for Instructors */}
-              <View
-                style={[
-                  styles.examplesContainer,
-                  {
-                    backgroundColor: `${colors.primary}10`,
-                    borderColor: colors.primary,
-                    marginTop: 20,
-                  },
-                ]}
-              >
-                <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                  📚 Sorting Question Examples
-                </Text>
+              {showQuestionExamples && (
+                <View
+                  style={[
+                    styles.examplesContainer,
+                    {
+                      backgroundColor: `${colors.primary}10`,
+                      borderColor: colors.primary,
+                      marginTop: 20,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.examplesTitle, { color: colors.primary }]}>
+                    📚 Sorting Question Examples
+                  </Text>
 
                 <View style={styles.exampleItem}>
                   <Text style={[styles.exampleLabel, { color: colors.text }]}>
@@ -1975,6 +2050,7 @@ export default function Create() {
                   </Text>
                 </View>
               </View>
+              )}
             </View>
           );
 
@@ -2060,19 +2136,20 @@ export default function Create() {
               </TouchableOpacity>
 
               {/* Sample Examples for Instructors */}
-              <View
-                style={[
-                  styles.examplesContainer,
-                  {
-                    backgroundColor: `${colors.primary}10`,
-                    borderColor: colors.primary,
-                    marginTop: 20,
-                  },
-                ]}
-              >
-                <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                  💡 Cipher Question Examples
-                </Text>
+              {showQuestionExamples && (
+                <View
+                  style={[
+                    styles.examplesContainer,
+                    {
+                      backgroundColor: `${colors.primary}10`,
+                      borderColor: colors.primary,
+                      marginTop: 20,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.examplesTitle, { color: colors.primary }]}>
+                    💡 Cipher Question Examples
+                  </Text>
 
                 <View style={styles.exampleItem}>
                   <Text style={[styles.exampleLabel, { color: colors.text }]}>
@@ -2166,6 +2243,7 @@ export default function Create() {
                   </Text>
                 </View>
               </View>
+              )}
             </View>
           );
 
@@ -2236,6 +2314,54 @@ export default function Create() {
         }
       });
     };
+
+    const getValidationMessages = () => {
+      const messages = [];
+
+      if (!questData.title.trim()) {
+        messages.push("Please enter a quest title");
+      }
+      if (!questData.description.trim()) {
+        messages.push("Please enter a quest description");
+      }
+      if (!questData.selectedSection) {
+        messages.push("Please select a subject");
+      }
+      if (questData.questions.length < 1) {
+        messages.push("Please add at least one question");
+      }
+      if (questData.questions.some((q) => !q.text.trim())) {
+        messages.push("All questions must have text");
+      }
+
+      const hasIncompleteQuestionFields = questData.questions.some((q) => {
+        switch (q.type) {
+          case "multipleChoice":
+            return q.choices && q.choices.some((c) => !c.trim());
+          case "codeMissing":
+            return (
+              !q.codeTemplate ||
+              !q.correctAnswer ||
+              q.codeTemplate.trim().length === 0 ||
+              q.correctAnswer.trim().length === 0
+            );
+          case "fillInBlanks":
+            return !q.blanks || q.blanks.some((b) => !b.trim());
+          case "codeOrdering":
+            return !q.codeBlocks || q.codeBlocks.some((b) => !b.code.trim());
+          default:
+            return false;
+        }
+      });
+
+      if (hasIncompleteQuestionFields) {
+        messages.push("Please complete all question fields");
+      }
+
+      return messages;
+    };
+
+    const validationMessages = getValidationMessages();
 
     const createCyberQuest = async () => {
       if (!isValid()) {
@@ -2338,68 +2464,51 @@ export default function Create() {
 
     return (
       <View style={styles.formContainer}>
-        <View style={styles.formHeader}>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => {
-              console.log(
-                "🔍 Cancel button clicked - isCreateMode:",
-                isCreateMode
-              );
-              if (isCreateMode) {
-                // In create mode, cancel returns to creator options
-                setActiveCreator("");
-              } else {
-                // In edit mode, cancel returns to home tab & clears edit state
-                resetToCreateMode();
-                router.push("/(tabs)");
-              }
-            }}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          {/* Apply dynamic color so header is visible in dark mode */}
-          <Text style={[styles.formTitle, { color: colors.textSecondary }]}>
-            🗺️ {isEditing ? "Edit" : "Create"} Cyber Quest Map
-          </Text>
+        {!useCompactHeader && (
+          <View style={styles.formHeader}>
+            {/* Apply dynamic color so header is visible in dark mode */}
+            <Text style={[styles.formTitle, { color: colors.textSecondary }]}> 
+              🗺️ {isEditing ? "Edit" : "Create"} Cyber Quest Map
+            </Text>
 
-          {/* Import/Export Menu Button */}
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              id="cq-import-export-btn"
-              style={[styles.menuButton, { borderColor: colors.border }]}
-              onPress={() => setShowImportExportMenu((v) => !v)}
-            >
-              <Ionicons
-                name="ellipsis-vertical"
-                size={20}
-                color={highlightColor}
-              />
-            </TouchableOpacity>
-
-            {isEditing && (
+            {/* Import/Export Menu Button */}
+            <View style={styles.headerActions}>
               <TouchableOpacity
-                style={styles.createNewButton}
-                onPress={() => {
-                  console.log(
-                    "🔍 Create New button clicked - clearing edit mode"
-                  );
-                  resetToCreateMode();
-                }}
+                id="cq-import-export-btn"
+                style={[styles.menuButton, { borderColor: colors.border }]}
+                onPress={() => setShowImportExportMenu((v) => !v)}
               >
-                <Ionicons name="add" size={20} color={highlightColor} />
-                <Text
-                  style={[
-                    styles.createNewText,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  New
-                </Text>
+                <Ionicons
+                  name="ellipsis-vertical"
+                  size={20}
+                  color={highlightColor}
+                />
               </TouchableOpacity>
-            )}
+
+              {isEditing && (
+                <TouchableOpacity
+                  style={styles.createNewButton}
+                  onPress={() => {
+                    console.log(
+                      "🔍 Create New button clicked - clearing edit mode"
+                    );
+                    resetToCreateMode();
+                  }}
+                >
+                  <Ionicons name="add" size={20} color={highlightColor} />
+                  <Text
+                    style={[
+                      styles.createNewText,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    New
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Import/Export Context Menu */}
         {showImportExportMenu && (
@@ -2445,6 +2554,25 @@ export default function Create() {
               />
               <Text style={[styles.contextMenuText, { color: colors.text }]}>
                 Download Sample JSON
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.contextMenuItem,
+                { borderBottomColor: colors.border },
+              ]}
+              onPress={() => {
+                setShowQuestionExamples((prev) => !prev);
+                setShowImportExportMenu(false);
+              }}
+            >
+              <Ionicons
+                name={showQuestionExamples ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color={highlightColor}
+              />
+              <Text style={[styles.contextMenuText, { color: colors.text }]}>
+                {showQuestionExamples ? "Disable Examples" : "Enable Examples"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -2651,6 +2779,8 @@ export default function Create() {
           style={[styles.formScroll, Platform.OS === "web" && styles.webScrollableForm]}
           showsVerticalScrollIndicator={true}
           persistentScrollbar={Platform.OS === "web"}
+          nestedScrollEnabled={Platform.OS === "android"}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
             paddingBottom: Platform.OS === "web" ? 24 : 120,
           }}
@@ -3116,36 +3246,9 @@ export default function Create() {
               </View>
 
               {/* Validation Message */}
-              {!isValid() && (
+              {validationMessages.length > 0 && (
                 <Text style={styles.validationMessage}>
-                  {!questData.title.trim() && "• Please enter a quest title\n"}
-                  {!questData.description.trim() &&
-                    "• Please enter a quest description\n"}
-                  {!questData.selectedSection && "• Please select a subject\n"}
-                  {questData.questions.some((q) => !q.text.trim()) &&
-                    "• All questions must have text\n"}
-                  {questData.questions.some((q) => {
-                    switch (q.type) {
-                      case "multipleChoice":
-                        return q.choices && q.choices.some((c) => !c.trim());
-                      case "codeMissing":
-                        return (
-                          !q.codeTemplate ||
-                          !q.correctAnswer ||
-                          q.codeTemplate.trim().length === 0 ||
-                          q.correctAnswer.trim().length === 0
-                        );
-                      case "fillInBlanks":
-                        return !q.blanks || q.blanks.some((b) => !b.trim());
-                      case "codeOrdering":
-                        return (
-                          !q.codeBlocks ||
-                          q.codeBlocks.some((b) => !b.code.trim())
-                        );
-                      default:
-                        return false;
-                    }
-                  }) && "• Please complete all question fields\n"}
+                  {validationMessages.map((message) => `• ${message}`).join("\n")}
                 </Text>
               )}
             </>
@@ -3335,7 +3438,7 @@ export default function Create() {
     return null;
   }; */
 
-  const SectionCreator = () => {
+  const SectionCreator = ({ useCompactHeader = false }) => {
     const [activeSection, setActiveSection] = useState("create"); // "create", "assign", or "manage"
     const [sectionData, setSectionData] = useState({
       name: "",
@@ -4133,17 +4236,13 @@ export default function Create() {
 
     return (
       <View style={styles.formContainer}>
-        <View style={[styles.formHeader, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => setActiveCreator("")}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <Text style={[styles.formTitle, { color: colors.textSecondary }]}>
-            🎓 Subject Management
-          </Text>
-        </View>
+        {!useCompactHeader && (
+          <View style={[styles.formHeader, { borderBottomColor: colors.border }]}> 
+            <Text style={[styles.formTitle, { color: colors.textSecondary }]}> 
+              🎓 Course Management
+            </Text>
+          </View>
+        )}
 
         {/* Tab Navigation */}
         <View style={styles.sectionTabContainer}>
@@ -4246,6 +4345,8 @@ export default function Create() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={true}
           persistentScrollbar={Platform.OS === "web"}
+          nestedScrollEnabled={Platform.OS === "android"}
+          keyboardShouldPersistTaps="handled"
         >
           {activeSection === "create" ? (
             // CREATE SUBJECT DIVISION
@@ -6468,9 +6569,15 @@ export default function Create() {
         ]}
       >
         {activeCreator === "cyber-quest-map" && (
-          <CyberQuestCreator isCreateMode={!isEditMode} />
+          <CyberQuestCreator
+            isCreateMode={!isEditMode}
+            useCompactHeader={Platform.OS === "android"}
+            menuControlRef={questMenuControlRef}
+          />
         )}
-        {activeCreator === "section-management" && <SectionCreator />}
+        {activeCreator === "section-management" && (
+          <SectionCreator useCompactHeader={Platform.OS === "android"} />
+        )}
       </Animated.View>
     );
   };
@@ -6478,66 +6585,126 @@ export default function Create() {
   return (
     <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.pageWrapper}>
+        <View
+          style={[
+            styles.pageWrapper,
+            Platform.OS === "android" && { paddingTop: Math.max(insets.top, 12) },
+          ]}
+        >
             {/* Header */}
+            {(() => {
+              const showCompactCreatorHeader =
+                Platform.OS === "android" && Boolean(activeCreator);
+              const shouldShowBackButton =
+                Boolean(activeCreator) ||
+                openedFromInstructorTools ||
+                openedFromIndex;
+              const compactCreatorTitle =
+                activeCreator === "cyber-quest-map"
+                  ? "Cyber Quest Map"
+                  : activeCreator === "section-management"
+                  ? "Course Management"
+                  : "";
+
+              return (
             <View style={[styles.header, { borderBottomColor: colors.border }]}>
               <View style={styles.headerTitleRow}>
-                {openedFromInstructorTools || openedFromIndex ? (
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (openedFromInstructorTools) {
-                        router.replace({
-                          pathname: "/(tabs)/instructor",
-                          params: { tab: "tools" },
-                        });
-                        return;
-                      }
+                <View style={styles.headerLeftSlot}>
+                  {shouldShowBackButton ? (
+                    <TouchableOpacity
+                      onPress={handleCreatorBack}
+                      style={styles.headerBackButton}
+                    >
+                      <Ionicons
+                        name="arrow-back"
+                        size={22}
+                        color="#000000"
+                      />
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.headerBackSpacer} />
+                  )}
+                </View>
 
-                      router.replace("/(tabs)");
-                    }}
-                    style={[
-                      styles.headerBackButton,
-                      {
-                        backgroundColor: `${highlightColor}20`,
-                        borderColor: `${highlightColor}60`,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name="arrow-back"
-                      size={18}
-                      color={highlightColor}
-                    />
-                  </TouchableOpacity>
+
+                {showCompactCreatorHeader ? (
+                  activeCreator === "cyber-quest-map" ? (
+                    <View style={styles.headerCompactQuestRow}>
+                      <Text
+                        style={[
+                          styles.headerCompactTitle,
+                          { color: colors.textSecondary },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {compactCreatorTitle}
+                      </Text>
+                      <TouchableOpacity
+                        id="cq-import-export-header-btn"
+                        style={[
+                          styles.menuButton,
+                          styles.headerMenuButton,
+                          { borderColor: colors.border },
+                        ]}
+                        onPress={() =>
+                          questMenuControlRef.current?.toggleMenu?.()
+                        }
+                      >
+                        <Ionicons
+                          name="ellipsis-vertical"
+                          size={20}
+                          color={highlightColor}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.headerCompactTitle,
+                        { color: colors.textSecondary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {compactCreatorTitle}
+                    </Text>
+                  )
                 ) : (
-                  <View style={styles.headerBackSpacer} />
+                  <Text
+                    style={[styles.headerTitle, { color: "#000000" }]}
+                  >
+                    🎮 Creator&apos;s Workshop
+                  </Text>
                 )}
 
-
-                <Text
-                  style={[styles.headerTitle, { color: colors.textSecondary }]}
-                >
-                  🎮 Creator&apos;s Workshop
-                </Text>
-                <View style={styles.headerBackSpacer} />
+                <View style={styles.headerRightSlot}>
+                  <View style={styles.headerBackSpacer} />
+                </View>
               </View>
-              <Text
-                style={[styles.headerSubtitle, { color: colors.textSecondary }]}
-              >
-                Welcome back, {user?.username || "Instructor"}! Ready to craft
-                amazing content?
-              </Text>
+              {!showCompactCreatorHeader && (
+                <Text
+                  style={[styles.headerSubtitle, { color: colors.textSecondary }]}
+                >
+                  Welcome back, {user?.username || "Instructor"}! Ready to craft
+                  amazing content?
+                </Text>
+              )}
             </View>
+              );
+            })()}
             {/* Content */}
-            <ScrollView
-              style={styles.outerScrollContainer}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              persistentScrollbar={false}
-              scrollEnabled={!activeCreator}
-            >
-              {renderContent()}
-            </ScrollView>
+            {activeCreator ? (
+              <View style={styles.outerScrollContainer}>{renderContent()}</View>
+            ) : (
+              <ScrollView
+                style={styles.outerScrollContainer}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                persistentScrollbar={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {renderContent()}
+              </ScrollView>
+            )}
           </View>
       </SafeAreaView>
     </LinearGradient>
@@ -6637,30 +6804,58 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   headerBackButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
+    padding: 6,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  headerLeftSlot: {
+    width: 40,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  headerRightSlot: {
+    width: 40,
+    alignItems: "flex-end",
     justifyContent: "center",
   },
   headerBackSpacer: {
     width: 34,
     height: 34,
   },
-  headerTitle: {
-    fontSize: 30,
+  headerTitlePlaceholder: {
+    flex: 1,
+  },
+  headerCompactTitle: {
+    flex: 1,
+    fontSize: 22,
     fontWeight: "800",
+    letterSpacing: 0.2,
+    textAlign: "left",
+    marginLeft: 10,
+  },
+  headerCompactQuestRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginLeft: 10,
+  },
+  headerMenuButton: {
+    marginLeft: 0,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 4,
     // color will be set dynamically
     letterSpacing: 0.3,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "500",
     // color will be set dynamically
     textAlign: "center",
-    opacity: 0.85,
-    lineHeight: 22,
+    opacity: 0.8,
   },
   outerScrollContainer: {
     flex: 1,

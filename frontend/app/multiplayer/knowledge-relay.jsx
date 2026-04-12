@@ -26,6 +26,20 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { GameNotificationService } from "@/services/gameNotificationService";
 import COLORS from "@/constants/custom-colors";
+import { useTheme } from "@/contexts/ThemeContext";
+
+const WEB_UI_SCALE = 1.;
+const scaleWeb = (value) =>
+  Platform.OS === "web" ? Math.round(value * WEB_UI_SCALE) : value;
+const TEAM_SELECTION_SCALE_WEB = 1.18;
+const TEAM_SELECTION_SCALE_MOBILE = 1.1;
+const scaleTeamSelection = (value) =>
+  Math.round(
+    value *
+      (Platform.OS === "web"
+        ? TEAM_SELECTION_SCALE_WEB
+        : TEAM_SELECTION_SCALE_MOBILE)
+  );
 
 // Team configurations
 const TEAMS = {
@@ -106,9 +120,13 @@ const SAMPLE_KR_QUESTIONS = [
 
 export default function KnowledgeRelay() {
   const router = useRouter();
+  const { isDarkMode } = useTheme();
   const { user } = useAuthStore();
   const { settings } = useSettings();
   const { showNotification } = useNotifications();
+  const screenGradient = isDarkMode
+    ? ["#0f172a", "#111827"]
+    : ["#caf1c8", "#5fd2cd"];
   const socketRef = useRef(null);
 
   // Game state
@@ -1405,7 +1423,7 @@ export default function KnowledgeRelay() {
   const renderInstructorEditor = () => {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.gradient}>
+        <LinearGradient colors={screenGradient} style={styles.gradient}>
           <SafeAreaView style={styles.safeArea}>
             {renderImportDocsModal?.()}
             {renderActionsMenuModal?.()}
@@ -1523,7 +1541,7 @@ export default function KnowledgeRelay() {
             >
               <View style={styles.modalContainer}>
                 <LinearGradient
-                  colors={["#caf1c8", "#5fd2cd"]}
+                  colors={screenGradient}
                   style={styles.gradient}
                 >
                   <SafeAreaView style={styles.modalSafeArea}>
@@ -1720,7 +1738,7 @@ export default function KnowledgeRelay() {
   // Render functions
   const renderRoomSetup = () => (
     <View style={styles.container}>
-      <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.gradient}>
+      <LinearGradient colors={screenGradient} style={styles.gradient}>
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.header}>
             <TouchableOpacity
@@ -1810,9 +1828,9 @@ export default function KnowledgeRelay() {
 
   const renderTeamSelection = () => (
     <View style={styles.container}>
-      <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.gradient}>
+      <LinearGradient colors={screenGradient} style={styles.gradient}>
         <SafeAreaView style={styles.safeArea}>
-          <View style={styles.header}>
+          <View style={styles.teamSelectionHeader}>
             <TouchableOpacity style={styles.backButton} onPress={leaveGame}>
               <MaterialCommunityIcons
                 name="arrow-left"
@@ -1820,11 +1838,16 @@ export default function KnowledgeRelay() {
                 color="#2acde6"
               />
             </TouchableOpacity>
-            <Text style={styles.title}>Select Your Team</Text>
-            <Text style={styles.subtitle}>Room ID: {gameData.roomId}</Text>
+            <Text style={styles.teamSelectionTitle}>Select Your Team</Text>
+            <Text style={styles.teamSelectionSubtitle}>Choose your squad and get ready to relay</Text>
+            <View style={styles.roomBadge}>
+              <Text style={styles.roomBadgeText}>Room ID: {gameData.roomId}</Text>
+            </View>
           </View>
 
-          <ScrollView style={styles.content}>
+          <ScrollView style={styles.content} contentContainerStyle={styles.teamSelectionContentContainer}>
+            <View style={styles.teamSelectionPanel}>
+              <Text style={styles.teamSelectionHint}>Tap a team card to join</Text>
             <View style={styles.teamsGrid}>
               {Object.entries(TEAMS).map(([teamKey, team]) => {
                 const teamData = gameData.teams[teamKey] || { players: [] };
@@ -1835,21 +1858,22 @@ export default function KnowledgeRelay() {
                     key={teamKey}
                     style={[
                       styles.teamCard,
+                      styles.teamCardBase,
                       { borderColor: team.color },
-                      isSelected && { borderWidth: 3 },
+                      isSelected && styles.teamCardSelected,
                     ]}
                     onPress={() => selectTeam(teamKey)}
                   >
                     <LinearGradient
-                      colors={[`${team.color}20`, `${team.color}10`]}
+                      colors={isSelected ? [`${team.color}2E`, `${team.color}14`] : ["rgba(255,255,255,0.96)", "rgba(248,250,252,0.94)"]}
                       style={styles.teamCardGradient}
                     >
                       <MaterialCommunityIcons
                         name={team.icon}
-                        size={40}
+                        size={scaleTeamSelection(40)}
                         color={team.color}
                       />
-                      <Text style={[styles.teamName, { color: team.color }]}>
+                      <Text style={[styles.teamName, { color: isSelected ? team.color : "#0f172a" }]}>
                         {team.name}
                       </Text>
                       <Text style={styles.playerCount}>
@@ -1859,7 +1883,7 @@ export default function KnowledgeRelay() {
                       {teamData.players.length > 0 && (
                         <View style={styles.playerList}>
                           {teamData.players.map((player, index) => (
-                            <Text key={index} style={styles.playerName}>
+                            <Text key={index} style={styles.playerNamePill}>
                               {player.name}
                             </Text>
                           ))}
@@ -1870,8 +1894,9 @@ export default function KnowledgeRelay() {
                 );
               })}
             </View>
+            </View>
 
-            <View style={{ marginTop: 10 }}>
+            <View style={styles.teamSelectionActions}>
               {isCreator && (
                 <TouchableOpacity
                   style={styles.startButton}
@@ -1909,7 +1934,7 @@ export default function KnowledgeRelay() {
       return (
         <View style={styles.container}>
           <LinearGradient
-            colors={["#caf1c8", "#5fd2cd"]}
+            colors={screenGradient}
             style={styles.gradient}
           >
             <SafeAreaView style={styles.safeArea}>
@@ -1922,7 +1947,7 @@ export default function KnowledgeRelay() {
 
     return (
       <View style={styles.container}>
-        <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.gradient}>
+        <LinearGradient colors={screenGradient} style={styles.gradient}>
           <SafeAreaView style={styles.safeArea}>
             {/* Game Header */}
             <View style={styles.gameHeader}>
@@ -2082,7 +2107,7 @@ export default function KnowledgeRelay() {
 
     return (
       <View style={styles.container}>
-        <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.gradient}>
+        <LinearGradient colors={screenGradient} style={styles.gradient}>
           <SafeAreaView style={styles.safeArea}>
             <View style={styles.finishedContainer}>
               {/* Game Over Header */}
@@ -2093,7 +2118,10 @@ export default function KnowledgeRelay() {
                   color={isWinner ? "#10b981" : "#2acde6"}
                 />
                 <Text style={styles.gameOverTitle}>Game Over!</Text>
+                <Text style={styles.gameOverSubtitle}>Knowledge Relay Match Complete</Text>
               </View>
+
+              <View style={styles.finishedCard}>
 
               {/* Winner/Loser Message */}
               <View style={styles.resultMessageContainer}>
@@ -2106,7 +2134,7 @@ export default function KnowledgeRelay() {
                     />
                     <Text style={styles.congratsText}>Congratulations!</Text>
                     <Text style={styles.winnerText}>
-                      🎉 {playerTeam.name} Won! 🎉
+                      {playerTeam.name} takes the crown!
                     </Text>
                     <Text style={styles.finalScoreText}>
                       Final Score: {playerTeam.score} points
@@ -2120,10 +2148,10 @@ export default function KnowledgeRelay() {
                       color="#64748b"
                     />
                     <Text style={styles.lostText}>
-                      Your team didn&apos;t win this time
+                      Your team didn&apos;t win this round.
                     </Text>
                     <Text style={styles.winnerAnnouncementText}>
-                      🏆 {winningTeam?.name} Won! 🏆
+                      Winner: {winningTeam?.name}
                     </Text>
                     <Text style={styles.encouragementText}>
                       Better luck next time!
@@ -2200,7 +2228,7 @@ export default function KnowledgeRelay() {
                   <MaterialCommunityIcons
                     name="refresh"
                     size={20}
-                    color="#92eacc"
+                    color="#f8fafc"
                   />
                   <Text style={styles.playAgainText}>Play Again</Text>
                 </TouchableOpacity>
@@ -2212,10 +2240,11 @@ export default function KnowledgeRelay() {
                   <MaterialCommunityIcons
                     name="home"
                     size={20}
-                    color="#f8fafc"
+                    color="#0f172a"
                   />
                   <Text style={styles.backToMenuText}>Back to Menu</Text>
                 </TouchableOpacity>
+              </View>
               </View>
             </View>
           </SafeAreaView>
@@ -2238,7 +2267,7 @@ export default function KnowledgeRelay() {
       >
         <View style={styles.modalContainer}>
           <LinearGradient
-            colors={["#caf1c8", "#5fd2cd"]}
+            colors={screenGradient}
             style={styles.gradient}
           >
             <SafeAreaView style={styles.modalSafeArea}>
@@ -2395,10 +2424,10 @@ const styles = StyleSheet.create({
     width: "100%",
     ...Platform.select({
       web: {
-        maxWidth: 600, // Reduced from 800 to make container smaller
+        maxWidth: scaleWeb(600),
         marginHorizontal: "auto",
         justifyContent: "center", // Center the grid items
-        gap: 16, // Add some consistent spacing between items
+        gap: scaleWeb(16),
       },
       default: {},
     }),
@@ -2417,10 +2446,10 @@ const styles = StyleSheet.create({
       web: {
         transition: "0.2s all ease",
         cursor: "pointer",
-        maxWidth: 220, // Limit the maximum width on web
-        maxHeight: 220, // Limit the maximum height on web
-        width: "calc(40% - 8px)", // Make them smaller, with space between
-        marginHorizontal: 8, // Add horizontal margin for spacing
+        maxWidth: scaleWeb(220),
+        maxHeight: scaleWeb(220),
+        width: "calc(45% - 12px)",
+        marginHorizontal: scaleWeb(8),
       },
       default: {},
     }),
@@ -2438,9 +2467,9 @@ const styles = StyleSheet.create({
     }),
   },
   currentPlayerContainer: {
-    backgroundColor: "#f1fffb",
-    borderRadius: 10,
-    padding: 15,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: scaleWeb(10),
+    padding: scaleWeb(15),
     alignItems: "center",
     marginBottom: 20,
     width: "100%",
@@ -2454,7 +2483,7 @@ const styles = StyleSheet.create({
     elevation: 5,
     ...Platform.select({
       web: {
-        maxWidth: 800,
+        maxWidth: scaleWeb(800),
         marginHorizontal: "auto",
         transition: "all 0.3s ease", // Smooth transition for web
       },
@@ -2496,19 +2525,54 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    padding: 20,
+    padding: scaleWeb(20),
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 1200,
+        maxWidth: scaleWeb(1200),
       },
       default: {},
     }),
   },
   header: {
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: scaleWeb(30),
     width: "100%",
+  },
+  teamSelectionHeader: {
+    alignItems: "center",
+    marginBottom: scaleWeb(18),
+    width: "100%",
+    position: "relative",
+  },
+  teamSelectionTitle: {
+    fontSize: scaleWeb(30),
+    fontWeight: "800",
+    color: "#0f172a",
+    textAlign: "center",
+    letterSpacing: 0.3,
+  },
+  teamSelectionSubtitle: {
+    marginTop: scaleWeb(6),
+    fontSize: scaleWeb(14),
+    color: "#334155",
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  roomBadge: {
+    marginTop: scaleWeb(10),
+    paddingHorizontal: scaleWeb(12),
+    paddingVertical: scaleWeb(7),
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(15,118,110,0.45)",
+    backgroundColor: "rgba(15,118,110,0.1)",
+  },
+  roomBadgeText: {
+    fontSize: scaleWeb(13),
+    color: "#0f766e",
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   backButton: {
     position: "absolute",
@@ -2517,38 +2581,68 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
+    fontSize: scaleWeb(28),
+    fontWeight: "800",
+    color: "#0f172a",
     textAlign: "center",
+    letterSpacing: 0.3,
   },
   subtitle: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    marginTop: 5,
+    fontSize: scaleWeb(16),
+    color: "#334155",
+    marginTop: scaleWeb(5),
   },
   content: {
     flex: 1,
     width: "100%",
     ...Platform.select({
       web: {
-        maxWidth: 800,
+        maxWidth: scaleWeb(900),
         alignSelf: "center",
       },
       default: {},
     }),
   },
+  teamSelectionContentContainer: {
+    paddingBottom: scaleWeb(18),
+  },
+  teamSelectionPanel: {
+    backgroundColor: "rgba(255,255,255,0.88)",
+    borderRadius: scaleWeb(18),
+    padding: scaleWeb(16),
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.34)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: scaleWeb(14),
+    elevation: 3,
+  },
+  teamSelectionHint: {
+    fontSize: scaleWeb(14),
+    color: "#475569",
+    textAlign: "center",
+    marginBottom: scaleWeb(12),
+    fontWeight: "600",
+  },
   setupCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 15,
-    padding: 30,
+    backgroundColor: "rgba(255, 255, 255, 0.88)",
+    borderRadius: scaleWeb(18),
+    padding: scaleWeb(30),
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.35)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: scaleWeb(16),
+    elevation: 4,
     ...Platform.select({
       web: {
-        width: 600,
+        width: scaleWeb(600),
         maxWidth: "90%",
         marginHorizontal: "auto",
-        minWidth: 480, // Ensure minimum width on web
+        minWidth: scaleWeb(480),
       },
       default: {},
     }),
@@ -2560,11 +2654,11 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   pageTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#1a5344",
+    fontSize: scaleWeb(28),
+    fontWeight: "800",
+    color: "#0f172a",
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: scaleWeb(20),
   },
   inputContainer: {
     width: "100%",
@@ -2577,18 +2671,19 @@ const styles = StyleSheet.create({
     }),
   },
   label: {
-    fontSize: 16,
-    color: "#258977",
-    marginBottom: 8,
+    fontSize: scaleWeb(16),
+    color: "#0f766e",
+    marginBottom: scaleWeb(8),
+    fontWeight: "600",
   },
   textInput: {
-    backgroundColor: "rgba(146, 234, 204, 0.8)",
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    color: "#1a5344",
+    backgroundColor: "rgba(241, 245, 249, 0.95)",
+    borderRadius: scaleWeb(10),
+    padding: scaleWeb(15),
+    fontSize: scaleWeb(16),
+    color: "#0f172a",
     borderWidth: 1,
-    borderColor: "#475569",
+    borderColor: "rgba(148, 163, 184, 0.5)",
     ...Platform.select({
       web: {
         minWidth: "100%",
@@ -2597,13 +2692,13 @@ const styles = StyleSheet.create({
     }),
   },
   playerNameDisplay: {
-    backgroundColor: "rgba(146, 234, 204, 0.6)",
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    color: "#94a3b8",
+    backgroundColor: "rgba(241, 245, 249, 0.92)",
+    borderRadius: scaleWeb(10),
+    padding: scaleWeb(15),
+    fontSize: scaleWeb(16),
+    color: "#334155",
     borderWidth: 1,
-    borderColor: "#475569",
+    borderColor: "rgba(148, 163, 184, 0.5)",
   },
   errorText: {
     color: "#ef4444",
@@ -2612,9 +2707,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   primaryButton: {
-    backgroundColor: "#aae021",
-    borderRadius: 10,
-    padding: 15,
+    backgroundColor: "#0f766e",
+    borderRadius: scaleWeb(10),
+    padding: scaleWeb(15),
     width: "100%",
     alignItems: "center",
     marginBottom: 15,
@@ -2629,9 +2724,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#64748b",
   },
   primaryButtonText: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
+    color: "#f8fafc",
+    fontSize: scaleWeb(18),
     fontWeight: "bold",
+    letterSpacing: 0.6,
   },
   divider: {
     flexDirection: "row",
@@ -2655,9 +2751,9 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     borderWidth: 2,
-    borderColor: "#2acde6",
-    borderRadius: 10,
-    padding: 15,
+    borderColor: "#0f766e",
+    borderRadius: scaleWeb(10),
+    padding: scaleWeb(15),
     width: "100%",
     alignItems: "center",
     marginBottom: 15,
@@ -2672,8 +2768,8 @@ const styles = StyleSheet.create({
     }),
   },
   secondaryButtonText: {
-    color: "#2acde6",
-    fontSize: 16,
+    color: "#0f766e",
+    fontSize: scaleWeb(16),
     fontWeight: "bold",
   },
   instructorButton: {
@@ -2734,25 +2830,37 @@ const styles = StyleSheet.create({
   },
   teamCard: {
     width: "48%",
-    marginBottom: 20,
-    borderRadius: 15,
+    marginBottom: scaleTeamSelection(20),
+    borderRadius: scaleTeamSelection(15),
     borderWidth: 2,
     overflow: "hidden",
     ...Platform.select({
       web: {
-        width: 300,
+        width: scaleTeamSelection(scaleWeb(300)),
         maxWidth: "45%",
       },
       default: {},
     }),
   },
+  teamCardBase: {
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderWidth: 2,
+  },
+  teamCardSelected: {
+    borderWidth: 3,
+    shadowColor: "#0f766e",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: scaleWeb(12),
+    elevation: 4,
+  },
   teamCardGradient: {
     // Make gradient background fully responsive to content & parent size
     backgroundColor: "#f1fffb",
-    padding: 20,
+    padding: scaleTeamSelection(20),
     alignItems: "center",
-    minHeight: 120,
-    borderRadius: 13,
+    minHeight: scaleTeamSelection(scaleWeb(120)),
+    borderRadius: scaleWeb(13),
     // Ensure it stretches when border width / content height changes
     width: "100%",
     alignSelf: "stretch",
@@ -2760,32 +2868,50 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   teamName: {
-    fontSize: 16,
-    color: "#3cbda2",
-    fontWeight: "bold",
-    marginTop: 10,
+    fontSize: scaleTeamSelection(scaleWeb(16)),
+    color: "#0f172a",
+    fontWeight: "800",
+    marginTop: scaleTeamSelection(10),
+    textAlign: "center",
   },
   playerCount: {
-    fontSize: 12,
-    color: "#3cbda2",
-    marginTop: 5,
+    fontSize: scaleTeamSelection(scaleWeb(12)),
+    color: "#475569",
+    marginTop: scaleTeamSelection(5),
+    fontWeight: "600",
   },
   playerList: {
-    marginTop: 10,
+    marginTop: scaleTeamSelection(10),
     alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: scaleWeb(6),
   },
   playerName: {
-    fontSize: 12,
+    fontSize: scaleTeamSelection(scaleWeb(12)),
     // Use dark text for better readability on light team card background
     color: "#1a5344",
-    marginVertical: 2,
+    marginVertical: scaleTeamSelection(2),
+  },
+  playerNamePill: {
+    fontSize: scaleTeamSelection(scaleWeb(11)),
+    color: "#0f172a",
+    backgroundColor: "rgba(226,232,240,0.85)",
+    borderRadius: 999,
+    paddingHorizontal: scaleWeb(9),
+    paddingVertical: scaleWeb(4),
+    fontWeight: "600",
+  },
+  teamSelectionActions: {
+    marginTop: scaleWeb(14),
   },
   startButton: {
     backgroundColor: "#10b981",
-    borderRadius: 15,
-    padding: 20,
+    borderRadius: scaleTeamSelection(15),
+    padding: scaleTeamSelection(20),
     alignItems: "center",
-    marginTop: 20,
+    marginTop: scaleTeamSelection(20),
     ...Platform.select({
       web: {
         maxWidth: 400,
@@ -2796,17 +2922,17 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     color: "#f8fafc",
-    fontSize: 18,
+    fontSize: scaleTeamSelection(scaleWeb(18)),
     fontWeight: "bold",
   },
   leaveRoomButton: {
     flexDirection: "row",
     backgroundColor: "#e11d48", // Bright red color for better visibility
-    borderRadius: 15,
-    padding: 15,
+    borderRadius: scaleTeamSelection(15),
+    padding: scaleTeamSelection(15),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 15,
+    marginBottom: scaleTeamSelection(15),
     // Add shadow for better visibility
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -2823,55 +2949,55 @@ const styles = StyleSheet.create({
   },
   leaveRoomButtonText: {
     color: "#ffffff",
-    fontSize: 16,
+    fontSize: scaleTeamSelection(scaleWeb(16)),
     fontWeight: "bold",
   },
   gameHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: scaleWeb(20),
     width: "100%",
   },
   questionInfo: {
     flex: 1,
   },
   questionNumber: {
-    fontSize: 14,
+    fontSize: scaleWeb(14),
     color: "#3cbda2",
   },
   questionCategory: {
-    fontSize: 16,
+    fontSize: scaleWeb(16),
     color: "#3cbda2",
     fontWeight: "bold",
   },
   timerContainer: {
     backgroundColor: "#ef4444",
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
+    borderRadius: scaleWeb(20),
+    paddingHorizontal: scaleWeb(15),
+    paddingVertical: scaleWeb(8),
   },
   timerText: {
     color: "#f8fafc",
-    fontSize: 18,
+    fontSize: scaleWeb(18),
     fontWeight: "bold",
   },
 
   currentPlayerText: {
-    fontSize: 18,
+    fontSize: scaleWeb(18),
     color: "#3cbda2",
     fontWeight: "bold",
   },
   currentTeamText: {
-    fontSize: 14,
+    fontSize: scaleWeb(14),
     color: "#3cbda2",
     marginTop: 5,
   },
   questionContainer: {
-    backgroundColor: "#f1fffb",
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: scaleWeb(15),
+    padding: scaleWeb(20),
+    marginBottom: scaleWeb(20),
     width: "100%",
     shadowColor: "#000",
     shadowOffset: {
@@ -2883,17 +3009,18 @@ const styles = StyleSheet.create({
     elevation: 5,
     ...Platform.select({
       web: {
-        maxWidth: 800,
+        maxWidth: scaleWeb(800),
         marginHorizontal: "auto",
       },
       default: {},
     }),
   },
   questionText: {
-    fontSize: 18,
-    color: "#3cbda2",
+    fontSize: scaleWeb(18),
+    color: "#0f172a",
     textAlign: "center",
-    lineHeight: 24,
+    lineHeight: scaleWeb(24),
+    fontWeight: "600",
   },
   optionsContainer: {
     flex: 1,
@@ -2901,7 +3028,7 @@ const styles = StyleSheet.create({
     width: "100%",
     ...Platform.select({
       web: {
-        maxWidth: 800,
+        maxWidth: scaleWeb(800),
         marginHorizontal: "auto",
       },
       default: {},
@@ -2953,8 +3080,8 @@ const styles = StyleSheet.create({
   },
   passButton: {
     backgroundColor: "#8b5cf6",
-    borderRadius: 10,
-    padding: 15,
+    borderRadius: scaleWeb(10),
+    padding: scaleWeb(15),
     flex: 1,
     marginRight: 10,
     alignItems: "center",
@@ -2967,7 +3094,7 @@ const styles = StyleSheet.create({
   },
   passButtonText: {
     color: "#f8fafc",
-    fontSize: 16,
+    fontSize: scaleWeb(16),
     fontWeight: "bold",
   },
   passesRemaining: {
@@ -2979,8 +3106,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#ffffff",
-    borderRadius: 10,
-    padding: 15,
+    borderRadius: scaleWeb(10),
+    padding: scaleWeb(15),
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -2994,9 +3121,10 @@ const styles = StyleSheet.create({
     }),
   },
   leaderboardButtonText: {
-    color: "#1a5344",
-    fontSize: 16,
+    color: "#0f172a",
+    fontSize: scaleWeb(16),
     marginLeft: 8,
+    fontWeight: "600",
   },
   // Instructor Editor Styles
   editorActions: {
@@ -3531,138 +3659,173 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 20,
+    padding: scaleWeb(20),
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 800,
+        maxWidth: scaleWeb(900),
         marginHorizontal: "auto",
+      },
+      default: {},
+    }),
+  },
+  finishedCard: {
+    width: "100%",
+    alignSelf: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.88)",
+    borderRadius: scaleWeb(20),
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.35)",
+    padding: scaleWeb(20),
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: scaleWeb(18),
+    elevation: 4,
+    ...Platform.select({
+      web: {
+        maxWidth: scaleWeb(760),
       },
       default: {},
     }),
   },
   gameOverHeader: {
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: scaleWeb(18),
   },
   gameOverTitle: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#f8fafc",
-    marginTop: 10,
+    fontSize: scaleWeb(32),
+    fontWeight: "800",
+    color: "#0f172a",
+    marginTop: scaleWeb(10),
     textAlign: "center",
+    letterSpacing: 0.4,
+  },
+  gameOverSubtitle: {
+    fontSize: scaleWeb(14),
+    color: "#334155",
+    marginTop: scaleWeb(6),
+    fontWeight: "500",
   },
   resultMessageContainer: {
     alignItems: "center",
-    marginBottom: 30,
+    alignSelf: "center",
+    marginBottom: scaleWeb(22),
     width: "100%",
     ...Platform.select({
       web: {
-        maxWidth: 600,
+        maxWidth: scaleWeb(650),
       },
       default: {},
     }),
   },
   winnerMessage: {
     alignItems: "center",
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
-    borderRadius: 15,
-    padding: 20,
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    borderRadius: scaleWeb(16),
+    padding: scaleWeb(20),
     borderWidth: 1,
-    borderColor: "#10b981",
+    borderColor: "rgba(16, 185, 129, 0.45)",
     width: "100%",
   },
   loserMessage: {
     alignItems: "center",
-    backgroundColor: "rgba(100, 116, 139, 0.1)",
-    borderRadius: 15,
-    padding: 20,
+    backgroundColor: "rgba(148, 163, 184, 0.14)",
+    borderRadius: scaleWeb(16),
+    padding: scaleWeb(20),
     borderWidth: 1,
-    borderColor: "#64748b",
+    borderColor: "rgba(100, 116, 139, 0.42)",
     width: "100%",
   },
   congratsText: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#10b981",
-    marginTop: 10,
+    fontSize: scaleWeb(24),
+    fontWeight: "800",
+    color: "#0f766e",
+    marginTop: scaleWeb(10),
   },
   winnerText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#2acde6",
-    marginTop: 10,
+    fontSize: scaleWeb(20),
+    fontWeight: "700",
+    color: "#0f172a",
+    marginTop: scaleWeb(10),
     textAlign: "center",
   },
   lostText: {
-    fontSize: 18,
-    color: "#94a3b8",
-    marginTop: 10,
+    fontSize: scaleWeb(18),
+    color: "#334155",
+    marginTop: scaleWeb(10),
     textAlign: "center",
   },
   winnerAnnouncementText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#2acde6",
-    marginTop: 10,
+    fontSize: scaleWeb(18),
+    fontWeight: "700",
+    color: "#0f766e",
+    marginTop: scaleWeb(10),
     textAlign: "center",
   },
   encouragementText: {
-    fontSize: 16,
-    color: "#e2e8f0",
-    marginTop: 5,
+    fontSize: scaleWeb(16),
+    color: "#475569",
+    marginTop: scaleWeb(5),
     textAlign: "center",
   },
   finalScoreText: {
-    fontSize: 16,
-    color: "#10b981",
-    marginTop: 10,
+    fontSize: scaleWeb(16),
+    color: "#0f766e",
+    marginTop: scaleWeb(10),
     fontWeight: "600",
   },
   yourScoreText: {
-    fontSize: 16,
-    color: "#94a3b8",
-    marginTop: 10,
+    fontSize: scaleWeb(16),
+    color: "#334155",
+    marginTop: scaleWeb(10),
     fontWeight: "600",
   },
   finalLeaderboard: {
     width: "100%",
-    backgroundColor: "#e8faee",
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 30,
-    shadowColor: "#000",
+    alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: scaleWeb(16),
+    padding: scaleWeb(20),
+    marginBottom: scaleWeb(24),
+    shadowColor: "#0f172a",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: scaleWeb(8),
     elevation: 3,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.3)",
     ...Platform.select({
       web: {
-        maxWidth: 600,
+        maxWidth: scaleWeb(700),
       },
       default: {},
     }),
   },
   leaderboardTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#23cf90",
+    fontSize: scaleWeb(20),
+    fontWeight: "800",
+    color: "#0f172a",
     textAlign: "center",
-    marginBottom: 15,
+    marginBottom: scaleWeb(15),
+    letterSpacing: 0.2,
   },
   finalTeamRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    marginBottom: 8,
-    backgroundColor: "#e8faee",
+    paddingVertical: scaleWeb(10),
+    paddingHorizontal: scaleWeb(15),
+    borderRadius: scaleWeb(10),
+    marginBottom: scaleWeb(8),
+    backgroundColor: "rgba(241,245,249,0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.22)",
   },
   highlightedTeamRow: {
-    backgroundColor: "#c2ffdc",
+    backgroundColor: "rgba(15,118,110,0.14)",
     borderWidth: 1,
-    borderColor: "#10b981",
+    borderColor: "rgba(15,118,110,0.42)",
   },
   rankContainer: {
     flexDirection: "row",
@@ -3670,9 +3833,9 @@ const styles = StyleSheet.create({
     width: 40,
   },
   rankText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#23cf90",
+    fontSize: scaleWeb(18),
+    fontWeight: "800",
+    color: "#0f172a",
     marginRight: 5,
   },
   teamColorIndicator: {
@@ -3683,35 +3846,41 @@ const styles = StyleSheet.create({
   },
   finalTeamName: {
     flex: 1,
-    fontSize: 16,
-    color: "#23cf90",
+    fontSize: scaleWeb(16),
+    color: "#0f172a",
     fontWeight: "600",
   },
   finalTeamScore: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#23cf90",
+    fontSize: scaleWeb(16),
+    fontWeight: "800",
+    color: "#0f766e",
   },
   finishedActions: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
+    alignSelf: "center",
     width: "100%",
-    gap: 15,
+    gap: scaleWeb(15),
     ...Platform.select({
       web: {
-        maxWidth: 600,
+        maxWidth: scaleWeb(700),
       },
       default: {},
     }),
   },
   playAgainButton: {
     flex: 1,
-    backgroundColor: "#2acde6",
-    borderRadius: 10,
-    padding: 15,
+    backgroundColor: "#0f766e",
+    borderRadius: scaleWeb(12),
+    padding: scaleWeb(15),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#0f766e",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: scaleWeb(10),
+    elevation: 3,
     ...Platform.select({
       web: {
         cursor: "pointer",
@@ -3720,21 +3889,21 @@ const styles = StyleSheet.create({
     }),
   },
   playAgainText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#92eacc",
+    fontSize: scaleWeb(16),
+    fontWeight: "800",
+    color: "#f8fafc",
     marginLeft: 5,
   },
   backToMenuButton: {
     flex: 1,
-    backgroundColor: "rgba(146, 234, 204, 0.8)",
-    borderRadius: 10,
-    padding: 15,
+    backgroundColor: "rgba(248,250,252,0.95)",
+    borderRadius: scaleWeb(12),
+    padding: scaleWeb(15),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#475569",
+    borderColor: "rgba(148,163,184,0.55)",
     ...Platform.select({
       web: {
         cursor: "pointer",
@@ -3743,9 +3912,9 @@ const styles = StyleSheet.create({
     }),
   },
   backToMenuText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#f8fafc",
+    fontSize: scaleWeb(16),
+    fontWeight: "800",
+    color: "#0f172a",
     marginLeft: 5,
   },
   // Leaderboard Modal Styles

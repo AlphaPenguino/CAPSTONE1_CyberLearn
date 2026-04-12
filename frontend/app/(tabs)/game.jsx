@@ -237,6 +237,8 @@ export default function GameArcade() {
   const { user, token } = useAuthStore();
   // Pull isDarkMode so we can adapt the points badge for proper contrast in light mode
   const { colors, isDarkMode } = useTheme();
+  const highlightColor = isDarkMode ? colors.primary : colors.textPrimary;
+  const screenGradient = isDarkMode ? ["#0f172a", "#111827"] : ["#caf1c8", "#5fd2cd"];
 
   // State for user's leaderboard points
   const [userLeaderboardData, setUserLeaderboardData] = useState(null);
@@ -311,7 +313,9 @@ export default function GameArcade() {
     if (gameId === "multiplayer") {
       router.push("/multiplayer");
     } else if (gameId === "quickplay") {
-      router.push("/arcade/quick-play");
+      router.push("/(tabs)/quick-play");
+    } else if (gameId === "knowledge-relay") {
+      router.push("/(tabs)/knowledge-relay");
     } else if (multiplayerModes.find((mode) => mode.id === gameId)) {
       router.push(`/multiplayer/${gameId}`);
     } else {
@@ -321,7 +325,7 @@ export default function GameArcade() {
   };
 
   return (
-    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+    <LinearGradient colors={screenGradient} style={styles.container}>
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         {/* Added wrapper for web to center content */}
         <View style={styles.contentWrapper}>
@@ -330,7 +334,12 @@ export default function GameArcade() {
             contentContainerStyle={isWeb ? styles.webScrollContent : null}
           >
             <View style={styles.header}>
-              <Text style={[styles.title, { color: colors.text }]}>Arcade</Text>
+              <View style={styles.headerLeft}>
+                <Text style={[styles.title, { color: highlightColor }]}>Arcade</Text>
+                <Text style={[styles.subtitle, { color: colors.textSecondary }]}> 
+                  Practice solo, challenge friends, and climb the leaderboard
+                </Text>
+              </View>
               {!isInstructor && (
                 <View
                   style={[
@@ -368,7 +377,7 @@ export default function GameArcade() {
 
             <FeaturedGame onPress={() => handleGameSelect("quickplay")} />
 
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}> 
               Multiplayer Modes
             </Text>
 
@@ -437,16 +446,26 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 10,
     width: "100%",
   },
+  headerLeft: {
+    flex: 1,
+    paddingRight: 12,
+  },
   title: {
-    fontSize: 32,
-    fontWeight: "bold",
+    fontSize: 30,
+    fontWeight: "800",
     color: COLORS.textPrimary,
+  },
+  subtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    fontWeight: "500",
+    opacity: 0.9,
   },
   userPoints: {
     flexDirection: "row",
@@ -465,11 +484,16 @@ const styles = StyleSheet.create({
     height: isWeb ? 300 : 220,
     margin: 20,
     marginTop: 10,
-    borderRadius: 20,
+    borderRadius: 22,
     overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "#FFF",
-    backgroundColor: "#c0fafb", // Lighter blue for better visibility
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.28)",
+    backgroundColor: "rgba(255,255,255,0.84)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    elevation: 4,
     width: isWeb ? "auto" : undefined,
   },
   featuredTouchable: {
@@ -489,26 +513,27 @@ const styles = StyleSheet.create({
     maxWidth: isWeb ? "60%" : undefined,
   },
   featuredLabel: {
-    color: COLORS.textPrimary,
-    fontWeight: "bold",
+    color: "#0f766e",
+    fontWeight: "800",
     fontSize: 12,
     marginBottom: 8,
+    letterSpacing: 0.4,
   },
   featuredTitle: {
     color: COLORS.textPrimary,
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: "800",
     marginBottom: 8,
   },
   featuredDescription: {
-    color: COLORS.textDark,
+    color: "#334155",
     marginBottom: 16,
     fontSize: 14,
-    // Limit description to half of the card width for earlier wrapping
-    width: "50%",
+    lineHeight: 20,
+    maxWidth: isWeb ? "72%" : "62%",
   },
   featuredButton: {
-    backgroundColor: "#64d883",
+    backgroundColor: "#0f766e",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 99,
@@ -537,7 +562,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: isWeb ? 26 : 22,
-    fontWeight: "bold",
+    fontWeight: "800",
     marginTop: 10,
     marginBottom: 16,
     marginHorizontal: 20,
@@ -648,6 +673,13 @@ const styles = StyleSheet.create({
   multiplayerCard: {
     borderRadius: 18,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.22)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 3,
   },
   multiplayerGradient: {
     padding: isWeb ? 20 : 16,
@@ -706,6 +738,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.22)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 3,
   },
   leaderboardGradient: {
     padding: isWeb ? 20 : 16,

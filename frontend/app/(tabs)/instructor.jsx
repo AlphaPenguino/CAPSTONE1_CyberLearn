@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
 import { API_URL } from "../../constants/api";
+import InstructorAnalytics from "../instructor/analytics";
 
 // Get screen width to determine if we're on web with a large screen
 const screenWidth = Dimensions.get("window").width;
@@ -27,7 +28,11 @@ export default function InstructorDashboard() {
   const normalizedRequestedTab =
     typeof requestedTab === "string" ? requestedTab.toLowerCase() : null;
   const [activeTab, setActiveTab] = useState(
-    normalizedRequestedTab === "tools" ? "tools" : "dashboard"
+    normalizedRequestedTab === "analytics"
+      ? "analytics"
+      : normalizedRequestedTab === "tools"
+      ? "tools"
+      : "dashboard"
   );
   const [summary, setSummary] = useState({
     totalStudents: 0,
@@ -42,6 +47,10 @@ export default function InstructorDashboard() {
   const router = useRouter();
 
   useEffect(() => {
+    if (normalizedRequestedTab === "analytics") {
+      setActiveTab("analytics");
+      return;
+    }
     if (normalizedRequestedTab === "tools") {
       setActiveTab("tools");
       return;
@@ -247,7 +256,7 @@ export default function InstructorDashboard() {
           description="View detailed analytics and performance metrics"
           icon="chart-box"
           color={colors.success}
-          onPress={() => router.push("/instructor/analytics")}
+          onPress={() => setActiveTab("analytics")}
         />
 
         <ToolCard
@@ -352,7 +361,14 @@ export default function InstructorDashboard() {
           </View>
 
           {/* Content */}
-          {activeTab === "dashboard" ? renderDashboard() : renderTools()}
+          {activeTab === "dashboard" && renderDashboard()}
+          {activeTab === "tools" && renderTools()}
+          {activeTab === "analytics" && (
+            <InstructorAnalytics
+              embedded
+              onBack={() => setActiveTab("tools")}
+            />
+          )}
         </View>
       </SafeAreaView>
     </LinearGradient>

@@ -18,10 +18,21 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore";
 import { API_URL } from "../../constants/api";
 
-export default function InstructorAnalytics() {
+export default function InstructorAnalytics({ embedded = false, onBack = null }) {
   const { user, token } = useAuthStore();
   const { colors } = useTheme();
   const router = useRouter();
+  const handleBack = useCallback(() => {
+    if (typeof onBack === "function") {
+      onBack();
+      return;
+    }
+
+    router.replace({
+      pathname: "/(tabs)/instructor",
+      params: { tab: "tools" },
+    });
+  }, [onBack, router]);
 
   // State management
   const [studentData, setStudentData] = useState(null);
@@ -277,7 +288,7 @@ export default function InstructorAnalytics() {
     return StyleSheet.create({
       container: {
         flex: 1,
-        backgroundColor: colors.surface,
+        backgroundColor: embedded ? "transparent" : colors.surface,
       },
       pageWrapper: {
         flex: 1,
@@ -592,18 +603,11 @@ export default function InstructorAnalytics() {
 
   // Helper functions
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.pageWrapper}>
+  const analyticsContent = (
+    <View style={styles.pageWrapper}>
         <View style={styles.header}>
           <TouchableOpacity
-            // Navigate explicitly to the instructor dashboard instead of relying on history
-            onPress={() =>
-              router.replace({
-                pathname: "/(tabs)/instructor",
-                params: { tab: "tools" },
-              })
-            }
+            onPress={handleBack}
             style={styles.backButton}
           >
             <MaterialCommunityIcons
@@ -929,6 +933,13 @@ export default function InstructorAnalytics() {
           )}
         </ScrollView>
       </View>
-    </SafeAreaView>
+  );
+
+  if (embedded) {
+    return <View style={styles.container}>{analyticsContent}</View>;
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>{analyticsContent}</SafeAreaView>
   );
 }

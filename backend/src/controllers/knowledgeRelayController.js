@@ -194,6 +194,30 @@ const initializeKnowledgeRelaySocket = (io) => {
         return;
       }
 
+      // Allow switching teams by detecting current membership first.
+      let currentTeamId = null;
+      for (const [teamKey, team] of Object.entries(game.teams || {})) {
+        if (team.players?.some((p) => p.id === socket.id)) {
+          currentTeamId = teamKey;
+          break;
+        }
+      }
+
+      // If user taps the same team again, treat it as a successful no-op refresh.
+      if (currentTeamId === teamId) {
+        io.to(`kr-${playerInfo.gameId}`).emit("kr-team-selected", {
+          playerId: socket.id,
+          playerName: playerInfo.playerName,
+          teamId,
+          gameState: game.getGameState(),
+        });
+        return;
+      }
+
+      if (currentTeamId) {
+        game.removePlayer(socket.id);
+      }
+
       const result = game.addPlayerToTeam(
         socket.id,
         playerInfo.playerName,
@@ -216,7 +240,7 @@ const initializeKnowledgeRelaySocket = (io) => {
         });
 
         console.log(
-          `Knowledge Relay - Player ${playerInfo.playerName} joined team ${teamId}`
+          `Knowledge Relay - Player ${playerInfo.playerName} selected team ${teamId}`
         );
       } else {
         socket.emit("kr-error", { message: result.message });

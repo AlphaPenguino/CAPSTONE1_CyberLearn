@@ -11,6 +11,7 @@ import {
   Platform,
   StyleSheet,
   useWindowDimensions,
+  TextInput,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,6 +38,9 @@ export default function Settings() {
   const [profileImageError, setProfileImageError] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const [isSavingUsername, setIsSavingUsername] = useState(false);
   // Force re-render / cache bust key for Image component
   const [imageKey, setImageKey] = useState(Date.now());
   // Track upload attempt to enable retry logic if file not immediately available on CDN/storage
@@ -51,8 +55,23 @@ export default function Settings() {
     }
   }, [user?.profileImageTimestamp]);
 
+  useEffect(() => {
+    if (!isEditingUsername) {
+      setUsernameDraft(user?.username || "");
+    }
+  }, [user?.username, isEditingUsername]);
+
   // Use dark blue in light mode instead of the default yellow for settings accents
   const highlightColor = isDarkMode ? colors.primary : "#1976d2";
+  const screenGradient = isDarkMode ? ["#0f172a", "#111827"] : ["#caf1c8", "#5fd2cd"];
+  const premiumCardStyle = {
+    backgroundColor: isDarkMode
+      ? "rgba(15, 23, 42, 0.74)"
+      : "rgba(255, 255, 255, 0.84)",
+    borderColor: isDarkMode
+      ? "rgba(148, 163, 184, 0.26)"
+      : "rgba(148, 163, 184, 0.34)",
+  };
 
   // Helper function to get compatible image URL
   const getCompatibleImageUrl = (url) => {
@@ -108,6 +127,9 @@ export default function Settings() {
     if (uploadRetryCountRef.current >= 4) return; // max 4 retries
     const attempt = ++uploadRetryCountRef.current;
     setTimeout(async () => {
+      if (isEditingUsername) {
+        return;
+      }
       const retryUrl = addCacheBuster(baseUrl, Date.now());
       console.log(`🔁 Retry prefetch attempt ${attempt} ->`, retryUrl);
       await prefetchImage(retryUrl);
@@ -402,6 +424,109 @@ export default function Settings() {
     await saveSettings({ [setting]: value });
   };
 
+  const handleSaveUsername = async () => {
+    const nextUsername = (usernameDraft || "").trim();
+    const previousUser = useAuthStore.getState().user || {};
+    const previousUsername = previousUser?.username || "";
+
+    if (!nextUsername) {
+      Alert.alert("Invalid Username", "Username cannot be empty.");
+      return;
+    }
+
+    if (nextUsername.length < 3) {
+      Alert.alert(
+        "Invalid Username",
+        "Username should be at least 3 characters long."
+      );
+      return;
+    }
+
+    if ((user?.username || "").toLowerCase() === nextUsername.toLowerCase()) {
+      setIsEditingUsername(false);
+      return;
+    }
+
+    try {
+      setIsSavingUsername(true);
+      // Exit editing zone immediately when user confirms with check button.
+      setIsEditingUsername(false);
+
+      // Optimistic local update for snappy UX.
+      updateUser({
+        ...previousUser,
+        username: nextUsername,
+      });
+
+      const currentToken = useAuthStore.getState().token;
+
+      if (!currentToken) {
+        throw new Error("No authentication token found. Please log in again.");
+      }
+
+      const response = await fetch(`${API_URL}/users/me/username`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+        },
+        body: JSON.stringify({ username: nextUsername }),
+      });
+
+      let data = await response.json().catch(() => ({}));
+      let finalResponse = response;
+
+      // Fallback for older backend instances that may not expose /users/me/username yet.
+      if (response.status === 404) {
+        const currentUserId = user?._id || user?.id;
+        if (currentUserId) {
+          const fallbackResponse = await fetch(`${API_URL}/users/${currentUserId}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${currentToken}`,
+            },
+            body: JSON.stringify({ username: nextUsername }),
+          });
+          const fallbackData = await fallbackResponse.json().catch(() => ({}));
+          finalResponse = fallbackResponse;
+          data = fallbackData;
+        }
+      }
+
+      if (!finalResponse.ok || !data?.success) {
+        if (response.status === 404 && finalResponse.status === 404) {
+          throw new Error(
+            "Username endpoint is unavailable (404). Please restart the backend server and try again."
+          );
+        }
+        throw new Error(data?.message || "Failed to update username");
+      }
+
+      const existingUser = useAuthStore.getState().user || {};
+      const mergedUser = {
+        ...existingUser,
+        ...(data.user || {}),
+        username: data?.user?.username || nextUsername,
+      };
+
+      updateUser(mergedUser);
+      Alert.alert("Success", "Username updated successfully.");
+    } catch (error) {
+      console.error("Error updating username:", error);
+      // Roll back optimistic update and reopen editor so user can retry.
+      updateUser({
+        ...previousUser,
+        username: previousUsername,
+      });
+      setUsernameDraft(nextUsername);
+      setIsEditingUsername(true);
+      Alert.alert("Error", error.message || "Failed to update username.");
+    } finally {
+      setIsSavingUsername(false);
+    }
+  };
+
   const SettingItem = ({
     title,
     subtitle,
@@ -413,14 +538,7 @@ export default function Settings() {
     <View
       style={[
         styles.settingItem,
-        {
-          backgroundColor: isDarkMode
-            ? "rgba(219, 252, 219, 1)" // #5da65d with 0.5 opacity
-            : "rgba(219, 255, 219, 0.8)", // Same for light/dark mode
-          borderColor: isDarkMode
-            ? "rgba(93, 166, 93, 0.7)" // Slightly darker border for contrast
-            : "rgba(93, 166, 93, 0.7)",
-        },
+        premiumCardStyle,
       ]}
     >
       {/* Existing content */}
@@ -462,7 +580,7 @@ export default function Settings() {
       <Text
         style={[
           styles.sectionTitle,
-          { color: isDarkMode ? "#383217ff" : "#1976d2" },
+          { color: highlightColor },
         ]}
       >
         Profile
@@ -470,14 +588,7 @@ export default function Settings() {
       <View
         style={[
           styles.profileContainer,
-          {
-            backgroundColor: isDarkMode
-              ? "rgba(219, 252, 219, 1)"
-              : "rgba(219, 255, 219, 0.8)",
-            borderColor: isDarkMode
-              ? "rgba(93, 166, 93, 0.7)"
-              : "rgba(93, 166, 93, 0.7)",
-          },
+          premiumCardStyle,
         ]}
       >
         <TouchableOpacity
@@ -511,7 +622,7 @@ export default function Settings() {
                       error.nativeEvent
                     );
                     setProfileImageError(true);
-                    if (uploadRetryCountRef.current < 4) {
+                    if (!isEditingUsername && uploadRetryCountRef.current < 4) {
                       const constructed = constructProfileImageUrl(
                         user.profileImage
                       );
@@ -558,17 +669,80 @@ export default function Settings() {
           </View>
         </TouchableOpacity>
         <View style={styles.profileInfo}>
-          <Text style={[styles.profileName, { color: colors.text }]}>
-            {user?.username || "Unknown User"}
-          </Text>
+          <View style={styles.usernameRow}>
+            {isEditingUsername ? (
+              <TextInput
+                value={usernameDraft}
+                onChangeText={setUsernameDraft}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+                blurOnSubmit={false}
+                editable={!isSavingUsername}
+                style={[
+                  styles.usernameInput,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: isDarkMode
+                      ? "rgba(30, 41, 59, 0.8)"
+                      : "rgba(241, 245, 249, 0.9)",
+                  },
+                ]}
+              />
+            ) : (
+              <Text style={[styles.profileName, { color: colors.text }]}> 
+                {user?.username || "Unknown User"}
+              </Text>
+            )}
+
+            {isEditingUsername ? (
+              <View style={styles.usernameActionsRow}>
+                <TouchableOpacity
+                  style={styles.usernameActionButton}
+                  onPress={handleSaveUsername}
+                  disabled={isSavingUsername}
+                >
+                  {isSavingUsername ? (
+                    <ActivityIndicator size="small" color={highlightColor} />
+                  ) : (
+                    <Ionicons name="checkmark" size={18} color={highlightColor} />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.usernameActionButton}
+                  onPress={() => {
+                    setUsernameDraft(user?.username || "");
+                    setIsEditingUsername(false);
+                  }}
+                  disabled={isSavingUsername}
+                >
+                  <Ionicons name="close" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.usernameEditButton}
+                onPress={() => {
+                  setUsernameDraft(user?.username || "");
+                  setIsEditingUsername(true);
+                }}
+              >
+                <Ionicons name="create-outline" size={16} color={highlightColor} />
+                <Text style={[styles.usernameEditText, { color: highlightColor }]}> 
+                  Edit
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           <View
             style={[
               styles.profileInfoSection,
               {
                 backgroundColor: isDarkMode
-                  ? "rgba(185, 255, 185, 0.3)"
-                  : "rgba(210, 250, 210, 0.6)",
+                  ? "rgba(30, 41, 59, 0.78)"
+                  : "rgba(241, 245, 249, 0.9)",
               },
             ]}
           >
@@ -621,8 +795,8 @@ export default function Settings() {
               styles.changePhotoButton,
               {
                 backgroundColor: isDarkMode
-                  ? "rgba(139, 92, 246, 0.15)"
-                  : "rgba(25, 118, 210, 0.1)",
+                  ? "rgba(30, 41, 59, 0.88)"
+                  : "rgba(241, 245, 249, 0.95)",
               },
             ]}
             onPress={handleProfilePictureUpload}
@@ -649,7 +823,7 @@ export default function Settings() {
       <Text
         style={[
           styles.sectionTitle,
-          { color: isDarkMode ? "#383217ff" : "#1976d2" },
+          { color: highlightColor },
         ]}
       >
         Security
@@ -658,14 +832,7 @@ export default function Settings() {
       <TouchableOpacity
         style={[
           styles.settingItem,
-          {
-            backgroundColor: isDarkMode
-              ? "rgba(219, 252, 219, 1)"
-              : "rgba(219, 255, 219, 0.8)",
-            borderColor: isDarkMode
-              ? "rgba(93, 166, 93, 0.7)"
-              : "rgba(93, 166, 93, 0.7)",
-          },
+          premiumCardStyle,
         ]}
         onPress={() => setShowChangePassword(true)}
       >
@@ -696,7 +863,7 @@ export default function Settings() {
       <Text
         style={[
           styles.sectionTitle,
-          { color: isDarkMode ? "#383217ff" : "#1976d2" },
+          { color: highlightColor },
         ]}
       >
         App Preferences
@@ -727,7 +894,7 @@ export default function Settings() {
       <Text
         style={[
           styles.sectionTitle,
-          { color: isDarkMode ? "#383217ff" : "#1976d2" },
+          { color: highlightColor },
         ]}
       >
         About
@@ -754,7 +921,7 @@ export default function Settings() {
   );
 
   return (
-    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+    <LinearGradient colors={screenGradient} style={styles.container}>
       <ScrollView
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
@@ -767,8 +934,11 @@ export default function Settings() {
           ]}
         >
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
+            <Text style={[styles.headerTitle, { color: highlightColor }]}> 
               ⚙️ Settings
+            </Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}> 
+              Personalize your account and app experience
             </Text>
           </View>
           <ProfileSection />
@@ -866,51 +1036,56 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   pageWrapper: {
     width: "100%",
-    maxWidth: 1200,
+    maxWidth: 1040,
     alignSelf: "center",
-    paddingHorizontal: 0, // remove horizontal space on larger screens
+    paddingHorizontal: 0,
     paddingBottom: 32,
   },
   pageWrapperMobile: {
     paddingHorizontal: 12, // leave a little padding on mobile
   },
   header: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     borderBottomWidth: 1,
+    marginBottom: 14,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: "bold",
-    ...Platform.select({
-      web: {
-        textShadow: "0px 0px 10px rgba(0, 150, 255, 0.7)",
-      },
-      default: {
-        textShadowColor: "rgba(0, 150, 255, 0.7)",
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 10,
-      },
-    }),
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  headerSubtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    fontWeight: "500",
+    opacity: 0.9,
   },
   section: {
-    marginTop: 20,
+    marginTop: 14,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 15,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    fontSize: 17,
+    fontWeight: "700",
+    marginBottom: 10,
+    letterSpacing: 0.2,
   },
   profileContainer: {
     flexDirection: "row",
-    alignItems: "center",
-    padding: 20,
-    borderRadius: 15,
+    alignItems: "flex-start",
+    padding: 18,
+    borderRadius: 16,
     borderWidth: 1,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    elevation: 4,
   },
   profileInfoSection: {
     flexDirection: "row",
@@ -980,15 +1155,62 @@ const styles = StyleSheet.create({
   profileInfo: {
     flex: 1,
   },
+  usernameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    gap: 10,
+  },
+  usernameInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  usernameEditButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(148, 163, 184, 0.16)",
+  },
+  usernameEditText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  usernameActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  usernameActionButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(148, 163, 184, 0.16)",
+  },
 
   settingItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 14,
     marginBottom: 10,
     borderWidth: 1,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 2,
   },
   settingLeft: {
     flexDirection: "row",
@@ -1013,8 +1235,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
+    borderRadius: 12,
+    marginBottom: 8,
   },
 
   logoutButtonContainer: {
@@ -1025,9 +1250,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#dc3545",
+    backgroundColor: "#b91c1c",
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 14,
     marginTop: 10,
     ...(Platform.OS === "web"
       ? {

@@ -18,6 +18,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { GameNotificationService } from "@/services/gameNotificationService";
 import AnswerFeedbackModal from "@/components/ui/AnswerFeedbackModal";
+import { useTheme } from "@/contexts/ThemeContext";
 
 // Local fallback data for different question types (used only if API not available)
 const FALLBACK_QUESTIONS = [
@@ -150,8 +151,13 @@ const FALLBACK_QUESTIONS = [
   },
 ];
 
+const WEB_UI_SCALE = 1.2;
+const webScale = (value) =>
+  Platform.OS === "web" ? Math.round(value * WEB_UI_SCALE) : value;
+
 export default function QuickPlay() {
   const router = useRouter();
+  const { colors, isDarkMode } = useTheme();
   const { settings } = useSettings();
   const { showNotification } = useNotifications();
   const [gameState, setGameState] = useState("menu"); // menu, playing, results
@@ -175,6 +181,18 @@ export default function QuickPlay() {
   // Initialize game
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const iconSize = (value) =>
+    Platform.OS === "web" ? Math.round(value * WEB_UI_SCALE) : value;
+  const highlightColor = isDarkMode ? colors.primary : colors.textPrimary;
+  const screenGradient = isDarkMode ? ["#0f172a", "#111827"] : ["#caf1c8", "#5fd2cd"];
+  const premiumCard = {
+    backgroundColor: isDarkMode
+      ? "rgba(15, 23, 42, 0.74)"
+      : "rgba(255, 255, 255, 0.86)",
+    borderColor: isDarkMode
+      ? "rgba(148, 163, 184, 0.24)"
+      : "rgba(148, 163, 184, 0.34)",
+  };
 
   const startGame = async () => {
     setLoading(true);
@@ -344,20 +362,21 @@ export default function QuickPlay() {
 
   const renderMenuScreen = () => (
     <View style={styles.gameContent}>
-      <View style={styles.gameInfo}>
+      <View style={[styles.gameInfo, premiumCard]}>
         <View style={styles.textSection}>
-          <Text style={styles.description}>
+          <Text style={[styles.modeBadge, { color: colors.text }]}>ARCADE TRAINING MODE</Text>
+          <Text style={[styles.description, { color: colors.textSecondary }]}> 
             Solo practice with randomized questions from all levels
           </Text>
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoText, { color: colors.text }]}> 
             • Randomized questions from all available levels
           </Text>
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoText, { color: colors.text }]}> 
             • Time-based challenges (30 seconds per question)
           </Text>
-          <Text style={styles.infoText}>• 3 lives system</Text>
-          <Text style={styles.infoText}>• Multiple question types</Text>
-          <Text style={styles.infoText}>• High score tracking</Text>
+          <Text style={[styles.infoText, { color: colors.text }]}>• 3 lives system</Text>
+          <Text style={[styles.infoText, { color: colors.text }]}>• Multiple question types</Text>
+          <Text style={[styles.infoText, { color: colors.text }]}>• High score tracking</Text>
         </View>
 
         <View style={styles.imageSection}>
@@ -370,7 +389,7 @@ export default function QuickPlay() {
           </View>
 
           <TouchableOpacity
-            style={styles.playButton}
+            style={[styles.playButton, { backgroundColor: "#0f766e" }]}
             onPress={startGame}
             disabled={loading}
           >
@@ -397,27 +416,27 @@ export default function QuickPlay() {
     return (
       <ScrollView style={styles.gameContent}>
         {/* Game HUD */}
-        <View style={styles.gameHUD}>
+        <View style={[styles.gameHUD, premiumCard]}>
           <View style={styles.hudItem}>
-            <Ionicons name="heart" size={20} color={COLORS.error} />
-            <Text style={styles.hudText}>{lives}</Text>
+            <Ionicons name="heart" size={iconSize(20)} color={COLORS.error} />
+            <Text style={[styles.hudText, { color: colors.text }]}>{lives}</Text>
           </View>
           <View style={styles.hudItem}>
-            <Ionicons name="time" size={20} color={COLORS.primary} />
-            <Text style={styles.hudText}>{timeLeft}s</Text>
+            <Ionicons name="time" size={iconSize(20)} color={COLORS.primary} />
+            <Text style={[styles.hudText, { color: colors.text }]}>{timeLeft}s</Text>
           </View>
           <View style={styles.hudItem}>
-            <Ionicons name="trophy" size={20} color={COLORS.primary} />
-            <Text style={styles.hudText}>{score}</Text>
+            <Ionicons name="trophy" size={iconSize(20)} color={COLORS.primary} />
+            <Text style={[styles.hudText, { color: colors.text }]}>{score}</Text>
           </View>
         </View>
 
         {/* Progress */}
         <View style={styles.progressContainer}>
-          <Text style={styles.progressText}>
+          <Text style={[styles.progressText, { color: colors.textSecondary }]}> 
             Question {currentQuestionIndex + 1} of {shuffledQuestions.length}
           </Text>
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: isDarkMode ? "rgba(30,41,59,0.8)" : "rgba(226,232,240,0.9)", borderColor: premiumCard.borderColor }]}>
             <View
               style={[
                 styles.progressFill,
@@ -426,6 +445,7 @@ export default function QuickPlay() {
                     ((currentQuestionIndex + 1) / shuffledQuestions.length) *
                     100
                   }%`,
+                  backgroundColor: highlightColor,
                 },
               ]}
             />
@@ -433,24 +453,24 @@ export default function QuickPlay() {
         </View>
 
         {/* Question */}
-        <View style={styles.questionContainer}>
+        <View style={[styles.questionContainer, premiumCard]}>
           <View style={styles.questionHeader}>
-            <Text style={styles.questionType}>
+            <Text style={[styles.questionType, { color: colors.textSecondary }]}> 
               {currentQuestion.type
                 .replace(/([A-Z])/g, " $1")
                 .replace(/^./, (str) => str.toUpperCase())}
             </Text>
-            <Text style={styles.difficulty}>
+            <Text style={[styles.difficulty, { color: highlightColor, borderColor: highlightColor, backgroundColor: isDarkMode ? "rgba(15,23,42,0.8)" : "rgba(241,245,249,0.9)" }]}> 
               {currentQuestion.difficulty.toUpperCase()}
             </Text>
           </View>
-          <Text style={styles.questionText}>{currentQuestion.question}</Text>
+          <Text style={[styles.questionText, { color: colors.text }]}>{currentQuestion.question}</Text>
 
           {renderQuestionContent(currentQuestion)}
         </View>
 
         {/* Submit Button */}
-        <TouchableOpacity style={styles.submitButton} onPress={submitAnswer}>
+        <TouchableOpacity style={[styles.submitButton, { backgroundColor: "#0f766e" }]} onPress={submitAnswer}>
           <Text style={styles.submitButtonText}>SUBMIT ANSWER</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -502,12 +522,12 @@ export default function QuickPlay() {
 
     return (
       <View style={styles.fillInBlanksContainer}>
-        <Text style={styles.helperText}>Fill in the blanks:</Text>
+          <Text style={[styles.helperText, { color: colors.textSecondary }]}>Fill in the blanks:</Text>
         {question.blanks.map((_, index) => (
           <View key={index} style={styles.blankContainer}>
-            <Text style={styles.blankLabel}>Blank {index + 1}:</Text>
+            <Text style={[styles.blankLabel, { color: colors.text }]}>Blank {index + 1}:</Text>
             <TextInput
-              style={styles.blankInput}
+              style={[styles.blankInput, { color: colors.text, borderColor: premiumCard.borderColor, backgroundColor: isDarkMode ? "rgba(30,41,59,0.75)" : "rgba(241,245,249,0.92)" }]}
               value={userBlanks[index]}
               onChangeText={(text) => {
                 const newBlanks = [...userBlanks];
@@ -525,12 +545,12 @@ export default function QuickPlay() {
 
   const renderCodeMissing = (question) => (
     <View style={styles.codeMissingContainer}>
-      <Text style={styles.helperText}>Complete the missing code:</Text>
-      <View style={styles.codeContainer}>
-        <Text style={styles.codeText}>{question.codeTemplate}</Text>
+      <Text style={[styles.helperText, { color: colors.textSecondary }]}>Complete the missing code:</Text>
+      <View style={[styles.codeContainer, { borderColor: premiumCard.borderColor, backgroundColor: isDarkMode ? "rgba(30,41,59,0.75)" : "rgba(241,245,249,0.92)" }]}>
+        <Text style={[styles.codeText, { color: colors.text }]}>{question.codeTemplate}</Text>
       </View>
       <TextInput
-        style={styles.codeInput}
+        style={[styles.codeInput, { color: colors.text, borderColor: premiumCard.borderColor, backgroundColor: isDarkMode ? "rgba(30,41,59,0.75)" : "rgba(241,245,249,0.92)" }]}
         value={answers.codeAnswer || ""}
         onChangeText={(text) => setAnswers({ ...answers, codeAnswer: text })}
         placeholder="Enter the missing code..."
@@ -548,18 +568,18 @@ export default function QuickPlay() {
 
     return (
       <View style={styles.codeOrderingContainer}>
-        <Text style={styles.helperText}>
+        <Text style={[styles.helperText, { color: colors.textSecondary }]}> 
           Drag and arrange the code blocks in the correct order:
         </Text>
 
         {/* Ordered blocks */}
         <View style={styles.orderedBlocksContainer}>
-          <Text style={styles.sectionTitle}>Your Order:</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Order:</Text>
           {userOrder.map((blockId, index) => {
             const block = question.codeBlocks.find((b) => b.id === blockId);
             return (
-              <View key={index} style={styles.orderedBlock}>
-                <Text style={styles.codeBlockText}>
+              <View key={index} style={[styles.orderedBlock, { backgroundColor: "rgba(15,118,110,0.14)", borderColor: "rgba(15,118,110,0.34)" }]}>
+                <Text style={[styles.codeBlockText, { color: colors.text }]}> 
                   {index + 1}. {block?.code}
                 </Text>
                 <TouchableOpacity
@@ -571,7 +591,7 @@ export default function QuickPlay() {
                 >
                   <Ionicons
                     name="close-circle"
-                    size={20}
+                    size={iconSize(20)}
                     color={COLORS.error}
                   />
                 </TouchableOpacity>
@@ -582,17 +602,17 @@ export default function QuickPlay() {
 
         {/* Available blocks */}
         <View style={styles.availableBlocksContainer}>
-          <Text style={styles.sectionTitle}>Available Blocks:</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Available Blocks:</Text>
           {availableBlocks.map((block) => (
             <TouchableOpacity
               key={block.id}
-              style={styles.availableBlock}
+              style={[styles.availableBlock, { borderColor: premiumCard.borderColor, backgroundColor: isDarkMode ? "rgba(30,41,59,0.75)" : "rgba(241,245,249,0.92)" }]}
               onPress={() => {
                 const newOrder = [...userOrder, block.id];
                 setAnswers({ ...answers, codeOrder: newOrder });
               }}
             >
-              <Text style={styles.codeBlockText}>{block.code}</Text>
+              <Text style={[styles.codeBlockText, { color: colors.text }]}>{block.code}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -602,27 +622,27 @@ export default function QuickPlay() {
 
   const renderResultsScreen = () => (
     <View style={styles.content}>
-      <View style={styles.resultsContainer}>
-        <Ionicons name="trophy" size={64} color={COLORS.primary} />
-        <Text style={styles.resultsTitle}>Game Complete!</Text>
-        <Text style={styles.finalScore}>Final Score: {score}</Text>
-        <Text style={styles.resultsDetails}>
+      <View style={[styles.resultsContainer, premiumCard]}>
+        <Ionicons name="trophy" size={iconSize(64)} color={COLORS.primary} />
+        <Text style={[styles.resultsTitle, { color: colors.text }]}>Game Complete!</Text>
+        <Text style={[styles.finalScore, { color: highlightColor }]}>Final Score: {score}</Text>
+        <Text style={[styles.resultsDetails, { color: colors.textSecondary }]}> 
           Questions Answered: {currentQuestionIndex + 1}
         </Text>
-        <Text style={styles.resultsDetails}>
+        <Text style={[styles.resultsDetails, { color: colors.textSecondary }]}> 
           Accuracy:{" "}
           {Math.round((score / (10 * (currentQuestionIndex + 1))) * 100)}%
         </Text>
 
         <View style={styles.resultsButtons}>
-          <TouchableOpacity style={styles.playAgainButton} onPress={startGame}>
+          <TouchableOpacity style={[styles.playAgainButton, { backgroundColor: "#0f766e" }]} onPress={startGame}>
             <Text style={styles.playAgainButtonText}>PLAY AGAIN</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.backToMenuButton}
+            style={[styles.backToMenuButton, { backgroundColor: isDarkMode ? "rgba(30,41,59,0.88)" : "rgba(241,245,249,0.95)", borderColor: premiumCard.borderColor }]}
             onPress={() => setGameState("menu")}
           >
-            <Text style={styles.backToMenuButtonText}>BACK TO MENU</Text>
+            <Text style={[styles.backToMenuButtonText, { color: colors.text }]}>BACK TO MENU</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -630,16 +650,21 @@ export default function QuickPlay() {
   );
 
   return (
-    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+    <LinearGradient colors={screenGradient} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => router.replace("/(tabs)/game")}
           >
-            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+            <Ionicons name="arrow-back" size={iconSize(24)} color={highlightColor} />
           </TouchableOpacity>
-          <Text style={styles.title}>Quick Play</Text>
+          <View style={styles.headerTextWrap}>
+            <Text style={[styles.title, { color: highlightColor }]}>Quick Play</Text>
+            <Text style={[styles.titleSubtitle, { color: colors.textSecondary }]}> 
+              Solo training mode
+            </Text>
+          </View>
         </View>
 
         {gameState === "menu" && renderMenuScreen()}
@@ -662,7 +687,7 @@ export default function QuickPlay() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: "transparent",
   },
   safeArea: {
     flex: 1,
@@ -670,64 +695,107 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: webScale(20),
+    paddingVertical: webScale(14),
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148, 163, 184, 0.28)",
   },
   backButton: {
-    marginRight: 16,
+    marginRight: webScale(16),
+  },
+  headerTextWrap: {
+    flex: 1,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: webScale(24),
+    fontWeight: "800",
     color: COLORS.textPrimary,
+    letterSpacing: 0.4,
+  },
+  titleSubtitle: {
+    marginTop: webScale(2),
+    fontSize: webScale(13),
+    fontWeight: "500",
+    opacity: 0.9,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: webScale(20),
+    paddingTop: webScale(20),
+    alignSelf: Platform.OS === "web" ? "center" : undefined,
+    width: Platform.OS === "web" ? webScale(980) : "100%",
+    maxWidth: "100%",
+  },
+  modeBadge: {
+    alignSelf: "flex-start",
+    fontSize: webScale(11),
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    borderWidth: 1,
+    borderColor: "rgba(15,118,110,0.45)",
+    backgroundColor: "rgba(15,118,110,0.12)",
+    paddingHorizontal: webScale(10),
+    paddingVertical: webScale(6),
+    borderRadius: 999,
+    marginBottom: webScale(12),
   },
   description: {
-    fontSize: 16,
+    fontSize: Platform.OS === "web" ? webScale(18) : 16,
     color: COLORS.textSecondary,
-    marginBottom: 30,
+    marginBottom: webScale(30),
     textAlign: "left",
+    lineHeight: webScale(26),
   },
   gameInfo: {
     backgroundColor: COLORS.cardBackground,
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 30,
+    padding: Platform.OS === "web" ? webScale(28) : 20,
+    borderRadius: webScale(16),
+    marginBottom: webScale(30),
     borderWidth: 1,
-    borderColor: "#FFFFFF",
+    borderColor: "rgba(148, 163, 184, 0.3)",
     flexDirection: "row",
     alignItems: "center",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: webScale(16),
+    elevation: 4,
   },
   textSection: {
     flex: 1,
-    paddingRight: 20,
+    paddingRight: webScale(20),
   },
   imageSection: {
     alignItems: "flex-start",
     justifyContent: "center",
   },
   infoText: {
-    fontSize: 14,
+    fontSize: Platform.OS === "web" ? webScale(16) : 14,
     color: COLORS.textPrimary,
-    marginBottom: 8,
-    lineHeight: 20,
+    marginBottom: webScale(10),
+    lineHeight: webScale(22),
   },
   playButton: {
     backgroundColor: "#d0ea4a",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    paddingVertical: webScale(16),
+    paddingHorizontal: Platform.OS === "web" ? webScale(28) : 16,
+    minWidth: Platform.OS === "web" ? webScale(220) : undefined,
+    borderRadius: webScale(12),
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: webScale(20),
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.35)",
+    shadowColor: "#0f766e",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: webScale(14),
+    elevation: 5,
   },
   playButtonText: {
-    color: "#03894d",
-    fontSize: 16,
+    color: "#f8fafc",
+    fontSize: webScale(16),
     fontWeight: "bold",
+    letterSpacing: 0.8,
   },
 
   // Image inside gameInfo
@@ -736,16 +804,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   menuImage: {
-    width: Platform.OS === "web" ? 200 : 160,
-    height: Platform.OS === "web" ? 200 : 160,
+    width: Platform.OS === "web" ? webScale(260) : 160,
+    height: Platform.OS === "web" ? webScale(260) : 160,
   },
 
   // Game Screen Styles
   gameContent: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: webScale(20),
     alignSelf: Platform.OS === "web" ? "center" : undefined,
-    width: Platform.OS === "web" ? 800 : "100%",
+    width: Platform.OS === "web" ? webScale(980) : "100%",
     maxWidth: "100%",
   },
 
@@ -753,35 +821,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     backgroundColor: COLORS.cardBackground,
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 20,
+    padding: webScale(15),
+    borderRadius: webScale(14),
+    marginBottom: webScale(20),
     borderWidth: 1,
-    borderColor: "#2acde6",
+    borderColor: "rgba(148, 163, 184, 0.3)",
   },
   hudItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: webScale(6),
+    paddingHorizontal: webScale(10),
+    paddingVertical: webScale(6),
+    borderRadius: webScale(10),
+    backgroundColor: "rgba(15,118,110,0.1)",
   },
   hudText: {
     color: COLORS.textPrimary,
-    fontSize: 16,
+    fontSize: webScale(16),
     fontWeight: "bold",
   },
   progressContainer: {
-    marginBottom: 20,
+    marginBottom: webScale(20),
   },
   progressText: {
     color: COLORS.textSecondary,
-    fontSize: 14,
-    marginBottom: 8,
+    fontSize: webScale(14),
+    marginBottom: webScale(8),
     textAlign: "center",
   },
   progressBar: {
-    height: 8,
+    height: webScale(8),
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 4,
+    borderRadius: webScale(4),
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#2acde6",
@@ -794,11 +866,11 @@ const styles = StyleSheet.create({
   // Question Styles
   questionContainer: {
     backgroundColor: COLORS.cardBackground,
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
+    padding: webScale(20),
+    borderRadius: webScale(14),
+    marginBottom: webScale(20),
     borderWidth: 1,
-    borderColor: "#2acde6",
+    borderColor: "rgba(148, 163, 184, 0.3)",
   },
   questionHeader: {
     flexDirection: "row",
@@ -824,10 +896,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accent,
   },
   questionText: {
-    fontSize: 16,
+    fontSize: webScale(16),
     color: COLORS.textPrimary,
-    lineHeight: 24,
-    marginBottom: 20,
+    lineHeight: webScale(24),
+    marginBottom: webScale(20),
   },
 
   // Multiple Choice Styles
@@ -835,18 +907,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   optionButton: {
-    backgroundColor: "#92eacc",
+    backgroundColor: "rgba(241, 245, 249, 0.92)",
     padding: 15,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#2acde6",
+    borderColor: "rgba(148, 163, 184, 0.34)",
   },
   selectedOption: {
-    backgroundColor: "#4a7c59",
-    borderColor: "#2acde6",
+    backgroundColor: "#0f766e",
+    borderColor: "#0f766e",
   },
   optionText: {
-    fontSize: 14,
+    fontSize: webScale(14),
     color: COLORS.textPrimary,
   },
   selectedOptionText: {
@@ -859,10 +931,10 @@ const styles = StyleSheet.create({
     gap: 15,
   },
   helperText: {
-    fontSize: 14,
+    fontSize: webScale(14),
     color: COLORS.textSecondary,
     fontStyle: "italic",
-    marginBottom: 10,
+    marginBottom: webScale(10),
   },
   blankContainer: {
     gap: 8,
@@ -916,10 +988,10 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: webScale(16),
     color: COLORS.textPrimary,
     fontWeight: "bold",
-    marginBottom: 10,
+    marginBottom: webScale(10),
   },
   orderedBlocksContainer: {
     gap: 10,
@@ -928,10 +1000,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: COLORS.primary,
+    backgroundColor: "rgba(15,118,110,0.16)",
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "rgba(15,118,110,0.34)",
   },
   availableBlocksContainer: {
     gap: 10,
@@ -953,74 +1027,90 @@ const styles = StyleSheet.create({
 
   // Submit Button
   submitButton: {
-    backgroundColor: COLORS.accent,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
+    backgroundColor: "#0f766e",
+    paddingVertical: webScale(16),
+    paddingHorizontal: webScale(32),
+    borderRadius: webScale(12),
     alignItems: "center",
-    marginBottom: 30,
-    marginTop: 10,
+    marginBottom: webScale(30),
+    marginTop: webScale(10),
+    shadowColor: "#0f766e",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: webScale(12),
+    elevation: 4,
   },
   submitButtonText: {
     color: "#FFF",
-    fontSize: 16,
+    fontSize: webScale(16),
     fontWeight: "bold",
+    letterSpacing: 0.8,
   },
 
   // Results Screen Styles
   resultsContainer: {
     alignItems: "center",
-    paddingVertical: 40,
+    paddingVertical: webScale(40),
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.3)",
+    borderRadius: webScale(16),
+    paddingHorizontal: webScale(20),
+    marginTop: webScale(12),
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? webScale(980) : "100%",
+    alignSelf: "center",
   },
   resultsTitle: {
-    fontSize: 28,
+    fontSize: webScale(28),
     fontWeight: "bold",
     color: COLORS.textPrimary,
-    marginTop: 20,
-    marginBottom: 10,
+    marginTop: webScale(20),
+    marginBottom: webScale(10),
   },
   finalScore: {
-    fontSize: 24,
+    fontSize: webScale(24),
     color: COLORS.textPrimary,
     fontWeight: "bold",
-    marginBottom: 20,
+    marginBottom: webScale(20),
   },
   resultsDetails: {
-    fontSize: 16,
+    fontSize: webScale(16),
     color: COLORS.textSecondary,
-    marginBottom: 8,
+    marginBottom: webScale(8),
   },
   resultsButtons: {
     width: "100%",
-    gap: 15,
-    marginTop: 30,
-    maxWidth: Platform.OS === "web" ? 500 : "100%",
+    gap: webScale(15),
+    marginTop: webScale(30),
+    maxWidth: Platform.OS === "web" ? webScale(500) : "100%",
     alignSelf: "center",
      },
   playAgainButton: {
-    backgroundColor: "#45db8b",
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
+    backgroundColor: "#0f766e",
+    paddingVertical: webScale(16),
+    paddingHorizontal: webScale(32),
+    borderRadius: webScale(12),
     alignItems: "center",
   },
   playAgainButtonText: {
     color: "#FFF",
-    fontSize: 16,
+    fontSize: webScale(16),
     fontWeight: "bold",
+    letterSpacing: 0.7,
   },
   backToMenuButton: {
-    backgroundColor: "#45db8b",
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
+    backgroundColor: "#f1f5f9",
+    paddingVertical: webScale(16),
+    paddingHorizontal: webScale(32),
+    borderRadius: webScale(12),
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#2acde6",
+    borderColor: "rgba(148, 163, 184, 0.34)",
   },
   backToMenuButtonText: {
-    color: "#FFF",
-    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontSize: webScale(16),
     fontWeight: "bold",
+    letterSpacing: 0.7,
   },
 });
