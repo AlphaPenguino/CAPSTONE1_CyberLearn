@@ -184,6 +184,8 @@ export default function QuickPlay() {
   const iconSize = (value) =>
     Platform.OS === "web" ? Math.round(value * WEB_UI_SCALE) : value;
   const highlightColor = isDarkMode ? colors.primary : colors.textPrimary;
+  const trainingPrimaryText = isDarkMode ? "#f8fafc" : "#0f172a";
+  const trainingSecondaryText = isDarkMode ? "#cbd5e1" : "#334155";
   const screenGradient = isDarkMode ? ["#0f172a", "#111827"] : ["#caf1c8", "#5fd2cd"];
   const premiumCard = {
     backgroundColor: isDarkMode
@@ -364,19 +366,24 @@ export default function QuickPlay() {
     <View style={styles.gameContent}>
       <View style={[styles.gameInfo, premiumCard]}>
         <View style={styles.textSection}>
-          <Text style={[styles.modeBadge, { color: colors.text }]}>ARCADE TRAINING MODE</Text>
-          <Text style={[styles.description, { color: colors.textSecondary }]}> 
+          <Text style={[styles.modeBadge, { color: trainingPrimaryText }]}>ARCADE TRAINING MODE</Text>
+          <Text
+            style={[
+              styles.description,
+              { color: trainingSecondaryText },
+            ]}
+          >
             Solo practice with randomized questions from all levels
           </Text>
-          <Text style={[styles.infoText, { color: colors.text }]}> 
+          <Text style={[styles.infoText, { color: trainingPrimaryText }]}> 
             • Randomized questions from all available levels
           </Text>
-          <Text style={[styles.infoText, { color: colors.text }]}> 
+          <Text style={[styles.infoText, { color: trainingPrimaryText }]}> 
             • Time-based challenges (30 seconds per question)
           </Text>
-          <Text style={[styles.infoText, { color: colors.text }]}>• 3 lives system</Text>
-          <Text style={[styles.infoText, { color: colors.text }]}>• Multiple question types</Text>
-          <Text style={[styles.infoText, { color: colors.text }]}>• High score tracking</Text>
+          <Text style={[styles.infoText, { color: trainingPrimaryText }]}>• 3 lives system</Text>
+          <Text style={[styles.infoText, { color: trainingPrimaryText }]}>• Multiple question types</Text>
+          <Text style={[styles.infoText, { color: trainingPrimaryText }]}>• High score tracking</Text>
         </View>
 
         <View style={styles.imageSection}>
@@ -760,14 +767,39 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: webScale(16),
     elevation: 4,
+    ...Platform.select({
+      android: {
+        flexDirection: "column",
+        alignItems: "stretch",
+        padding: 14,
+      },
+      default: {},
+    }),
   },
   textSection: {
     flex: 1,
     paddingRight: webScale(20),
+    ...Platform.select({
+      android: {
+        flex: 0,
+        width: "100%",
+        paddingRight: 0,
+        marginBottom: 10,
+      },
+      default: {},
+    }),
   },
   imageSection: {
     alignItems: "flex-start",
     justifyContent: "center",
+    ...Platform.select({
+      android: {
+        alignItems: "center",
+        width: "100%",
+        marginTop: 4,
+      },
+      default: {},
+    }),
   },
   infoText: {
     fontSize: Platform.OS === "web" ? webScale(16) : 14,
@@ -790,6 +822,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.28,
     shadowRadius: webScale(14),
     elevation: 5,
+    ...Platform.select({
+      android: {
+        width: "100%",
+        marginBottom: 8,
+      },
+      default: {},
+    }),
   },
   playButtonText: {
     color: "#f8fafc",
@@ -806,6 +845,13 @@ const styles = StyleSheet.create({
   menuImage: {
     width: Platform.OS === "web" ? webScale(260) : 160,
     height: Platform.OS === "web" ? webScale(260) : 160,
+    ...Platform.select({
+      android: {
+        width: 128,
+        height: 128,
+      },
+      default: {},
+    }),
   },
 
   // Game Screen Styles

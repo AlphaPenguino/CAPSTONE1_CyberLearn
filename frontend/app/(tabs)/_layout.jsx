@@ -323,6 +323,24 @@ export default function TabLayout() {
         />
 
         <Tabs.Screen
+          name="quiz-showdown"
+          options={{
+            href: null,
+            title: "Quiz Showdown",
+            headerShown: Platform.OS !== "web",
+          }}
+        />
+
+        <Tabs.Screen
+          name="digital-defenders"
+          options={{
+            href: null,
+            title: "Digital Defenders",
+            headerShown: Platform.OS !== "web",
+          }}
+        />
+
+        <Tabs.Screen
           name="settings"
           options={{
             title: "Settings",

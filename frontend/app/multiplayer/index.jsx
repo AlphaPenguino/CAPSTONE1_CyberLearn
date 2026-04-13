@@ -25,7 +25,7 @@ export default function MultiplayerIndex() {
       icon: "bell-ring",
       color: "#2acde6",
       players: "2-8 Players",
-      route: "/multiplayer/quiz-showdown",
+      route: "/(tabs)/quiz-showdown",
       status: "available",
     },
     {
@@ -49,7 +49,7 @@ export default function MultiplayerIndex() {
       icon: "shield-account",
       color: "#1a5344",
       players: "2-4 Players",
-      route: "/multiplayer/digital-defenders",
+      route: "/(tabs)/digital-defenders",
       status: "available",
     },
   ];

@@ -117,6 +117,11 @@ class QuizShowdownSocketService {
       this.emit("game-finished", data);
     });
 
+    this.socket.on("game-restarted", (data) => {
+      console.log("Game restarted:", data);
+      this.emit("game-restarted", data);
+    });
+
     this.socket.on("player-disconnected", (data) => {
       console.log("Player disconnected:", data);
       this.emit("player-disconnected", data);
@@ -125,6 +130,11 @@ class QuizShowdownSocketService {
     this.socket.on("room-closed", (data) => {
       console.log("Room closed:", data);
       this.emit("room-closed", data);
+    });
+
+    this.socket.on("room-left", (data) => {
+      console.log("Room left:", data);
+      this.emit("room-left", data);
     });
 
     this.socket.on("game-state", (data) => {
@@ -163,12 +173,26 @@ class QuizShowdownSocketService {
     this.socket.emit("join-team", { roomId, teamName });
   }
 
+  leaveRoom() {
+    if (!this.socket?.connected) {
+      throw new Error("Socket not connected");
+    }
+    this.socket.emit("leave-room");
+  }
+
   startGame(roomId) {
     if (!this.socket?.connected) {
       throw new Error("Socket not connected");
     }
     console.log("Starting game in room:", roomId);
     this.socket.emit("start-game", { roomId });
+  }
+
+  restartGame(roomId) {
+    if (!this.socket?.connected) {
+      throw new Error("Socket not connected");
+    }
+    this.socket.emit("restart-game", { roomId });
   }
 
   buzz(roomId, teamName) {
@@ -192,6 +216,13 @@ class QuizShowdownSocketService {
       roomId
     );
     this.socket.emit("submit-answer", { roomId, teamName, answerIndex });
+  }
+
+  questionTimeExpired(roomId, teamName) {
+    if (!this.socket?.connected) {
+      throw new Error("Socket not connected");
+    }
+    this.socket.emit("question-time-expired", { roomId, teamName });
   }
 
   getGameState(roomId) {

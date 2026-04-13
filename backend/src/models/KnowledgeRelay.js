@@ -354,7 +354,7 @@ class KnowledgeRelayGame {
   tickTimer() {
     if (!this.isTimerActive) return false;
 
-    this.timer--;
+    this.timer = Math.max(0, this.timer - 1);
 
     if (this.timer <= 0) {
       return this.handleTimeout();
@@ -367,12 +367,22 @@ class KnowledgeRelayGame {
   handleTimeout() {
     const currentTeamData = this.teams[this.currentTeam];
 
+    // Freeze current countdown tick before applying timeout transition.
+    this.stopTimer();
+
     // If team has passes remaining, auto-pass
     if (currentTeamData.passesRemaining > 0) {
       return this.usePass(this.currentTeam);
     } else {
-      // Treat as wrong answer and move to next player
-      return this.moveToNextPlayer(false);
+      // Treat as wrong answer and move to next player with a fresh timer.
+      const nextPlayerResult = this.moveToNextPlayer(false);
+      this.startTimer();
+      return {
+        success: true,
+        passed: false,
+        timedOut: true,
+        ...nextPlayerResult,
+      };
     }
   }
 

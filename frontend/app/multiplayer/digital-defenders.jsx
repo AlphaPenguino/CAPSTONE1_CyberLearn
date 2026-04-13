@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
   ScrollView,
   Alert,
@@ -38,6 +39,14 @@ if (IS_UNSUPPORTED_PLATFORM) {
 }
 
 const { width: screenWidth } = Dimensions.get("window");
+
+const PREMIUM_GRADIENT = ["#caf1c8", "#5fd2cd"];
+const PREMIUM_SURFACE = "rgba(255, 255, 255, 0.92)";
+const PREMIUM_SURFACE_ALT = "rgba(255, 255, 255, 0.85)";
+const PREMIUM_TEXT = "#0f172a";
+const PREMIUM_MUTED = "#334155";
+const PREMIUM_ACCENT = "#1f8f6a";
+const PREMIUM_ACCENT_DARK = "#0f6b50";
 
 // Dummy data for testing
 const DUMMY_QUESTION_CARDS = [
@@ -370,7 +379,10 @@ function DigitalDefenders() {
         style={styles.actionsMenuOverlay}
       >
         <View style={styles.actionsMenuContainer}>
-          <Text style={styles.actionsMenuTitle}>Actions</Text>
+          <View style={styles.actionsMenuHeader}>
+            <Text style={styles.actionsMenuTitle}>Menu</Text>
+            <Text style={styles.actionsMenuSubtitle}>Question tools and imports</Text>
+          </View>
           <TouchableOpacity
             style={styles.actionsMenuItem}
             onPress={() => {
@@ -378,8 +390,16 @@ function DigitalDefenders() {
               setShowActionsMenu(false);
             }}
           >
-            <MaterialCommunityIcons name="download" size={20} color="#10b981" />
+            <View style={styles.actionsMenuItemIcon}>
+              <MaterialCommunityIcons name="download" size={18} color="#10b981" />
+            </View>
             <Text style={styles.actionsMenuItemText}>Download Sample</Text>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={20}
+              color="rgba(15, 23, 42, 0.45)"
+              style={styles.actionsMenuItemRight}
+            />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionsMenuItem}
@@ -388,8 +408,16 @@ function DigitalDefenders() {
               setShowActionsMenu(false);
             }}
           >
-            <MaterialCommunityIcons name="upload" size={20} color="#2acde6" />
+            <View style={styles.actionsMenuItemIcon}>
+              <MaterialCommunityIcons name="upload" size={18} color="#0ea5e9" />
+            </View>
             <Text style={styles.actionsMenuItemText}>Upload JSON</Text>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={20}
+              color="rgba(15, 23, 42, 0.45)"
+              style={styles.actionsMenuItemRight}
+            />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionsMenuItem}
@@ -398,18 +426,29 @@ function DigitalDefenders() {
               setShowActionsMenu(false);
             }}
           >
-            <MaterialCommunityIcons
-              name="book-open-page-variant"
-              size={20}
-              color="#6366f1"
-            />
+            <View style={styles.actionsMenuItemIcon}>
+              <MaterialCommunityIcons
+                name="book-open-page-variant"
+                size={18}
+                color="#6366f1"
+              />
+            </View>
             <Text style={styles.actionsMenuItemText}>Import Docs</Text>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={20}
+              color="rgba(15, 23, 42, 0.45)"
+              style={styles.actionsMenuItemRight}
+            />
           </TouchableOpacity>
+          <View style={styles.actionsMenuDivider} />
           <TouchableOpacity
             style={[styles.actionsMenuItem, styles.actionsMenuCloseItem]}
             onPress={() => setShowActionsMenu(false)}
           >
-            <MaterialCommunityIcons name="close" size={20} color="#f87171" />
+            <View style={styles.actionsMenuItemIcon}>
+              <MaterialCommunityIcons name="close" size={18} color="#ef4444" />
+            </View>
             <Text style={styles.actionsMenuItemText}>Close</Text>
           </TouchableOpacity>
         </View>
@@ -509,6 +548,32 @@ function DigitalDefenders() {
       Alert.alert(title, message, buttons);
     }
   };
+
+  const isInvalidSessionPayload = useCallback((payload) => {
+    const rawMessage =
+      typeof payload === "string"
+        ? payload
+        : payload?.message || payload?.error || payload?.reason || "";
+
+    return /invalid\s*session|session\s*invalid|session\s*expired|unauthorized|auth\s*failed|token\s*expired/i.test(
+      String(rawMessage)
+    );
+  }, []);
+
+  const handleInvalidSessionGameOver = useCallback(
+    (payload) => {
+      const message =
+        (typeof payload === "string" ? payload : payload?.message || payload?.error) ||
+        "Your game session is no longer valid. Please start a new match.";
+
+      setIsConnected(false);
+      setGameEndData({ message });
+      setGameOverReason("invalid_session");
+      setGameState("gameOver");
+      showAlert("Session Invalid", message);
+    },
+    [showAlert]
+  );
 
   // Backend data loading functions
   const loadGameData = useCallback(async () => {
@@ -1199,7 +1264,11 @@ function DigitalDefenders() {
 
     const handleSocketError = (data) => {
       console.error("Socket error:", data);
-      Alert.alert("Error", data.message || "An error occurred");
+      if (isInvalidSessionPayload(data)) {
+        handleInvalidSessionGameOver(data);
+        return;
+      }
+      Alert.alert("Error", data.message || data.error || "An error occurred");
     };
 
     const handleSocketConnected = () => {
@@ -1211,7 +1280,17 @@ function DigitalDefenders() {
     const handleSocketDisconnected = (data) => {
       console.log("Socket disconnected:", data?.reason || "unknown reason");
       setIsConnected(false);
+      if (isInvalidSessionPayload(data)) {
+        handleInvalidSessionGameOver(data);
+      }
       // Don't immediately clear room data, allow for reconnection
+    };
+
+    const handleSocketConnectionError = (data) => {
+      console.error("Socket connection error:", data?.error || data?.message);
+      if (isInvalidSessionPayload(data)) {
+        handleInvalidSessionGameOver(data);
+      }
     };
 
     const handleSocketReconnected = (data) => {
@@ -1270,6 +1349,7 @@ function DigitalDefenders() {
     digitalDefendersSocket.on("player-disconnected", handlePlayerDisconnected);
     digitalDefendersSocket.on("player-left", handlePlayerLeft);
     digitalDefendersSocket.on("socket-game-error", handleSocketError);
+    digitalDefendersSocket.on("socket-error", handleSocketConnectionError);
     digitalDefendersSocket.on("socket-connected", handleSocketConnected);
     digitalDefendersSocket.on("socket-disconnected", handleSocketDisconnected);
     digitalDefendersSocket.on("socket-reconnected", handleSocketReconnected);
@@ -1315,6 +1395,7 @@ function DigitalDefenders() {
       );
       digitalDefendersSocket.off("player-left", handlePlayerLeft);
       digitalDefendersSocket.off("socket-game-error", handleSocketError);
+      digitalDefendersSocket.off("socket-error", handleSocketConnectionError);
       digitalDefendersSocket.off("socket-connected", handleSocketConnected);
       digitalDefendersSocket.off(
         "socket-disconnected",
@@ -1335,6 +1416,8 @@ function DigitalDefenders() {
     };
   }, [
     syncWithServerState,
+    isInvalidSessionPayload,
+    handleInvalidSessionGameOver,
     user,
     token,
     isMyTurn,
@@ -2204,7 +2287,7 @@ function DigitalDefenders() {
             onPress={createRoom}
             disabled={!isConnected || !playerName.trim()}
           >
-            <MaterialCommunityIcons name="plus" size={20} color="#3b82f6" />
+            <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
             <Text style={styles.lobbyActionButtonText}>Create Room</Text>
           </TouchableOpacity>
 
@@ -2235,7 +2318,7 @@ function DigitalDefenders() {
               onPress={joinRoom}
               disabled={!isConnected || !playerName.trim() || !roomId.trim()}
             >
-              <MaterialCommunityIcons name="login" size={20} color="#3b82f6" />
+              <MaterialCommunityIcons name="login" size={20} color="#FFFFFF" />
               <Text style={styles.lobbyActionButtonText}>Join Room</Text>
             </TouchableOpacity>
           </View>
@@ -2831,6 +2914,15 @@ function DigitalDefenders() {
               gameEndData?.finalWave || currentWave
             } | Final Health: ${gameEndData?.finalHealth || pcHealth}/5`,
           };
+        case "invalid_session":
+          return {
+            icon: "account-alert",
+            title: "Session Invalid",
+            message:
+              gameEndData?.message ||
+              "This game session is no longer valid. Start a new match to continue.",
+            subtitle: "Please rejoin from the lobby.",
+          };
         default:
           return {
             icon: "skull",
@@ -2929,37 +3021,39 @@ function DigitalDefenders() {
     </View>
   );
 
-  const renderInstructorEditor = () => (
-    <Modal visible={showInstructorEditor} animationType="slide">
-      <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
-        <SafeAreaView style={styles.safeArea}>
-          {renderImportDocsModal?.()}
-          {renderActionsMenuModal?.()}
-          <View style={styles.editorHeader}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowInstructorEditor(false)}
-            >
-              <MaterialCommunityIcons
-                name="close"
-                size={24}
-                color={COLORS.textPrimary}
-              />
-            </TouchableOpacity>
+  const renderInstructorEditor = () => {
+    const editorBody = (
+      <>
+        {renderImportDocsModal?.()}
+        {renderActionsMenuModal?.()}
+        <View style={styles.editorHeader}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => setShowInstructorEditor(false)}
+          >
+            <MaterialCommunityIcons
+              name="close"
+              size={24}
+              color={COLORS.textPrimary}
+            />
+          </TouchableOpacity>
+          <View style={styles.editorTitleBlock}>
             <Text style={styles.editorTitle}>Edit Cards</Text>
-            <TouchableOpacity
-              style={styles.moreMenuButton}
-              onPress={() => setShowActionsMenu(true)}
-            >
-              <MaterialCommunityIcons
-                name="dots-vertical"
-                size={26}
-                color={COLORS.textPrimary}
-              />
-            </TouchableOpacity>
+            <Text style={styles.editorSubtitle}>Digital Defenders Question Manager</Text>
           </View>
+          <TouchableOpacity
+            style={styles.moreMenuButton}
+            onPress={() => setShowActionsMenu(true)}
+          >
+            <MaterialCommunityIcons
+              name="dots-vertical"
+              size={26}
+              color={COLORS.textPrimary}
+            />
+          </TouchableOpacity>
+        </View>
 
-          <ScrollView style={styles.editorContent}>
+        <ScrollView style={styles.editorContent}>
             <Text style={styles.editorSectionTitle}>
               Question Cards by Wave
             </Text>
@@ -3104,23 +3198,51 @@ function DigitalDefenders() {
                 </Text>
               </View>
             ))}
-          </ScrollView>
-        </SafeAreaView>
-      </LinearGradient>
-    </Modal>
-  );
+        </ScrollView>
+      </>
+    );
+
+    return (
+      <Modal
+        visible={showInstructorEditor}
+        animationType={Platform.OS === "web" ? "fade" : "slide"}
+        transparent={Platform.OS === "web"}
+        onRequestClose={() => setShowInstructorEditor(false)}
+      >
+        {Platform.OS === "web" ? (
+          <View style={styles.editorWebModalOverlay}>
+            <TouchableWithoutFeedback onPress={() => setShowInstructorEditor(false)}>
+              <View style={styles.editorWebModalBackdrop} />
+            </TouchableWithoutFeedback>
+
+            <LinearGradient colors={PREMIUM_GRADIENT} style={styles.editorWebModalCard}>
+              <SafeAreaView style={styles.safeArea}>{editorBody}</SafeAreaView>
+            </LinearGradient>
+          </View>
+        ) : (
+          <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
+            <SafeAreaView style={styles.safeArea}>{editorBody}</SafeAreaView>
+          </LinearGradient>
+        )}
+      </Modal>
+    );
+  };
 
   // Edit form modal
   const renderEditForm = () => (
     <Modal visible={showEditForm} animationType="slide">
-      <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+      <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.editorHeader}>
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => setShowEditForm(false)}
             >
-              <MaterialCommunityIcons name="close" size={24} color="#3b82f6" />
+              <MaterialCommunityIcons
+                name="close"
+                size={24}
+                color={PREMIUM_TEXT}
+              />
             </TouchableOpacity>
             <Text style={styles.editorTitle}>
               {editingCard ? "Edit" : "Create"} Question
@@ -3430,7 +3552,7 @@ function DigitalDefenders() {
   );
 
   return (
-    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+    <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         {renderImportDocsModal?.()}
         <View style={styles.header}>
@@ -3442,7 +3564,7 @@ function DigitalDefenders() {
               <MaterialCommunityIcons
                 name="arrow-left"
                 size={24}
-                color="#3b82f6"
+                  color={PREMIUM_TEXT}
               />
             </TouchableOpacity>
             <Text style={styles.title}>🛡️ Digital Defenders</Text>
@@ -3500,26 +3622,27 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(74, 124, 89, 0.2)",
+    borderBottomColor: "rgba(15, 23, 42, 0.1)",
     position: "relative",
-    justifyContent: "center", // Center items horizontally
-    minHeight: 60, // Ensure consistent height
+    justifyContent: "center",
+    minHeight: 64,
+    backgroundColor: PREMIUM_SURFACE_ALT,
   },
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    position: "absolute",
-    left: -50,
-    right: 0,
+    width: "100%",
+    paddingHorizontal: 4,
   },
   backButton: {
-    padding: 5,
-    marginRight: 15, // Increased space between back button and title
-    marginLeft: -10, // More negative margin to push further left
-    transform: [{ translateX: -5 }], // Additional shift to the left
+    padding: 6,
+    marginRight: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
   },
   debugButton: {
     padding: 5,
@@ -3531,11 +3654,12 @@ const styles = StyleSheet.create({
     borderRadius: 15,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
+    fontSize: 25,
+    fontWeight: "800",
+    color: PREMIUM_TEXT,
     textAlign: "center",
-    alignSelf: "center", // Center vertically in container
+    alignSelf: "center",
+    letterSpacing: 0.2,
   },
   loadingContainer: {
     flex: 1,
@@ -3575,15 +3699,16 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   gameTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
+    fontSize: 30,
+    fontWeight: "800",
+    color: PREMIUM_TEXT,
     marginTop: 15,
-    marginBottom: 5,
+    marginBottom: 6,
   },
   gameSubtitle: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: "#00000",
+    fontWeight: "600",
   },
   lobbyErrorText: {
     fontSize: 16,
@@ -3597,9 +3722,9 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
+    fontSize: 19,
+    fontWeight: "800",
+    color: PREMIUM_TEXT,
     marginBottom: 15,
     textAlign: "center",
   },
@@ -3634,47 +3759,60 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   rulesList: {
-    backgroundColor: "rgba(95, 41, 156, 0.9)",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 15,
-    padding: 15,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 3,
   },
   ruleText: {
-    color: "rgba(255, 255, 255, 0.9)",
+    color: PREMIUM_MUTED,
     fontSize: 14,
+    fontWeight: "600",
     marginBottom: 6,
   },
   buttonContainer: {
     gap: 15,
   },
   startButton: {
-    backgroundColor: "#2acde6",
+    backgroundColor: PREMIUM_ACCENT,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 18,
     borderRadius: 15,
     gap: 10,
+    shadowColor: PREMIUM_ACCENT_DARK,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 4,
   },
   startButtonText: {
-    color: COLORS.textPrimary,
+    color: "#f8fafc",
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
   editorButton: {
-    backgroundColor: "rgba(139, 92, 246, 0.5)",
+    backgroundColor: "rgba(15, 23, 42, 0.14)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 15,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: "rgba(139, 92, 246, 0.3)",
+    borderColor: "rgba(15, 23, 42, 0.22)",
     gap: 8,
   },
   editorButtonText: {
-    color: "#1a5344",
+    color: PREMIUM_TEXT,
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
   },
 
   // New Lobby Styles
@@ -3694,35 +3832,35 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
+    fontWeight: "700",
+    color: PREMIUM_TEXT,
     marginBottom: 8,
   },
   textInput: {
-    backgroundColor: "rgba(74, 124, 89, 0.2)",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 12,
     padding: 15,
     fontSize: 16,
-    color: COLORS.textPrimary,
+    color: PREMIUM_TEXT,
     borderWidth: 1,
-    borderColor: "rgba(74, 124, 89, 0.3)",
+    borderColor: "rgba(15, 23, 42, 0.14)",
   },
   playerNameDisplay: {
-    backgroundColor: "rgba(95, 41, 156, 0.9)",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 12,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(139, 92, 246, 0.3)",
+    borderColor: "rgba(15, 23, 42, 0.14)",
   },
   playerIcon: {
     marginRight: 12,
   },
   playerNameText: {
-    color: "rgba(255, 255, 255, 1)",
+    color: PREMIUM_TEXT,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     flex: 1,
   },
   roomActions: {
@@ -3742,11 +3880,11 @@ const styles = StyleSheet.create({
   },
   lobbyActionButtonText: {
     fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
+    fontWeight: "700",
+    color: "#f8fafc",
   },
   createRoomButton: {
-    backgroundColor: "#10b981",
+    backgroundColor: PREMIUM_ACCENT,
   },
   joinRoomContainer: {
     flexDirection: "row",
@@ -3754,25 +3892,25 @@ const styles = StyleSheet.create({
   },
   roomIdInput: {
     flex: 1,
-    backgroundColor: "rgba(74, 124, 89, 0.2)",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 12,
     padding: 15,
     fontSize: 16,
-    color: COLORS.textPrimary,
+    color: PREMIUM_TEXT,
     borderWidth: 1,
-    borderColor: "rgba(74, 124, 89, 0.3)",
+    borderColor: "rgba(15, 23, 42, 0.14)",
     textAlign: "center",
     textTransform: "uppercase",
   },
   joinRoomButton: {
-    backgroundColor: "#3b82f6",
+    backgroundColor: PREMIUM_ACCENT_DARK,
     paddingHorizontal: 20,
   },
   // soloPlayContainer, orText, soloPlayButton removed (Play Solo feature deprecated)
 
   // Waiting Room Styles
   roomInfo: {
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 15,
     padding: 20,
     marginBottom: 20,
@@ -3780,13 +3918,13 @@ const styles = StyleSheet.create({
   },
   roomIdDisplay: {
     fontSize: 24,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
+    fontWeight: "800",
+    color: PREMIUM_TEXT,
     marginBottom: 8,
   },
   roomStatus: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: PREMIUM_MUTED,
     marginBottom: 8,
   },
   creatorBadge: {
@@ -3801,15 +3939,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 12,
     padding: 15,
     marginBottom: 10,
   },
   playerName: {
     fontSize: 16,
-    color: COLORS.textPrimary,
-    fontWeight: "600",
+    color: PREMIUM_TEXT,
+    fontWeight: "700",
   },
   playerStatus: {
     paddingHorizontal: 12,
@@ -3832,7 +3970,7 @@ const styles = StyleSheet.create({
   },
   waitingText: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: PREMIUM_MUTED,
     textAlign: "center",
     marginBottom: 15,
     fontStyle: "italic",
@@ -3939,7 +4077,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   questionCard: {
-    backgroundColor: "rgba(99, 47, 167, 1)",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 20,
     padding: 25,
     minHeight: 150,
@@ -3947,13 +4085,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: "rgba(74, 124, 89, 0.3)",
+    borderColor: "rgba(15, 23, 42, 0.12)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 4,
   },
   questionText: {
     fontSize: 18,
-    color: "rgba(255, 255, 255, 1)",
+    color: PREMIUM_TEXT,
     textAlign: "center",
-    fontWeight: "600",
+    fontWeight: "700",
   },
   instructionIndicator: {
     position: "absolute",
@@ -4211,11 +4354,11 @@ const styles = StyleSheet.create({
   },
   gameOverContent: {
     alignItems: "center",
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 20,
     padding: 40,
     borderWidth: 1,
-    borderColor: "rgba(231, 76, 60, 0.3)",
+    borderColor: "rgba(239, 68, 68, 0.25)",
     width: Platform.OS === "web" ? 700 : "auto",
   },
   gameOverTitle: {
@@ -4227,7 +4370,7 @@ const styles = StyleSheet.create({
   },
   gameOverText: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: PREMIUM_MUTED,
     textAlign: "center",
     marginBottom: 10,
   },
@@ -4240,7 +4383,7 @@ const styles = StyleSheet.create({
   gameOverStats: {
     alignItems: "center",
     marginBottom: 20,
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
+    backgroundColor: "rgba(15, 23, 42, 0.06)",
     borderRadius: 10,
     padding: 15,
     borderWidth: 1,
@@ -4265,7 +4408,7 @@ const styles = StyleSheet.create({
   },
   playerScoreText: {
     fontSize: 14,
-    color: "#ecf0f1",
+    color: PREMIUM_TEXT,
     fontWeight: "bold",
     textAlign: "center",
   },
@@ -4275,7 +4418,7 @@ const styles = StyleSheet.create({
   },
   playerScoreDetails: {
     fontSize: 12,
-    color: "#95a5a6",
+    color: PREMIUM_MUTED,
     textAlign: "center",
     marginTop: 2,
   },
@@ -4287,7 +4430,7 @@ const styles = StyleSheet.create({
   },
   victoryContent: {
     alignItems: "center",
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 20,
     padding: 40,
     borderWidth: 1,
@@ -4306,7 +4449,7 @@ const styles = StyleSheet.create({
   },
   victoryText: {
     fontSize: 16,
-    color: COLORS.textSecondary,
+    color: PREMIUM_MUTED,
     textAlign: "center",
     marginBottom: 20,
   },
@@ -4320,7 +4463,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   restartButton: {
-    backgroundColor: "#2acde6",
+    backgroundColor: PREMIUM_ACCENT,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -4330,28 +4473,69 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   restartButtonText: {
-    color: COLORS.textPrimary,
+    color: "#f8fafc",
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
 
   // Editor Styles
+  editorWebModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+  },
+  editorWebModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(2, 6, 23, 0.6)",
+  },
+  editorWebModalCard: {
+    width: "100%",
+    maxWidth: 1180,
+    height: "92%",
+    maxHeight: "92%",
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.16)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.25,
+    shadowRadius: 26,
+    elevation: 10,
+  },
   editorHeader: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(74, 124, 89, 0.2)",
+    borderBottomColor: "rgba(15, 23, 42, 0.1)",
+    backgroundColor: PREMIUM_SURFACE_ALT,
   },
   closeButton: {
-    marginRight: 15,
-    padding: 5,
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
+  },
+  editorTitleBlock: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 8,
   },
   editorTitle: {
     fontSize: 24,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
+    fontWeight: "800",
+    color: PREMIUM_TEXT,
+    letterSpacing: 0.2,
+  },
+  editorSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    color: PREMIUM_MUTED,
+    fontWeight: "600",
   },
   editorContent: {
     flex: 1,
@@ -4361,40 +4545,48 @@ const styles = StyleSheet.create({
   },
   editorSectionTitle: {
     fontSize: 20,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
+    fontWeight: "800",
+    color: PREMIUM_TEXT,
     marginTop: 20,
     marginBottom: 15,
   },
   editorCard: {
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
-    borderRadius: 12,
-    padding: 15,
+    backgroundColor: PREMIUM_SURFACE,
+    borderRadius: 14,
+    padding: 16,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: "rgba(74, 124, 89, 0.2)",
+    borderColor: "rgba(15, 23, 42, 0.1)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 2,
   },
   editorCardDisabled: {
-    opacity: 0.6,
+    opacity: 0.72,
+    backgroundColor: "rgba(241, 245, 249, 0.92)",
   },
   editorCardTitle: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
+    fontWeight: "800",
+    color: PREMIUM_TEXT,
     marginBottom: 8,
   },
   editorCardTitleDisabled: {
-    color: "#666",
+    color: "#64748b",
   },
   editorCardText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: PREMIUM_MUTED,
     marginBottom: 5,
+    lineHeight: 20,
   },
   editorCardAnswer: {
     fontSize: 14,
-    color: COLORS.textPrimary,
+    color: PREMIUM_TEXT,
     marginBottom: 10,
+    fontWeight: "700",
   },
   editorCardDescription: {
     fontSize: 12,
@@ -4416,24 +4608,25 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: "rgba(139, 92, 246, 0.1)",
+    backgroundColor: "rgba(15, 111, 80, 0.1)",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(139, 92, 246, 0.3)",
+    borderColor: "rgba(15, 111, 80, 0.28)",
     gap: 5,
   },
   editCardButtonText: {
-    color: "#1a5344",
+    color: PREMIUM_ACCENT_DARK,
     fontSize: 12,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
 
   // New editor styles
   editorSectionSubtitle: {
     fontSize: 14,
-    color: COLORS.textPrimary,
+    color: PREMIUM_MUTED,
     marginBottom: 15,
-    fontStyle: "italic",
+    lineHeight: 20,
+    fontWeight: "500",
   },
   createCardButton: {
     flexDirection: "row",
@@ -4441,18 +4634,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 12,
     paddingHorizontal: 20,
-    backgroundColor: "rgba(139, 92, 246, 0.1)",
+    backgroundColor: "rgba(15, 111, 80, 0.08)",
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: "rgba(139, 92, 246, 0.3)",
+    borderColor: "rgba(15, 111, 80, 0.32)",
     borderStyle: "dashed",
     marginBottom: 20,
     gap: 8,
   },
   createCardButtonText: {
-    color: "#1a5344",
+    color: PREMIUM_ACCENT_DARK,
     fontSize: 14,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
   cardActionButtons: {
     flexDirection: "row",
@@ -4477,9 +4670,10 @@ const styles = StyleSheet.create({
   },
   editorCardMeta: {
     fontSize: 12,
-    color: COLORS.textPrimary,
+    color: PREMIUM_MUTED,
     marginTop: 5,
     marginBottom: 10,
+    fontWeight: "600",
   },
 
   // Form styles
@@ -4861,11 +5055,11 @@ const styles = StyleSheet.create({
   // Wave Section Styles
   waveSection: {
     marginBottom: 25,
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
-    borderRadius: 15,
-    padding: 15,
+    backgroundColor: PREMIUM_SURFACE_ALT,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(139, 92, 246, 0.3)",
+    borderColor: "rgba(15, 23, 42, 0.09)",
   },
   waveSectionHeader: {
     flexDirection: "row",
@@ -4874,21 +5068,22 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(74, 124, 89, 0.2)",
+    borderBottomColor: "rgba(15, 23, 42, 0.1)",
   },
   waveSectionTitle: {
     fontSize: 20,
-    fontWeight: "bold",
-    color: "#1a5344",
+    fontWeight: "800",
+    color: PREMIUM_TEXT,
   },
   waveSectionCounter: {
     fontSize: 14,
-    color: "#aaa",
-    backgroundColor: "rgba(139, 92, 246, 0.2)",
+    color: PREMIUM_MUTED,
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 15,
     overflow: "hidden",
+    fontWeight: "700",
   },
   waveFullNotice: {
     flexDirection: "row",
@@ -4906,17 +5101,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   emptyWaveNotice: {
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
+    backgroundColor: "rgba(241, 245, 249, 0.9)",
     paddingVertical: 20,
     paddingHorizontal: 15,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(74, 124, 89, 0.2)",
+    borderColor: "rgba(15, 23, 42, 0.16)",
     borderStyle: "dashed",
   },
   emptyWaveText: {
     fontSize: 14,
-    color: "#aaa",
+    color: "#64748b",
     textAlign: "center",
     fontStyle: "italic",
   },
@@ -5109,46 +5304,92 @@ const styles = StyleSheet.create({
   },
   moreMenuButton: {
     padding: 8,
-    borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
     marginLeft: 8,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.12)",
   },
   actionsMenuOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(2, 6, 23, 0.58)",
     justifyContent: "flex-end",
     padding: 20,
+    ...Platform.select({
+      web: {
+        alignItems: "center",
+      },
+      default: {},
+    }),
   },
   actionsMenuContainer: {
-    backgroundColor: "#92eacc",
+    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 20,
     paddingVertical: 14,
     paddingHorizontal: 18,
     width: "100%",
+    maxWidth: Platform.OS === "web" ? 520 : undefined,
+    alignSelf: Platform.OS === "web" ? "center" : "auto",
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.12)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  actionsMenuHeader: {
+    marginBottom: 6,
+    paddingHorizontal: 4,
   },
   actionsMenuTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 10,
-    paddingHorizontal: 4,
+    color: PREMIUM_TEXT,
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  actionsMenuSubtitle: {
+    marginTop: 2,
+    color: PREMIUM_MUTED,
+    fontSize: 12,
+    fontWeight: "600",
   },
   actionsMenuItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
     borderRadius: 10,
     gap: 12,
+    backgroundColor: "rgba(248, 250, 252, 0.72)",
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+  },
+  actionsMenuItemIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.94)",
+  },
+  actionsMenuItemRight: {
+    marginLeft: "auto",
   },
   actionsMenuItemText: {
-    color: COLORS.textPrimary,
+    color: PREMIUM_TEXT,
     fontSize: 15,
-    fontWeight: "500",
+    fontWeight: "700",
+  },
+  actionsMenuDivider: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(15, 23, 42, 0.12)",
   },
   actionsMenuCloseItem: {
-    marginTop: 6,
-    backgroundColor: "rgba(248,113,113,0.08)",
+    marginTop: 10,
+    backgroundColor: "rgba(254, 226, 226, 0.78)",
+    borderColor: "rgba(239, 68, 68, 0.22)",
   },
   // Docs styles
   docsButton: {

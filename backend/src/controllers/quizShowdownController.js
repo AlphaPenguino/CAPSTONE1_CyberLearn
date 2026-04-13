@@ -1,6 +1,5 @@
 import {
   QuizShowdownGame,
-  QuizShowdownQuestion,
 } from "../models/QuizShowdown.js";
 import {
   logActivity,
@@ -11,6 +10,18 @@ import {
 // Game state storage
 const quizShowdownGames = new Map();
 const quizShowdownPlayers = new Map();
+const ROOM_ID_LENGTH = 6;
+const ROOM_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+const generateRoomId = () => {
+  let id = "";
+  for (let i = 0; i < ROOM_ID_LENGTH; i++) {
+    id += ROOM_ID_CHARS.charAt(Math.floor(Math.random() * ROOM_ID_CHARS.length));
+  }
+  return id;
+};
+
+const isValidRoomId = (roomId) => /^[A-Z0-9]{6}$/.test(roomId || "");
 
 // Initialize Socket.IO for Quiz Showdown
 const initializeQuizShowdownSocket = (io) => {
@@ -19,14 +30,77 @@ const initializeQuizShowdownSocket = (io) => {
   quizShowdownNamespace.on("connection", (socket) => {
     console.log("Quiz Showdown user connected:", socket.id);
 
+    const handlePlayerExit = async (leaveType = "disconnect") => {
+      const player = quizShowdownPlayers.get(socket.id);
+      if (!player) return;
+
+      const game = quizShowdownGames.get(player.gameId);
+
+      try {
+        await logActivity({
+          userId: null,
+          username: player.playerName,
+          userRole: "unknown",
+          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_LEAVE,
+          resource: AUDIT_RESOURCES.QUIZ_SHOWDOWN,
+          resourceId: player.gameId,
+          details: {
+            gameType: "quiz_showdown",
+            roomId: player.gameId,
+            leaveType,
+            teamName: player.teamName,
+          },
+          ipAddress: socket.handshake.address,
+          userAgent: socket.handshake.headers["user-agent"],
+        });
+      } catch (error) {
+        console.error("Failed to log Quiz Showdown room leave:", error);
+      }
+
+      if (game) {
+        game.removePlayerFromAllTeams(socket.id);
+
+        socket.to(player.gameId).emit("player-disconnected", {
+          playerName: player.playerName,
+          teamName: player.teamName,
+          game: game.getPublicGameState(),
+          leaveType,
+        });
+
+        quizShowdownNamespace.to(player.gameId).emit("team-updated", {
+          game: game.getPublicGameState(),
+          playerName: player.playerName,
+          teamName: player.teamName,
+        });
+
+        // Creator leaving lobby closes room.
+        if (player.isCreator && game.gameState === "lobby") {
+          quizShowdownGames.delete(player.gameId);
+          quizShowdownNamespace.to(player.gameId).emit("room-closed", {
+            message:
+              leaveType === "leave-room"
+                ? "Room creator left"
+                : "Room creator disconnected",
+          });
+        }
+      }
+
+      if (leaveType === "leave-room") {
+        socket.leave(player.gameId);
+        socket.emit("room-left", { roomId: player.gameId });
+      }
+
+      quizShowdownPlayers.delete(socket.id);
+    };
+
     // Create a new game room
     socket.on("create-room", async (data) => {
       const { playerName } = data;
 
-      // Generate 3-digit room ID
+      // Generate 6-character alphanumeric room ID
       let roomId;
       do {
-        roomId = Math.floor(100 + Math.random() * 900).toString();
+        roomId = generateRoomId();
       } while (quizShowdownGames.has(roomId));
 
       const game = new QuizShowdownGame(roomId, socket.id, playerName);
@@ -75,8 +149,17 @@ const initializeQuizShowdownSocket = (io) => {
 
     // Join an existing game room
     socket.on("join-room", async (data) => {
-      const { roomId, playerName } = data;
-      const game = quizShowdownGames.get(roomId);
+      const normalizedRoomId = (data.roomId || "").trim().toUpperCase();
+      const { playerName } = data;
+
+      if (!isValidRoomId(normalizedRoomId)) {
+        socket.emit("error", {
+          message: "Room ID must be 6 alphanumeric characters",
+        });
+        return;
+      }
+
+      const game = quizShowdownGames.get(normalizedRoomId);
 
       if (!game) {
         socket.emit("error", { message: "Room not found" });
@@ -90,22 +173,22 @@ const initializeQuizShowdownSocket = (io) => {
 
       // Add player to players map (without team initially)
       quizShowdownPlayers.set(socket.id, {
-        gameId: roomId,
+        gameId: normalizedRoomId,
         playerName,
         teamName: null,
         isCreator: false,
       });
 
-      socket.join(roomId);
+      socket.join(normalizedRoomId);
       socket.emit("room-joined", {
-        roomId,
+        roomId: normalizedRoomId,
         game: game.getPublicGameState(),
         isCreator: false,
         playerName,
       });
 
       // Notify other players
-      socket.to(roomId).emit("player-joined", {
+      socket.to(normalizedRoomId).emit("player-joined", {
         playerName,
         game: game.getPublicGameState(),
       });
@@ -117,10 +200,10 @@ const initializeQuizShowdownSocket = (io) => {
         userRole: "unknown",
         action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_JOIN,
         resource: AUDIT_RESOURCES.QUIZ_SHOWDOWN,
-        resourceId: roomId,
+        resourceId: normalizedRoomId,
         details: {
           gameType: "quiz_showdown",
-          roomId: roomId,
+          roomId: normalizedRoomId,
           playerName: playerName,
           isCreator: false,
         },
@@ -128,7 +211,13 @@ const initializeQuizShowdownSocket = (io) => {
         userAgent: socket.handshake.headers["user-agent"],
       });
 
-      console.log(`${playerName} joined Quiz Showdown room ${roomId}`);
+      console.log(
+        `${playerName} joined Quiz Showdown room ${normalizedRoomId}`
+      );
+    });
+
+    socket.on("leave-room", async () => {
+      await handlePlayerExit("leave-room");
     });
 
     // Join a team
@@ -235,6 +324,43 @@ const initializeQuizShowdownSocket = (io) => {
       }).catch((error) =>
         console.error("Failed to log Quiz Showdown game start:", error)
       );
+    });
+
+    // Host-only rematch after game over
+    socket.on("restart-game", (data) => {
+      const { roomId } = data;
+      const game = quizShowdownGames.get(roomId);
+      const player = quizShowdownPlayers.get(socket.id);
+
+      if (!game) {
+        socket.emit("error", { message: "Room not found" });
+        return;
+      }
+
+      if (!player || !player.isCreator) {
+        socket.emit("error", {
+          message: "Only the room creator can play again",
+        });
+        return;
+      }
+
+      if (game.gameState !== "finished") {
+        socket.emit("error", {
+          message: "Play again is only available after game over",
+        });
+        return;
+      }
+
+      const result = game.restartGame();
+      if (!result.success) {
+        socket.emit("error", { message: result.message || "Failed to restart game" });
+        return;
+      }
+
+      quizShowdownNamespace.to(roomId).emit("game-restarted", {
+        game: game.getPublicGameState(),
+        restartedBy: player.playerName,
+      });
     });
 
     // Handle buzzer press
@@ -364,6 +490,74 @@ const initializeQuizShowdownSocket = (io) => {
       }
     });
 
+    // Handle question timeout (treat as incorrect answer and pass turn)
+    socket.on("question-time-expired", (data) => {
+      const { roomId, teamName } = data;
+      const game = quizShowdownGames.get(roomId);
+      const player = quizShowdownPlayers.get(socket.id);
+
+      if (!game) {
+        socket.emit("error", { message: "Room not found" });
+        return;
+      }
+
+      if (!player || player.gameId !== roomId) {
+        socket.emit("error", { message: "Invalid session" });
+        return;
+      }
+
+      if (player.teamName !== teamName) {
+        socket.emit("error", { message: "You're not on this team" });
+        return;
+      }
+
+      const result = game.submitAnswer(socket.id, teamName, -1);
+      if (result.success) {
+        const currentQuestion = game.getCurrentQuestion();
+
+        quizShowdownNamespace.to(roomId).emit("answer-submitted", {
+          teamName,
+          answerIndex: -1,
+          timedOut: true,
+          correct: false,
+          correctAnswer: currentQuestion ? currentQuestion.correct : null,
+          message: `${teamName} ran out of time!`,
+          game: game.getPublicGameState(),
+          gameFinished: result.gameFinished,
+          nextQuestion: result.nextQuestion,
+          nextTeam: result.nextTeam,
+        });
+
+        if (result.gameFinished) {
+          quizShowdownNamespace.to(roomId).emit("game-finished", {
+            winner: result.winner,
+            finalScores: result.finalScores,
+            game: game.getPublicGameState(),
+          });
+        } else if (result.nextQuestion) {
+          setTimeout(() => {
+            quizShowdownNamespace.to(roomId).emit("next-question", {
+              game: game.getPublicGameState(),
+            });
+
+            setTimeout(() => {
+              game.activateBuzzer();
+              quizShowdownNamespace.to(roomId).emit("buzzer-activated", {
+                game: game.getPublicGameState(),
+              });
+            }, 3000);
+          }, 2000);
+        } else if (result.nextTeam) {
+          quizShowdownNamespace.to(roomId).emit("team-turn", {
+            answeringTeam: result.nextTeam,
+            game: game.getPublicGameState(),
+          });
+        }
+      } else {
+        socket.emit("answer-failed", { message: result.message });
+      }
+    });
+
     // Get game state
     socket.on("get-game-state", (data) => {
       const { roomId } = data;
@@ -380,54 +574,8 @@ const initializeQuizShowdownSocket = (io) => {
     });
 
     // Handle disconnection
-    socket.on("disconnect", () => {
-      const player = quizShowdownPlayers.get(socket.id);
-
-      if (player) {
-        logActivity({
-          userId: null,
-          username: player.playerName,
-          userRole: "unknown",
-          action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_LEAVE,
-          resource: AUDIT_RESOURCES.QUIZ_SHOWDOWN,
-          resourceId: player.gameId,
-          details: {
-            gameType: "quiz_showdown",
-            roomId: player.gameId,
-            leaveType: "disconnect",
-            teamName: player.teamName,
-          },
-          ipAddress: socket.handshake.address,
-          userAgent: socket.handshake.headers["user-agent"],
-        }).catch((error) =>
-          console.error("Failed to log Quiz Showdown room leave:", error)
-        );
-
-        const game = quizShowdownGames.get(player.gameId);
-
-        if (game) {
-          // Remove player from game
-          game.removePlayerFromAllTeams(socket.id);
-
-          // Notify other players
-          socket.to(player.gameId).emit("player-disconnected", {
-            playerName: player.playerName,
-            teamName: player.teamName,
-            game: game.getPublicGameState(),
-          });
-
-          // If creator disconnects and game hasn't started, remove the game
-          if (player.isCreator && game.gameState === "lobby") {
-            quizShowdownGames.delete(player.gameId);
-            quizShowdownNamespace.to(player.gameId).emit("room-closed", {
-              message: "Room creator disconnected",
-            });
-          }
-        }
-
-        quizShowdownPlayers.delete(socket.id);
-      }
-
+    socket.on("disconnect", async () => {
+      await handlePlayerExit("disconnect");
       console.log("Quiz Showdown user disconnected:", socket.id);
     });
 

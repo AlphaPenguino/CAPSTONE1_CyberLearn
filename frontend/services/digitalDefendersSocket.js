@@ -8,7 +8,11 @@ class DigitalDefendersSocketService {
   }
 
   connect() {
-    if (this.socket?.connected) {
+    // Reuse existing socket instance to avoid multiple parallel connections.
+    if (this.socket) {
+      if (!this.socket.connected) {
+        this.socket.connect();
+      }
       return this.socket;
     }
 

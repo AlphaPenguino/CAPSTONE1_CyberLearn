@@ -9,7 +9,6 @@ import {
   ScrollView,
   Modal,
   Platform,
-  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -264,6 +263,7 @@ const SAMPLE_QS_QUESTIONS = [
 ];
 
 // Mock room data - sample rooms for reference
+const PREMIUM_GRADIENT = ["#caf1c8", "#5fd2cd"];
 
 export default function QuizShowdown() {
   const router = useRouter();
@@ -285,6 +285,10 @@ export default function QuizShowdown() {
   const playerNameRef = useRef("");
   const selectedTeamRef = useRef(null);
   const gameStateRef = useRef(null);
+  const gamePhaseRef = useRef("lobby");
+  const settingsRef = useRef(settings);
+  const showNotificationRef = useRef(showNotification);
+  const questionTimeoutSentRef = useRef(false);
 
   // Socket connection state
   const [isConnected, setIsConnected] = useState(false);
@@ -384,7 +388,8 @@ export default function QuizShowdown() {
         style={styles.actionsMenuOverlay}
       >
         <View style={styles.actionsMenuContainer}>
-          <Text style={styles.actionsMenuTitle}>Actions</Text>
+          <Text style={styles.actionsMenuTitle}>Question Manager</Text>
+          <Text style={styles.actionsMenuSubtitle}>Quick tools for your question bank</Text>
           <TouchableOpacity
             style={styles.actionsMenuItem}
             onPress={() => {
@@ -392,7 +397,7 @@ export default function QuizShowdown() {
               setShowActionsMenu(false);
             }}
           >
-            <MaterialCommunityIcons name="plus" size={20} color="#10b981" />
+            <MaterialCommunityIcons name="plus-circle" size={20} color="#0f766e" />
             <Text style={styles.actionsMenuItemText}>Create Question</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -405,7 +410,7 @@ export default function QuizShowdown() {
             <MaterialCommunityIcons
               name="file-upload"
               size={20}
-              color="#3b82f6"
+              color="#2563eb"
             />
             <Text style={styles.actionsMenuItemText}>Upload JSON</Text>
           </TouchableOpacity>
@@ -419,7 +424,7 @@ export default function QuizShowdown() {
             <MaterialCommunityIcons
               name="file-download"
               size={20}
-              color="#10b981"
+              color="#0f766e"
             />
             <Text style={styles.actionsMenuItemText}>Download Sample</Text>
           </TouchableOpacity>
@@ -433,7 +438,7 @@ export default function QuizShowdown() {
             <MaterialCommunityIcons
               name="book-open-page-variant"
               size={20}
-              color="#6366f1"
+              color="#4f46e5"
             />
             <Text style={styles.actionsMenuItemText}>Import Docs</Text>
           </TouchableOpacity>
@@ -441,7 +446,7 @@ export default function QuizShowdown() {
             style={[styles.actionsMenuItem, styles.actionsMenuCloseItem]}
             onPress={() => setShowActionsMenu(false)}
           >
-            <MaterialCommunityIcons name="close" size={20} color="#f87171" />
+            <MaterialCommunityIcons name="close" size={20} color="#dc2626" />
             <Text style={styles.actionsMenuItemText}>Close</Text>
           </TouchableOpacity>
         </View>
@@ -450,12 +455,11 @@ export default function QuizShowdown() {
   );
 
   // UI states
-  const [showCreateRoom, setShowCreateRoom] = useState(false);
-  const [newRoomName, setNewRoomName] = useState("");
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [showLeaveGameModal, setShowLeaveGameModal] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const [isJoiningTeam, setIsJoiningTeam] = useState(null); // Track which team is being joined
+  const [isRestartingGame, setIsRestartingGame] = useState(false);
 
   // File upload states for instructor mode
   const [selectedFile, setSelectedFile] = useState(null);
@@ -573,6 +577,24 @@ export default function QuizShowdown() {
     gameStateRef.current = gameState;
   }, [gameState]);
 
+  useEffect(() => {
+    gamePhaseRef.current = gamePhase;
+  }, [gamePhase]);
+
+  useEffect(() => {
+    if (gamePhase === "question") {
+      questionTimeoutSentRef.current = false;
+    }
+  }, [gamePhase, roundNumber]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  useEffect(() => {
+    showNotificationRef.current = showNotification;
+  }, [showNotification]);
+
   // Update player name when user is loaded
   useEffect(() => {
     if (user?.fullName && !playerName) {
@@ -583,108 +605,63 @@ export default function QuizShowdown() {
   // Track the most recent room for reconnection purposes
   const lastRoomRef = useRef({ id: null, playerName: null });
 
-  // Socket core connection events
+  // Keep latest room data for reconnect flow.
   useEffect(() => {
-    // Update last room when current room changes
     if (currentRoom?.id && playerName) {
-      console.log(
-        `Setting last room ref to ${currentRoom.id} for ${playerName}`
-      );
       lastRoomRef.current = {
         id: currentRoom.id,
-        playerName: playerName,
+        playerName,
       };
     }
-
-    // Socket connection event listeners
-    quizShowdownSocket.on("connect", () => {
-      console.log("Socket connected event triggered");
-      setIsConnected(true);
-      setConnectionError(null);
-
-      // Check if we should attempt to rejoin previous room
-      const lastRoom = lastRoomRef.current;
-      if (lastRoom?.id && lastRoom?.playerName && gamePhase === "lobby") {
-        console.log(
-          `Attempting to rejoin room ${lastRoom.id} after connection`
-        );
-        // Give socket a moment to stabilize
-        setTimeout(() => {
-          try {
-            quizShowdownSocket.joinRoom(lastRoom.id, lastRoom.playerName);
-            console.log("Auto-rejoin attempt sent");
-          } catch (error) {
-            console.error("Failed to auto-rejoin room:", error);
-          }
-        }, 1000);
-      }
-    });
-
-    quizShowdownSocket.on("disconnect", () => {
-      console.log("Socket disconnected event triggered");
-      setIsConnected(false);
-    });
-
-    quizShowdownSocket.on("connect_error", (err) => {
-      console.log("Socket connection error:", err);
-      setConnectionError("Connection error: " + err.message);
-    });
-
-    // Cleanup on unmount
-    return () => {
-      quizShowdownSocket.off("connect");
-      quizShowdownSocket.off("disconnect");
-      quizShowdownSocket.off("connect_error");
-    };
-  }, [currentRoom?.id, playerName, gamePhase]);
+  }, [currentRoom?.id, playerName]);
 
   // Animations
   // Initialize socket connection and load questions
   useEffect(() => {
-    const initializeApp = async () => {
+    const loadQuestions = async () => {
       try {
-        // Connect to socket
-        quizShowdownSocket.connect();
-        setIsConnected(quizShowdownSocket.isConnected());
-
-        // Load questions for instructor mode with fallback when empty
-        try {
-          const response = await quizShowdownApi.getQuestions();
-          if (response.success) {
-            const rows = response.data || [];
-            if (rows.length === 0) {
-              // DB empty -> fallback to bundled samples
-              setQuestions(sampleQuestions);
-            } else {
-              const convertedQuestions = rows.map((question) => ({
-                ...question,
-                choices: question.options,
-                correctAnswer: question.correct,
-                points: question.points || 1,
-              }));
-              setQuestions(convertedQuestions);
-            }
-          } else {
+        const response = await quizShowdownApi.getQuestions();
+        if (response.success) {
+          const rows = response.data || [];
+          if (rows.length === 0) {
             setQuestions(sampleQuestions);
+          } else {
+            const convertedQuestions = rows.map((question) => ({
+              ...question,
+              choices: question.options,
+              correctAnswer: question.correct,
+              points: question.points || 1,
+            }));
+            setQuestions(convertedQuestions);
           }
-        } catch (fetchErr) {
-          console.error("Question fetch failed, using samples:", fetchErr);
+        } else {
           setQuestions(sampleQuestions);
         }
-      } catch (error) {
-        console.error("Failed to initialize app:", error);
-        setConnectionError(error.message);
-        // Fallback to sample questions on error
+      } catch (fetchErr) {
+        console.error("Question fetch failed, using samples:", fetchErr);
         setQuestions(sampleQuestions);
       }
     };
-
-    initializeApp();
 
     // Setup socket event listeners
     const handleSocketConnected = () => {
       setIsConnected(true);
       setConnectionError(null);
+
+      const lastRoom = lastRoomRef.current;
+      if (
+        lastRoom?.id &&
+        lastRoom?.playerName &&
+        gamePhaseRef.current === "lobby"
+      ) {
+        setTimeout(() => {
+          try {
+            quizShowdownSocket.joinRoom(lastRoom.id, lastRoom.playerName);
+          } catch (error) {
+            console.error("Failed to auto-rejoin room:", error);
+          }
+        }, 600);
+      }
     };
 
     const handleSocketDisconnected = () => {
@@ -921,6 +898,7 @@ export default function QuizShowdown() {
     const handleGameFinished = async (data) => {
       setGameState(data.game);
       setGamePhase("results");
+      setIsRestartingGame(false);
 
       // Send enhanced notification on game completion
       const winner = data.game?.winner;
@@ -928,13 +906,31 @@ export default function QuizShowdown() {
       await GameNotificationService.sendGameCompletionNotification(
         "quiz-showdown",
         { winner },
-        showNotification,
-        settings
+        showNotificationRef.current,
+        settingsRef.current
       );
+    };
+
+    const handleGameRestarted = (data) => {
+      setIsRestartingGame(false);
+      setGameState(data.game);
+      updateTeamsFromGameState(data.game);
+      updateCurrentQuestion(data.game);
+      setCurrentQuestion(null);
+      setRoundNumber(1);
+      setCountdown(3);
+      setBuzzerTimer(0);
+      setQuestionTimer(15);
+      setCanBuzz(false);
+      setBuzzedTeam(null);
+      setSelectedAnswer(null);
+      setAnswerResult(null);
+      setGamePhase("teamSelect");
     };
 
     const handleSocketGameError = (data) => {
       console.error("Socket game error:", data);
+      setIsRestartingGame(false);
 
       // Clear joining states on error
       setIsJoiningTeam(null);
@@ -980,7 +976,18 @@ export default function QuizShowdown() {
     quizShowdownSocket.on("team-turn", handleTeamTurn);
     quizShowdownSocket.on("next-question", handleNextQuestion);
     quizShowdownSocket.on("game-finished", handleGameFinished);
+    quizShowdownSocket.on("game-restarted", handleGameRestarted);
     quizShowdownSocket.on("socket-game-error", handleSocketGameError);
+
+    try {
+      quizShowdownSocket.connect();
+      setIsConnected(quizShowdownSocket.isConnected());
+    } catch (error) {
+      console.error("Failed to initialize socket:", error);
+      setConnectionError(error.message);
+    }
+
+    loadQuestions();
 
     return () => {
       // Cleanup event listeners
@@ -999,16 +1006,12 @@ export default function QuizShowdown() {
       quizShowdownSocket.off("team-turn", handleTeamTurn);
       quizShowdownSocket.off("next-question", handleNextQuestion);
       quizShowdownSocket.off("game-finished", handleGameFinished);
+      quizShowdownSocket.off("game-restarted", handleGameRestarted);
       quizShowdownSocket.off("socket-game-error", handleSocketGameError);
 
       quizShowdownSocket.disconnect();
     };
-  }, [
-    currentQuestion?.correctAnswer,
-    updateTeamsFromGameState,
-    settings,
-    showNotification,
-  ]);
+  }, [updateTeamsFromGameState]);
 
   // Helper function to determine if player can select answers
   const canSelectAnswer = () => {
@@ -1134,7 +1137,24 @@ export default function QuizShowdown() {
           if (!isMountedRef.current) return prev;
 
           if (prev <= 1) {
-            // Time's up for answering, auto-submit or move to next
+            // Time's up for the answering team - let backend advance turn.
+            const myTeam = selectedTeamRef.current?.trim();
+            const answeringTeam = buzzedTeam?.trim();
+            const isMyTurn = Boolean(myTeam && answeringTeam && myTeam === answeringTeam);
+
+            if (
+              isMyTurn &&
+              !questionTimeoutSentRef.current &&
+              currentRoom?.id &&
+              isConnected
+            ) {
+              questionTimeoutSentRef.current = true;
+              try {
+                quizShowdownSocket.questionTimeExpired(currentRoom.id, myTeam);
+              } catch (error) {
+                console.error("Failed to send question timeout event:", error);
+              }
+            }
             return 0;
           }
           return prev - 1;
@@ -1145,7 +1165,7 @@ export default function QuizShowdown() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [gamePhase, questionTimer]);
+  }, [gamePhase, questionTimer, buzzedTeam, currentRoom?.id, isConnected]);
 
   // Room management
   const createRoom = async () => {
@@ -1161,7 +1181,6 @@ export default function QuizShowdown() {
 
     try {
       quizShowdownSocket.createRoom(playerNameRef.current);
-      setShowCreateRoom(false);
     } catch (error) {
       console.error("Failed to create room:", error);
       Alert.alert("Error", "Failed to create room. Please try again.");
@@ -1220,19 +1239,25 @@ export default function QuizShowdown() {
   };
 
   const joinRoomByCode = () => {
-    if (!roomCode.trim()) {
+    const normalizedRoomId = roomCode.trim().toUpperCase();
+
+    if (!normalizedRoomId) {
       Alert.alert("Error", "Please enter a room code");
       return;
     }
 
-    // Validate room code format (should be 3 digits)
-    if (!/^\d{3}$/.test(roomCode.trim())) {
-      Alert.alert("Error", "Room code must be exactly 3 digits");
+    // Validate room ID format (6 alphanumeric characters)
+    if (!/^[A-Z0-9]{6}$/.test(normalizedRoomId)) {
+      Alert.alert(
+        "Error",
+        "Room ID must be exactly 6 letters and numbers"
+      );
       return;
     }
 
-    console.log("Joining room by code:", roomCode);
-    joinRoom(roomCode.trim());
+    setRoomCode(normalizedRoomId);
+    console.log("Joining room by code:", normalizedRoomId);
+    joinRoom(normalizedRoomId);
   };
 
   // Team management
@@ -1423,43 +1448,77 @@ export default function QuizShowdown() {
   };
 
   const resetGame = () => {
+    if (!isCreator) {
+      Alert.alert("Host Only", "Only the host can start a rematch.");
+      return;
+    }
+
+    if (!currentRoom?.id) {
+      Alert.alert("Error", "Room not found.");
+      return;
+    }
+
+    if (!isConnected) {
+      Alert.alert("Error", "Not connected to server");
+      return;
+    }
+
+    try {
+      setIsRestartingGame(true);
+      quizShowdownSocket.restartGame(currentRoom.id);
+    } catch (_error) {
+      setIsRestartingGame(false);
+      Alert.alert("Error", "Failed to restart game. Please try again.");
+    }
+  };
+
+  const returnToLobbyState = () => {
+    // Intentional leave should not trigger auto-rejoin.
+    lastRoomRef.current = { id: null, playerName: null };
+
+    setGamePhase("lobby");
+    setCurrentRoom(null);
+    setSelectedTeam(null);
     setGameState(null);
-    setCurrentQuestion(null);
-    setRoundNumber(1);
-    setBuzzedTeam(null);
-    setSelectedAnswer(null);
-    setAnswerResult(null);
-    setCanBuzz(false);
-    setGamePhase("teamSelect");
+    setIsCreator(false);
+    setIsJoiningRoom(false);
+    setIsJoiningTeam(null);
+    setShowLeaveGameModal(false);
+
+    if (!quizShowdownSocket.isConnected()) {
+      try {
+        quizShowdownSocket.connect();
+      } catch (error) {
+        console.warn("Reconnect after leave failed:", error);
+      }
+    }
   };
 
   const leaveGame = () => {
     // On results screen the confirmation modal isn't rendered, so perform immediate leave
     if (gamePhase === "results") {
       try {
-        quizShowdownSocket.disconnect();
+        if (currentRoom?.id) {
+          quizShowdownSocket.leaveRoom();
+        }
       } catch (e) {
-        console.warn("Socket disconnect on results leave failed:", e);
+        console.warn("Room leave on results screen failed:", e);
       }
-      setGamePhase("lobby");
-      setCurrentRoom(null);
-      setSelectedTeam(null);
-      setGameState(null);
-      setIsCreator(false);
-      setShowLeaveGameModal(false);
+      returnToLobbyState();
       return;
     }
     setShowLeaveGameModal(true);
   };
 
   const confirmLeaveGame = () => {
-    quizShowdownSocket.disconnect();
-    setGamePhase("lobby");
-    setCurrentRoom(null);
-    setSelectedTeam(null);
-    setGameState(null);
-    setIsCreator(false);
-    setShowLeaveGameModal(false);
+    try {
+      if (currentRoom?.id) {
+        quizShowdownSocket.leaveRoom();
+      }
+    } catch (error) {
+      console.warn("Room leave failed:", error);
+    }
+    returnToLobbyState();
   };
 
   // Question management for instructor mode
@@ -1811,10 +1870,6 @@ export default function QuizShowdown() {
         roomCode={roomCode}
         setRoomCode={setRoomCode}
         playerName={playerName}
-        showCreateRoom={showCreateRoom}
-        setShowCreateRoom={setShowCreateRoom}
-        newRoomName={newRoomName}
-        setNewRoomName={setNewRoomName}
         createRoom={createRoom}
         joinRoomByCode={joinRoomByCode}
         isInstructor={isInstructor}
@@ -1822,7 +1877,6 @@ export default function QuizShowdown() {
         setGamePhase={setGamePhase}
         router={router}
         isConnected={isConnected}
-        setIsConnected={setIsConnected}
         connectionError={connectionError}
         isJoiningRoom={isJoiningRoom}
         instructorPrivilege={instructorPrivilege}
@@ -1840,7 +1894,6 @@ export default function QuizShowdown() {
         joinTeam={joinTeam}
         startGame={startGame}
         leaveGame={leaveGame}
-        isInstructor={isInstructor}
         isCreator={isCreator}
         gameState={gameState}
         isConnected={isConnected}
@@ -1855,7 +1908,7 @@ export default function QuizShowdown() {
   if (gamePhase === "instructor") {
     return (
       <SafeAreaView style={styles.container}>
-        <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.gradient}>
+        <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
           {renderImportDocsModal?.()}
           {renderActionsMenuModal?.()}
           <View style={styles.editorContainer}>
@@ -1870,22 +1923,33 @@ export default function QuizShowdown() {
                   color="#3b82f6"
                 />
               </TouchableOpacity>
-              <Text style={styles.editorTitle}>Question Manager</Text>
-              <TouchableOpacity
-                style={styles.moreMenuButton}
-                onPress={() => setShowActionsMenu(true)}
-              >
-                <MaterialCommunityIcons
-                  name="dots-vertical"
-                  size={26}
-                  color={COLORS.textPrimary}
-                />
-              </TouchableOpacity>
+              <View style={styles.editorHeaderMeta}>
+                <Text style={styles.editorTitle}>Question Manager</Text>
+                <Text style={styles.editorSubtitle}>
+                  Build your question set for Quiz Showdown
+                </Text>
+                <Text style={styles.editorStatsText}>
+                  Number of Questions: {(questions || []).length}
+                </Text>
+              </View>
+              <View style={styles.editorHeaderActions}>
+
+                <TouchableOpacity
+                  style={styles.moreMenuButton}
+                  onPress={() => setShowActionsMenu(true)}
+                >
+                  <MaterialCommunityIcons
+                    name="dots-vertical"
+                    size={22}
+                    color="#0f172a"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView
               style={styles.questionsList}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={Platform.OS === "web"}
             >
               {(questions || []).map((question, index) => (
                 <TouchableOpacity
@@ -1921,6 +1985,9 @@ export default function QuizShowdown() {
                   <Text style={styles.questionPreview} numberOfLines={2}>
                     {question.question}
                   </Text>
+                  <Text style={styles.questionMetaText}>
+                    {question.points || 1} pt{(question.points || 1) > 1 ? "s" : ""}
+                  </Text>
                 </TouchableOpacity>
               ))}
 
@@ -1928,13 +1995,18 @@ export default function QuizShowdown() {
                 style={styles.createQuestionCard}
                 onPress={createNewQuestion}
               >
-                <MaterialCommunityIcons
-                  name="plus-circle-outline"
-                  size={48}
-                  color="#10b981"
-                />
+                <View style={styles.createQuestionIconWrap}>
+                  <MaterialCommunityIcons
+                    name="plus"
+                    size={30}
+                    color="#ffffff"
+                  />
+                </View>
                 <Text style={styles.createQuestionText}>
                   Create New Question
+                </Text>
+                <Text style={styles.createQuestionSubtext}>
+                  Add a fresh challenge to your quiz bank
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -1943,14 +2015,18 @@ export default function QuizShowdown() {
           {/* Question Edit Modal */}
           <Modal
             visible={editingQuestion !== null}
-            animationType="slide"
-            presentationStyle="pageSheet"
+            animationType={Platform.OS === "web" ? "fade" : "slide"}
+            transparent={Platform.OS === "web"}
+            presentationStyle={Platform.OS === "web" ? undefined : "pageSheet"}
           >
             {editingQuestion && (
-              <SafeAreaView style={styles.modalContainer}>
+              <View style={Platform.OS === "web" ? styles.editorWebModalOverlay : styles.modalContainer}>
                 <LinearGradient
-                  colors={["#92eacc", "#4a7c59"]}
-                  style={styles.gradient}
+                  colors={["#ecfeff", "#f0fdfa", "#eef2ff"]}
+                  style={[
+                    styles.gradient,
+                    Platform.OS === "web" && styles.editorWebModalCard,
+                  ]}
                 >
                   <View style={styles.modalHeader}>
                     <TouchableOpacity onPress={() => setEditingQuestion(null)}>
@@ -2054,7 +2130,7 @@ export default function QuizShowdown() {
                     </View>
                   </ScrollView>
                 </LinearGradient>
-              </SafeAreaView>
+              </View>
             )}
           </Modal>
 
@@ -2241,6 +2317,8 @@ export default function QuizShowdown() {
         teams={teams}
         resetGame={resetGame}
         leaveGame={leaveGame}
+        isCreator={isCreator}
+        isRestartingGame={isRestartingGame}
       />
     );
   }
@@ -2248,7 +2326,7 @@ export default function QuizShowdown() {
   // Main game screen (buzzer and question phases)
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.gradient}>
+      <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
         {/* Header - Fixed */}
         <View style={styles.gameHeader}>
           <TouchableOpacity style={styles.backButton} onPress={leaveGame}>
@@ -2536,7 +2614,7 @@ export default function QuizShowdown() {
       <Modal visible={showLeaveGameModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Leave Game</Text>
+            <Text style={[styles.modalTitle, styles.leaveModalTitle]}>Leave Game</Text>
             <Text style={styles.modalDescription}>
               Are you sure you want to leave? Your progress in this game will be
               lost.
@@ -2570,10 +2648,6 @@ const LobbyScreen = ({
   roomCode,
   setRoomCode,
   playerName,
-  showCreateRoom,
-  setShowCreateRoom,
-  newRoomName,
-  setNewRoomName,
   createRoom,
   joinRoomByCode,
   isInstructor,
@@ -2581,91 +2655,117 @@ const LobbyScreen = ({
   setGamePhase,
   router,
   isConnected,
-  setIsConnected, // Add this parameter
   connectionError,
   isJoiningRoom,
   instructorPrivilege,
 }) => (
   <SafeAreaView style={styles.container}>
-    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.gradient}>
-      <ScrollView style={styles.scrollView}>
-        {/* Header */}
+    <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.lobbyScrollContent}
+      >
         <View style={styles.lobbyHeader}>
           <TouchableOpacity
             style={styles.lobbyBackButton}
             onPress={() => router.push("/(tabs)/game")}
           >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={24}
-              color="#3b82f6"
-            />
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#0f172a" />
           </TouchableOpacity>
           <View style={styles.titleContainer}>
-            <MaterialCommunityIcons
-              name="bell-ring"
-              size={40}
-              color="#2acde6"
-            />
+            <View style={styles.lobbyHeroIconWrap}>
+              <MaterialCommunityIcons name="lightning-bolt" size={34} color="#0f766e" />
+            </View>
             <Text style={styles.lobbyTitle}>Quiz Showdown</Text>
-            <Text style={styles.lobbySubtitle}>
-              Competitive Team Quiz Battle
-            </Text>
+            <Text style={styles.lobbySubtitle}>Competitive Team Quiz Battle</Text>
           </View>
         </View>
 
-        {/* Connection Status */}
-        <View style={styles.connectionStatus}>
-          <View
+        <Text style={styles.pageTitle}>Join a Game Room</Text>
+
+        <View style={styles.setupCard}>
+          <View style={styles.connectionStatusRow}>
+            <View
+              style={[
+                styles.connectionIndicator,
+                isConnected
+                  ? styles.connectionIndicatorOnline
+                  : styles.connectionIndicatorOffline,
+              ]}
+            >
+              <MaterialCommunityIcons
+                name={isConnected ? "wifi" : "wifi-off"}
+                size={16}
+                color={isConnected ? "#0f766e" : "#dc2626"}
+              />
+              <Text
+                style={[
+                  styles.connectionText,
+                  isConnected ? styles.connectionTextOnline : styles.connectionTextOffline,
+                ]}
+              >
+                {isConnected ? "Connected" : "Disconnected"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.inputSection}>
+            <Text style={styles.inputLabel}>Room ID</Text>
+            <TextInput
+              style={styles.roomCodeInput}
+              value={roomCode}
+              onChangeText={(text) =>
+                setRoomCode(text.replace(/[^a-zA-Z0-9]/g, "").toUpperCase())
+              }
+              placeholder="Enter Room ID"
+              placeholderTextColor="#64748b"
+              maxLength={6}
+              autoCapitalize="characters"
+              editable={!isJoiningRoom}
+            />
+          </View>
+
+          <View style={styles.inputSection}>
+            <Text style={styles.inputLabel}>Player Name</Text>
+            <View style={styles.playerNameDisplay}>
+              <MaterialCommunityIcons
+                name="account-circle"
+                size={20}
+                color="#0f766e"
+                style={styles.playerIcon}
+              />
+              <Text style={styles.playerNameText}>{playerName || "Loading..."}</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
             style={[
-              styles.connectionIndicator,
-              { backgroundColor: isConnected ? "#10b981" : "#ef4444" },
+              styles.joinCodeButton,
+              (isJoiningRoom || !isConnected) && styles.disabledButton,
             ]}
+            onPress={joinRoomByCode}
+            disabled={isJoiningRoom || !isConnected}
           >
-            <MaterialCommunityIcons
-              name={isConnected ? "wifi" : "wifi-off"}
-              size={16}
-              color="#3b82f6"
-            />
-            <Text style={styles.connectionText}>
-              {isConnected ? "Connected" : "Disconnected"}
-            </Text>
+            <Text style={styles.joinCodeText}>{isJoiningRoom ? "Joining..." : "Join Room"}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <Text style={styles.dividerText}>OR</Text>
           </View>
 
-          {connectionError && (
-            <Text style={styles.errorText}>{connectionError}</Text>
-          )}
-        </View>
+          <TouchableOpacity
+            style={[styles.createRoomButton, (!isConnected || isJoiningRoom) && styles.disabledButton]}
+            onPress={createRoom}
+            disabled={!isConnected || isJoiningRoom}
+          >
+            <Text style={styles.createRoomText}>Generate Room ID</Text>
+          </TouchableOpacity>
 
-        {/* Robot Image */}
-        <View style={styles.robotSection}>
-          <Image
-            source={require("../../assets/images/robot5.png")}
-            style={styles.lobbyRobotImage}
-            resizeMode="cover"
-          />
-        </View>
+          {connectionError ? <Text style={styles.errorText}>{connectionError}</Text> : null}
 
-        {/* Player Name Display */}
-        <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>Playing as</Text>
-          <View style={styles.playerNameDisplay}>
-            <MaterialCommunityIcons
-              name="account"
-              size={20}
-              color="#2acde6"
-              style={styles.playerIcon}
-            />
-            <Text style={styles.playerNameText}>
-              {playerName || "Loading..."}
-            </Text>
-          </View>
-        </View>
-
-        {/* Instructor Toggle */}
-        {instructorPrivilege && (
-          <View style={styles.instructorSection}>
-            <TouchableOpacity
+          {instructorPrivilege && (
+            <View style={styles.instructorSection}>
+              <TouchableOpacity
               style={[
                 styles.instructorToggle,
                 isInstructor && styles.instructorToggleActive,
@@ -2674,8 +2774,8 @@ const LobbyScreen = ({
             >
               <MaterialCommunityIcons
                 name={isInstructor ? "school" : "account"}
-                size={20}
-                color={isInstructor ? "white" : "#666"}
+                size={18}
+                color={isInstructor ? "#ffffff" : "#334155"}
               />
               <Text
                 style={[
@@ -2692,91 +2792,13 @@ const LobbyScreen = ({
                 style={styles.editQuestionsButton}
                 onPress={() => setGamePhase("instructor")}
               >
-                <MaterialCommunityIcons
-                  name="pencil"
-                  size={20}
-                  color="#3b82f6"
-                />
-                <Text style={styles.editQuestionsText}>Edit Questions</Text>
+                <MaterialCommunityIcons name="pencil" size={18} color="#ffffff" />
+                <Text style={styles.editQuestionsText}>Manage Questions</Text>
               </TouchableOpacity>
             )}
-          </View>
-        )}
-
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.createRoomButton}
-            onPress={() => setShowCreateRoom(true)}
-          >
-            <MaterialCommunityIcons
-              name="plus-circle"
-              size={24}
-              color="#3b82f6"
-            />
-            <Text style={styles.createRoomText}>Create Room</Text>
-          </TouchableOpacity>
-
-          <View style={styles.joinRoomContainer}>
-            <TextInput
-              style={styles.roomCodeInput}
-              value={roomCode}
-              onChangeText={(text) => {
-                // Only allow numeric input
-                const numericText = text.replace(/[^0-9]/g, "");
-                setRoomCode(numericText);
-              }}
-              placeholder="Room code..."
-              placeholderTextColor="#666"
-              maxLength={3}
-              keyboardType="numeric"
-              editable={!isJoiningRoom}
-            />
-            <TouchableOpacity
-              style={[
-                styles.joinCodeButton,
-                (isJoiningRoom || !isConnected) && styles.disabledButton,
-              ]}
-              onPress={joinRoomByCode}
-              disabled={isJoiningRoom || !isConnected}
-            >
-              <Text style={styles.joinCodeText}>
-                {isJoiningRoom ? "Joining..." : "Join"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Create Room Modal */}
-        <Modal visible={showCreateRoom} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Create New Room</Text>
-              <Text style={styles.modalDescription}>
-                You&apos;ll be the room creator and can start the game when
-                ready.
-              </Text>
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={() => setShowCreateRoom(false)}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.modalCreateButton,
-                    !isConnected && styles.disabledButton,
-                  ]}
-                  onPress={createRoom}
-                  disabled={!isConnected}
-                >
-                  <Text style={styles.modalCreateText}>Create Room</Text>
-                </TouchableOpacity>
-              </View>
             </View>
-          </View>
-        </Modal>
+          )}
+        </View>
       </ScrollView>
     </LinearGradient>
   </SafeAreaView>
@@ -2790,7 +2812,6 @@ const TeamSelectScreen = ({
   joinTeam,
   startGame,
   leaveGame,
-  isInstructor,
   isCreator,
   gameState,
   isConnected,
@@ -2800,7 +2821,7 @@ const TeamSelectScreen = ({
   confirmLeaveGame,
 }) => (
   <SafeAreaView style={styles.container}>
-    <LinearGradient colors={["#abfcc3ff", "#29d8acff"]} style={styles.gradient}>
+    <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={leaveGame}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="#3b82f6" />
@@ -2812,7 +2833,6 @@ const TeamSelectScreen = ({
         )}
       </View>
 
-      {/* Player Name Display */}
       <View style={styles.nameInputContainer}>
         <View style={styles.playerNameDisplay}>
           <MaterialCommunityIcons
@@ -2825,46 +2845,13 @@ const TeamSelectScreen = ({
             {playerName || "Loading..."}
           </Text>
         </View>
-        {/* Debug info */}
-        {__DEV__ && (
-          <View
-            style={{
-              backgroundColor: "#92eacc",
-              padding: 10,
-              margin: 10,
-              borderRadius: 5,
-            }}
-          >
-            <Text style={{ color: COLORS.textPrimary, fontSize: 12 }}>
-              Debug: Selected Team: {selectedTeam || "None"}
-            </Text>
-            <Text style={{ color: COLORS.textPrimary, fontSize: 12 }}>
-              Player Name: {playerName}
-            </Text>
-            <Text style={{ color: COLORS.textPrimary, fontSize: 12 }}>
-              Team A Players: {teams.teamA.players.length} -{" "}
-              {teams.teamA.players.join(", ")}
-            </Text>
-            <Text style={{ color: COLORS.textPrimary, fontSize: 12 }}>
-              Team B Players: {teams.teamB.players.length} -{" "}
-              {teams.teamB.players.join(", ")}
-            </Text>
-            <Text style={{ color: COLORS.textPrimary, fontSize: 12 }}>
-              Connected: {isConnected ? "Yes" : "No"}
-            </Text>
-            <Text style={{ color: COLORS.textPrimary, fontSize: 12 }}>
-              Room: {currentRoom?.id || "None"}
-            </Text>
-          </View>
-        )}
       </View>
 
-      {/* Team Selection */}
       <View style={styles.teamSelectContainer}>
         <Text style={styles.teamSelectTitle}>Choose Your Team</Text>
+        <Text style={styles.teamSelectHint}>Tap a team card to lock in before the match starts.</Text>
 
         <View style={styles.teamsContainer}>
-          {/* Team A */}
           <TouchableOpacity
             style={[
               styles.teamSelectCard,
@@ -2921,7 +2908,6 @@ const TeamSelectScreen = ({
             </Text>
           </TouchableOpacity>
 
-          {/* Team B */}
           <TouchableOpacity
             style={[
               styles.teamSelectCard,
@@ -2979,7 +2965,6 @@ const TeamSelectScreen = ({
           </TouchableOpacity>
         </View>
 
-        {/* Start Game Button */}
         {isCreator &&
           gameState &&
           gameState.teamA.members.length > 0 &&
@@ -2996,13 +2981,18 @@ const TeamSelectScreen = ({
               <Text style={styles.startGameText}>Start Game</Text>
             </TouchableOpacity>
           )}
+        {isCreator &&
+          gameState &&
+          (gameState.teamA.members.length === 0 || gameState.teamB.members.length === 0) && (
+            <Text style={styles.waitingText}>At least 1 player is needed on each team to begin.</Text>
+          )}
       </View>
 
       {/* Leave Game Confirmation Modal (Team Select Phase) */}
       <Modal visible={showLeaveGameModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Leave Room</Text>
+            <Text style={[styles.modalTitle, styles.leaveModalTitle]}>Leave Room</Text>
             <Text style={styles.modalDescription}>
               Are you sure you want to leave this room and return to the Quiz
               Showdown lobby?
@@ -3033,7 +3023,7 @@ const TeamSelectScreen = ({
 
 const CountdownScreen = ({ countdown, currentQuestion, roundNumber }) => (
   <SafeAreaView style={styles.container}>
-    <LinearGradient colors={["#abfcc3ff", "#29d8acff"]} style={styles.gradient}>
+    <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
       <View style={styles.countdownContainer}>
         <Text style={styles.countdownRound}>Round {roundNumber}</Text>
         <Text style={styles.countdownSubtext}>
@@ -3070,7 +3060,13 @@ const CountdownScreen = ({ countdown, currentQuestion, roundNumber }) => (
   </SafeAreaView>
 );
 
-const ResultsScreen = ({ teams, resetGame, leaveGame }) => {
+const ResultsScreen = ({
+  teams,
+  resetGame,
+  leaveGame,
+  isCreator,
+  isRestartingGame,
+}) => {
   const winner =
     teams.teamA.score > teams.teamB.score
       ? teams.teamA
@@ -3080,11 +3076,11 @@ const ResultsScreen = ({ teams, resetGame, leaveGame }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.gradient}>
+      <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
         <View style={styles.resultsContainer}>
           <MaterialCommunityIcons name="trophy" size={80} color="#2acde6" />
           <Text style={styles.resultsTitle}>
-            {winner ? `${winner.name} Wins!` : "It&apos;s a Tie!"}
+            {winner ? `${winner.name} Wins!` : "It's a Tie!"}
           </Text>
 
           <View style={styles.finalScoresContainer}>
@@ -3110,17 +3106,28 @@ const ResultsScreen = ({ teams, resetGame, leaveGame }) => {
           </View>
 
           <View style={styles.resultsButtons}>
-            <TouchableOpacity
-              style={styles.playAgainButton}
-              onPress={resetGame}
-            >
-              <MaterialCommunityIcons
-                name="refresh"
-                size={24}
-                color="#3b82f6"
-              />
-              <Text style={styles.playAgainText}>Play Again</Text>
-            </TouchableOpacity>
+            {isCreator ? (
+              <TouchableOpacity
+                style={[styles.playAgainButton, isRestartingGame && styles.disabledButton]}
+                onPress={resetGame}
+                disabled={isRestartingGame}
+              >
+                <MaterialCommunityIcons
+                  name="refresh"
+                  size={24}
+                  color="#3b82f6"
+                />
+                <Text style={styles.playAgainText}>
+                  {isRestartingGame ? "Starting..." : "Play Again"}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.waitingMessage}>
+                <Text style={styles.waitingText}>
+                  Waiting for the host to start a rematch...
+                </Text>
+              </View>
+            )}
 
             <TouchableOpacity
               style={styles.backToLobbyButton}
@@ -3181,14 +3188,14 @@ const TeamScoreCard = ({ team, isMyTeam, buzzedTeam }) => {
 
 const styles = StyleSheet.create({
   playerNameDisplay: {
-    backgroundColor: "rgba(60, 189, 162, 0.8)", // Using 0.8 opacity instead of 1.0
+    backgroundColor: "rgba(248, 250, 252, 0.95)",
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(60, 189, 162, 0.9)",
-    width: "100%", // Ensure it takes full width
+    borderColor: "rgba(148, 163, 184, 0.35)",
+    width: "100%",
     ...Platform.select({
       web: {
         maxWidth: 400, // Limit max width on web
@@ -3215,18 +3222,18 @@ const styles = StyleSheet.create({
 
   playerIcon: {
     marginRight: 12,
-    color: "#FFFFFF", // White icon for better contrast on green background
+    color: "#0f766e",
   },
   playerNameDisplayText: {
-    color: "#FFFFFF", // White text for better readability on green background
-    fontSize: 18,
+    color: "#0f172a",
+    fontSize: 17,
     fontWeight: "600",
     textAlign: "center",
     flex: 1,
   },
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: "#f8fafc",
     ...Platform.select({
       web: {
         width: "100%",
@@ -3252,6 +3259,9 @@ const styles = StyleSheet.create({
       },
       default: {},
     }),
+  },
+  lobbyScrollContent: {
+    paddingBottom: 28,
   },
 
   // Game content containers
@@ -3279,8 +3289,8 @@ const styles = StyleSheet.create({
   // Lobby screen specific styles
   lobbyHeader: {
     position: "relative",
-    paddingTop: 20,
-    paddingBottom: 30,
+    paddingTop: 12,
+    paddingBottom: 18,
     paddingHorizontal: 20,
     ...Platform.select({
       web: {
@@ -3292,7 +3302,7 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     alignItems: "center",
-    marginTop: 20,
+    marginTop: 10,
     alignSelf: "center",
     ...Platform.select({
       web: {
@@ -3303,27 +3313,65 @@ const styles = StyleSheet.create({
     }),
   },
   inputSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     marginBottom: 20,
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 600,
+        maxWidth: "100%",
         alignSelf: "center",
       },
       default: {},
     }),
   },
-  instructorSection: {
-    paddingHorizontal: 20,
-    marginBottom: 30,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  setupCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.35)",
+    padding: 20,
+    marginHorizontal: 20,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 5,
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 600,
+        maxWidth: 700,
+        alignSelf: "center",
+      },
+      default: {},
+    }),
+  },
+  lobbyHeroIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(13, 148, 136, 0.12)",
+    marginBottom: 8,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#0f172a",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  connectionStatusRow: {
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  instructorSection: {
+    marginTop: 12,
+    gap: 10,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: "100%",
         alignSelf: "center",
       },
       default: {},
@@ -3346,6 +3394,7 @@ const styles = StyleSheet.create({
   teamSelectContainer: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingBottom: 16,
     ...Platform.select({
       web: {
         width: "100%",
@@ -3369,12 +3418,17 @@ const styles = StyleSheet.create({
   },
   teamSelectCard: {
     flex: 1,
-    backgroundColor: "#35d091",
+    backgroundColor: "#ffffff",
     borderRadius: 16,
     padding: 20,
-    borderWidth: 3,
-    borderColor: "transparent",
+    borderWidth: 2,
+    borderColor: "rgba(15, 23, 42, 0.08)",
     minHeight: 200,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
     ...Platform.select({
       web: {
         minWidth: 400, // Increased from 300px
@@ -3382,6 +3436,10 @@ const styles = StyleSheet.create({
       },
       default: {},
     }),
+  },
+  selectedTeamCard: {
+    borderColor: "#0f766e",
+    shadowOpacity: 0.2,
   },
 
   // Question container styles
@@ -3460,7 +3518,7 @@ const styles = StyleSheet.create({
 
   // Modal styles
   modalContent: {
-    backgroundColor: "#92eacc",
+    backgroundColor: "#ffffff",
     borderRadius: 16,
     padding: 24,
     width: "90%",
@@ -3476,7 +3534,7 @@ const styles = StyleSheet.create({
   // Question Editor Styles
   editorContainer: {
     flex: 1,
-    paddingTop: 20,
+    paddingTop: 16,
     ...Platform.select({
       web: {
         width: "100%",
@@ -3492,18 +3550,25 @@ const styles = StyleSheet.create({
       web: {
         width: "100%",
         maxWidth: 1000,
+        overflowY: "scroll",
+        scrollbarWidth: "thin",
       },
       default: {},
     }),
   },
   questionItem: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 14,
     padding: 16,
     marginHorizontal: 20,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
+    borderColor: "rgba(148,163,184,0.28)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
     ...Platform.select({
       web: {
         marginHorizontal: 0,
@@ -3624,11 +3689,13 @@ const styles = StyleSheet.create({
   },
 
   actionsMenuContainer: {
-    backgroundColor: "#92eacc",
-    borderRadius: 16,
-    paddingVertical: 12,
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     width: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.34)",
     ...Platform.select({
       web: {
         maxWidth: 600,
@@ -3677,20 +3744,20 @@ const styles = StyleSheet.create({
   },
 
   lobbyTitle: {
-    color: COLORS.textPrimary,
+    color: "#0f172a",
     fontSize: 28,
-    fontWeight: "bold",
-    marginTop: 10,
+    fontWeight: "800",
+    marginTop: 4,
   },
   lobbySubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 16,
-    marginTop: 5,
+    color: "#475569",
+    fontSize: 15,
+    marginTop: 4,
   },
 
   inputLabel: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
+    color: "#0f766e",
+    fontSize: 15,
     fontWeight: "600",
     marginBottom: 8,
   },
@@ -3721,18 +3788,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    marginBottom: 8,
+  },
+  connectionIndicatorOnline: {
+    backgroundColor: "rgba(16, 185, 129, 0.14)",
+  },
+  connectionIndicatorOffline: {
+    backgroundColor: "rgba(239, 68, 68, 0.12)",
   },
   connectionText: {
-    color: "#ffffff",
+    color: "#334155",
     fontSize: 12,
     fontWeight: "600",
     marginLeft: 6,
+  },
+  connectionTextOnline: {
+    color: "#0f766e",
+  },
+  connectionTextOffline: {
+    color: "#dc2626",
   },
   errorText: {
     color: "#ef4444",
     fontSize: 12,
     textAlign: "center",
+    marginTop: 10,
   },
   robotSection: {
     alignItems: "center",
@@ -3742,7 +3821,7 @@ const styles = StyleSheet.create({
     height: 240,
   },
   disconnectedText: {
-    color: "#ef4444",
+    color: "#dc2626",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -3755,20 +3834,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   waitingText: {
-    color: "#ffffffff",
-    fontSize: 12,
+    color: "#475569",
+    fontSize: 13,
     textAlign: "center",
     fontStyle: "italic",
+    marginTop: 10,
   },
   instructorToggle: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(74, 124, 89, 0.2)",
+    justifyContent: "center",
+    backgroundColor: "rgba(241, 245, 249, 0.9)",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: "rgba(148, 163, 184, 0.35)",
   },
   instructorToggleActive: {
     backgroundColor: "#10b981",
@@ -3786,7 +3867,8 @@ const styles = StyleSheet.create({
   editQuestionsButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2acde6",
+    justifyContent: "center",
+    backgroundColor: "#0f766e",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
@@ -3799,19 +3881,29 @@ const styles = StyleSheet.create({
   },
 
   createRoomButton: {
-    backgroundColor: "#10b981",
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.45)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     padding: 16,
     borderRadius: 12,
-    marginBottom: 16,
   },
   createRoomText: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginLeft: 8,
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  divider: {
+    alignItems: "center",
+    marginVertical: 14,
+  },
+  dividerText: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
   },
   joinRoomContainer: {
     flexDirection: "row",
@@ -3819,27 +3911,28 @@ const styles = StyleSheet.create({
   },
   roomCodeInput: {
     flex: 1,
-    backgroundColor: "rgba(74, 124, 89, 0.2)",
+    backgroundColor: "rgba(241, 245, 249, 0.95)",
     borderRadius: 12,
     padding: 16,
-    color: "#ffffff",
+    color: "#0f172a",
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: "rgba(148, 163, 184, 0.5)",
     textAlign: "center",
     textTransform: "uppercase",
   },
   joinCodeButton: {
-    backgroundColor: "#2acde6",
+    backgroundColor: "#0f766e",
     paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 12,
     justifyContent: "center",
+    alignItems: "center",
   },
   joinCodeText: {
     color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 15,
+    fontWeight: "700",
   },
   roomsSection: {
     paddingHorizontal: 20,
@@ -3905,7 +3998,7 @@ const styles = StyleSheet.create({
   // Team Select Screen Styles
   nameInputContainer: {
     paddingHorizontal: 20,
-    marginBottom: 30,
+    marginBottom: 16,
   },
   playerNameInput: {
     backgroundColor: "rgba(74, 124, 89, 0.2)",
@@ -3919,17 +4012,23 @@ const styles = StyleSheet.create({
   },
 
   teamSelectTitle: {
-    color: "#ffffff",
+    color: "#0f172a",
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: "800",
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 6,
+  },
+  teamSelectHint: {
+    color: "#475569",
+    textAlign: "center",
+    fontSize: 13,
+    marginBottom: 18,
   },
 
   teamSelectName: {
-    color: "#d1f2d5",
+    color: "#0f172a",
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
     marginLeft: 8,
   },
   teamPlayersContainer: {
@@ -3955,7 +4054,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   startGameButton: {
-    backgroundColor: "#10b981",
+    backgroundColor: "#0f766e",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -3965,8 +4064,8 @@ const styles = StyleSheet.create({
   },
   startGameText: {
     color: "#ffffff",
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "700",
     marginLeft: 8,
   },
 
@@ -4559,12 +4658,12 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: "rgba(74, 124, 89, 0.2)",
+    backgroundColor: "#9ca3af",
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: "#9ca3af",
   },
   modalCancelText: {
     color: "#ffffff",
@@ -4583,6 +4682,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
+  leaveModalTitle: {
+    color: "#000000",
+  },
 
   // Question Editor Styles (from Knowledge Relay)
 
@@ -4591,12 +4693,54 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 16,
+    backgroundColor: "rgba(255,255,255,0.82)",
+    borderRadius: 16,
+    marginHorizontal: 20,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.3)",
+  },
+  editorHeaderMeta: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  editorHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   editorTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 20,
-    fontWeight: "bold",
+    color: "#0f172a",
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  editorSubtitle: {
+    color: "#475569",
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: "600",
+  },
+  editorStatsText: {
+    color: "#0f766e",
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: "700",
+  },
+  questionCountBadge: {
+    minWidth: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(15,118,110,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(15,118,110,0.35)",
+  },
+  questionCountText: {
+    color: "#0f766e",
+    fontSize: 13,
+    fontWeight: "800",
   },
   createQuestionButton: {
     backgroundColor: "rgba(16, 185, 129, 0.2)",
@@ -4605,41 +4749,82 @@ const styles = StyleSheet.create({
   },
 
   questionNumber: {
-    color: "#60a5fa",
+    color: "#0f766e",
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
   deleteButton: {
-    backgroundColor: "rgba(239, 68, 68, 0.2)",
-    borderRadius: 6,
-    padding: 4,
+    backgroundColor: "rgba(239, 68, 68, 0.12)",
+    borderRadius: 8,
+    padding: 6,
   },
   questionPreview: {
-    color: COLORS.textPrimary,
+    color: "#0f172a",
     fontSize: 16,
     fontWeight: "500",
     marginBottom: 4,
   },
+  questionMetaText: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
   createQuestionCard: {
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
-    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 16,
     padding: 24,
     marginHorizontal: 20,
     marginBottom: 20,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "rgba(16, 185, 129, 0.3)",
-    borderStyle: "dashed",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.35)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  createQuestionIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#0f766e",
+    alignItems: "center",
+    justifyContent: "center",
   },
   createQuestionText: {
-    color: "#10b981",
+    color: "#0f172a",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     marginTop: 8,
+  },
+  createQuestionSubtext: {
+    color: "#64748b",
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "500",
   },
   modalContainer: {
     flex: 1,
+  },
+  editorWebModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  editorWebModalCard: {
+    width: "100%",
+    maxWidth: 980,
+    maxHeight: "90%",
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.35)",
   },
   modalHeader: {
     flexDirection: "row",
@@ -4648,7 +4833,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+    borderBottomColor: "rgba(148,163,184,0.35)",
   },
   // Specific adjustments when modalTitle is used inside modalHeader
   modalHeaderTitle: {
@@ -4657,7 +4842,7 @@ const styles = StyleSheet.create({
     marginHorizontal: "10vw", // provide horizontal spacing between buttons
   },
   saveButton: {
-    color: "#10b981",
+    color: "#0f766e",
     fontSize: 16,
     fontWeight: "600",
     marginLeft: 12, // spacing from the title on web
@@ -4667,21 +4852,21 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   formLabel: {
-    color: "#ffffff",
+    color: "#0f172a",
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 8,
   },
   textArea: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backgroundColor: "rgba(248,250,252,0.96)",
     borderRadius: 8,
     padding: 12,
-    color: "#ffffff",
+    color: "#0f172a",
     fontSize: 16,
     minHeight: 80,
     textAlignVertical: "top",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
+    borderColor: "rgba(148,163,184,0.45)",
   },
   formRow: {
     flexDirection: "row",
@@ -4701,7 +4886,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: "#64748b",
+    borderColor: "#94a3b8",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -4721,7 +4906,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   optionLabel: {
-    color: "#60a5fa",
+    color: "#0f766e",
     fontSize: 16,
     fontWeight: "bold",
     width: 24,
@@ -4730,13 +4915,13 @@ const styles = StyleSheet.create({
   },
   optionInput: {
     flex: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backgroundColor: "rgba(248,250,252,0.96)",
     borderRadius: 8,
     padding: 12,
-    color: "#ffffff",
+    color: "#0f172a",
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
+    borderColor: "rgba(148,163,184,0.45)",
   },
   correctAnswerInfo: {
     flexDirection: "row",
@@ -4970,10 +5155,15 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
   moreMenuButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    marginLeft: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(248,250,252,0.95)",
+    marginLeft: 2,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionsMenuOverlay: {
     flex: 1,
@@ -4983,10 +5173,17 @@ const styles = StyleSheet.create({
   },
 
   actionsMenuTitle: {
-    color: COLORS.textPrimary,
+    color: "#0f172a",
     fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 8,
+    fontWeight: "800",
+    marginBottom: 2,
+    paddingHorizontal: 4,
+  },
+  actionsMenuSubtitle: {
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 10,
     paddingHorizontal: 4,
   },
   actionsMenuItem: {
@@ -4994,16 +5191,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 6,
-    borderRadius: 8,
+    borderRadius: 10,
     gap: 12,
+    backgroundColor: "rgba(248,250,252,0.9)",
+    marginBottom: 4,
   },
   actionsMenuItemText: {
-    color: COLORS.textPrimary,
+    color: "#0f172a",
     fontSize: 15,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   actionsMenuCloseItem: {
     marginTop: 4,
-    backgroundColor: "rgba(248,113,113,0.08)",
+    backgroundColor: "rgba(248,113,113,0.14)",
   },
 });

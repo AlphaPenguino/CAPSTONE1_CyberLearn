@@ -172,6 +172,9 @@ const [importing, setImporting] = React.useState(false);
     BACKGROUND_OPTIONS[0]
   );
   const [levelProgress, setLevelProgress] = useState(null);
+  const [isPlayerStatsExpanded, setIsPlayerStatsExpanded] = useState(
+    Platform.OS !== "android"
+  );
   const levelProgressLoadedRef = useRef(false); // Track if level progress has been loaded
   const hasAppliedReturnSubjectRef = useRef(false);
   const hasAppliedReturnFocusRef = useRef(false);
@@ -1287,6 +1290,9 @@ const handleImportCyberQuestsWeb = () => {
     !error &&
     modules.length === 0;
 
+  const showPlayerStatsDetails =
+    Platform.OS !== "android" || isPlayerStatsExpanded;
+
   const showWebMapBackdrop =
     Platform.OS === "web" &&
     !!selectedBackground?.image &&
@@ -1298,6 +1304,7 @@ const handleImportCyberQuestsWeb = () => {
 
   const webMapStripWidth = Platform.OS === "web" ? Math.min(viewportWidth, 800) : viewportWidth;
   const webMapStripLeft = Platform.OS === "web" ? (viewportWidth - webMapStripWidth) / 2 : 0;
+  const webMapBackgroundScale = Platform.OS === "web" ? 1.6 : 1;
 
   const handleOpenJoinSubject = useCallback(() => {
     if (Platform.OS === "web") {
@@ -1601,240 +1608,259 @@ const handleImportCyberQuestsWeb = () => {
                 Platform.OS === "web" && styles.levelProgressHeaderWeb,
               ]}
             >
-              <MaterialCommunityIcons
-                name="crown"
-                size={Platform.OS === "web" ? 22 : 18}
-                color="#FFD700"
-              />
-              <Text style={[styles.levelProgressTitle, { color: "#fff" }]}>
-                Player Stats
-              </Text>
-            </View>
-
-            {/* Add user info section */}
-            <View
-              style={[
-                styles.levelProgressUserInfo,
-                Platform.OS === "web" && styles.levelProgressUserInfoWeb,
-              ]}
-            >
-              <Text style={styles.levelProgressUsername}>
-                {user?.username || "Unknown Player"}
-              </Text>
-              {user?.fullName && (
-                <Text style={styles.levelProgressFullName}>
-                  {user.fullName}
-                </Text>
+              <View style={styles.levelProgressHeaderLeft}>
+                <MaterialCommunityIcons
+                  name="crown"
+                  size={Platform.OS === "web" ? 22 : 18}
+                  color="#FFD700"
+                />
+                <Text style={[styles.levelProgressTitle, { color: "#fff" }]}>Player Stats</Text>
+              </View>
+              {Platform.OS === "android" && (
+                <TouchableOpacity
+                  style={styles.playerStatsToggleButton}
+                  onPress={() => setIsPlayerStatsExpanded((prev) => !prev)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.playerStatsToggleText}>
+                    {isPlayerStatsExpanded ? "Hide" : "Show"}
+                  </Text>
+                  <Ionicons
+                    name={isPlayerStatsExpanded ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color="#E2E8F0"
+                  />
+                </TouchableOpacity>
               )}
             </View>
-            <View
-              style={[
-                styles.levelProgressStats,
-                Platform.OS !== "web" && styles.levelProgressStatsMobile,
-                Platform.OS === "web" && styles.levelProgressStatsWeb,
-              ]}
-            >
-              <View
-                style={[
-                  styles.levelProgressStat,
-                  Platform.OS === "web" && styles.levelProgressStatWeb,
-                ]}
-              >
+
+            {showPlayerStatsDetails && (
+              <>
+                {/* Add user info section */}
                 <View
                   style={[
-                    styles.levelIconContainer,
-                    { backgroundColor: "rgba(41, 121, 255, 0.2)" },
+                    styles.levelProgressUserInfo,
+                    Platform.OS === "web" && styles.levelProgressUserInfoWeb,
                   ]}
                 >
-                  <MaterialCommunityIcons
-                    name="account-star"
-                    size={Platform.OS === "web" ? 24 : 18} // Smaller icon on mobile
-                    color="#2979FF"
-                  />
-                </View>
-                <View
-                  style={
-                    Platform.OS === "web" && styles.levelProgressContentWeb
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.levelProgressValue,
-                      { color: "#2979FF" },
-                      Platform.OS !== "web" && styles.levelProgressValueMobile,
-                      Platform.OS === "web" && styles.levelProgressValueWeb,
-                    ]}
-                  >
-                    {levelProgress.progression.globalLevel}
+                  <Text style={styles.levelProgressUsername}>
+                    {user?.username || "Unknown Player"}
                   </Text>
-                  <Text
-                    style={[
-                      styles.levelProgressLabel,
-                      { color: "#B0C4DE" },
-                      Platform.OS !== "web" && styles.levelProgressLabelMobile,
-                      Platform.OS === "web" && styles.levelProgressLabelWeb,
-                    ]}
-                  >
-                    Global Level
-                  </Text>
+                  {user?.fullName && (
+                    <Text style={styles.levelProgressFullName}>{user.fullName}</Text>
+                  )}
                 </View>
                 <View
                   style={[
-                    styles.progressBarContainer,
-                    Platform.OS === "web" && styles.progressBarContainerWeb,
+                    styles.levelProgressStats,
+                    Platform.OS !== "web" && styles.levelProgressStatsMobile,
+                    Platform.OS === "web" && styles.levelProgressStatsWeb,
                   ]}
                 >
                   <View
                     style={[
-                      styles.progressBar,
-                      {
-                        width: `${Math.min(
-                          (levelProgress.progression.globalLevel % 5) * 20,
-                          100
-                        )}%`,
-                        backgroundColor: "#2979FF",
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-              <View
-                style={[
-                  styles.levelProgressStat,
-                  styles.middleStat,
-                  Platform.OS === "web" && styles.middleStatWeb,
-                  Platform.OS === "web" && styles.levelProgressStatWeb,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.levelIconContainer,
-                    { backgroundColor: "rgba(255, 107, 107, 0.2)" },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="trophy-award"
-                    size={Platform.OS === "web" ? 24 : 18} // Smaller icon on mobile
-                    color="#FF6B6B"
-                  />
-                </View>
-                <View
-                  style={
-                    Platform.OS === "web" && styles.levelProgressContentWeb
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.levelProgressValue,
-                      { color: "#FF6B6B" },
-                      Platform.OS !== "web" && styles.levelProgressValueMobile,
-                      Platform.OS === "web" && styles.levelProgressValueWeb,
+                      styles.levelProgressStat,
+                      Platform.OS === "web" && styles.levelProgressStatWeb,
                     ]}
                   >
-                    {levelProgress.progression.maxLevelReached}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.levelProgressLabel,
-                      { color: "#B0C4DE" },
-                      Platform.OS !== "web" && styles.levelProgressLabelMobile,
-                      Platform.OS === "web" && styles.levelProgressLabelWeb,
-                    ]}
-                  >
-                    Max Quest
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.starContainer,
-                    Platform.OS === "web" && styles.starContainerWeb,
-                  ]}
-                >
-                  {[...Array(3)].map((_, i) => (
-                    <MaterialCommunityIcons
-                      key={i}
-                      name="star"
-                      size={Platform.OS === "web" ? 12 : 10} // Smaller stars on mobile
-                      color={
-                        i <
-                        Math.min(
-                          levelProgress.progression.maxLevelReached / 5,
-                          3
-                        )
-                          ? "#FFD700"
-                          : "rgba(255,255,255,0.3)"
+                    <View
+                      style={[
+                        styles.levelIconContainer,
+                        { backgroundColor: "rgba(41, 121, 255, 0.2)" },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="account-star"
+                        size={Platform.OS === "web" ? 24 : 18} // Smaller icon on mobile
+                        color="#2979FF"
+                      />
+                    </View>
+                    <View
+                      style={
+                        Platform.OS === "web" && styles.levelProgressContentWeb
                       }
-                    />
-                  ))}
-                </View>
-              </View>
-              <View
-                style={[
-                  styles.levelProgressStat,
-                  Platform.OS === "web" && styles.levelProgressStatWeb,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.levelIconContainer,
-                    { backgroundColor: "rgba(16, 185, 129, 0.2)" },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="counter"
-                    size={Platform.OS === "web" ? 24 : 18} // Smaller icon on mobile
-                    color="#10B981"
-                  />
-                </View>
-                <View
-                  style={
-                    Platform.OS === "web" && styles.levelProgressContentWeb
-                  }
-                >
-                  <Text
+                    >
+                      <Text
+                        style={[
+                          styles.levelProgressValue,
+                          { color: "#2979FF" },
+                          Platform.OS !== "web" && styles.levelProgressValueMobile,
+                          Platform.OS === "web" && styles.levelProgressValueWeb,
+                        ]}
+                      >
+                        {levelProgress.progression.globalLevel}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.levelProgressLabel,
+                          { color: "#B0C4DE" },
+                          Platform.OS !== "web" && styles.levelProgressLabelMobile,
+                          Platform.OS === "web" && styles.levelProgressLabelWeb,
+                        ]}
+                      >
+                        Global Level
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.progressBarContainer,
+                        Platform.OS === "android" && styles.progressBarContainerAndroid,
+                        Platform.OS === "web" && styles.progressBarContainerWeb,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.progressBar,
+                          {
+                            width: `${Math.min(
+                              (levelProgress.progression.globalLevel % 5) * 20,
+                              100
+                            )}%`,
+                            backgroundColor: "#2979FF",
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View
                     style={[
-                      styles.levelProgressValue,
-                      { color: "#10B981" },
-                      Platform.OS !== "web" && styles.levelProgressValueMobile,
-                      Platform.OS === "web" && styles.levelProgressValueWeb,
+                      styles.levelProgressStat,
+                      styles.middleStat,
+                      Platform.OS === "web" && styles.middleStatWeb,
+                      Platform.OS === "web" && styles.levelProgressStatWeb,
                     ]}
                   >
-                    {levelProgress.progression.combinedScore}
-                  </Text>
-                  <Text
+                    <View
+                      style={[
+                        styles.levelIconContainer,
+                        { backgroundColor: "rgba(255, 107, 107, 0.2)" },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="trophy-award"
+                        size={Platform.OS === "web" ? 24 : 18} // Smaller icon on mobile
+                        color="#FF6B6B"
+                      />
+                    </View>
+                    <View
+                      style={
+                        Platform.OS === "web" && styles.levelProgressContentWeb
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.levelProgressValue,
+                          { color: "#FF6B6B" },
+                          Platform.OS !== "web" && styles.levelProgressValueMobile,
+                          Platform.OS === "web" && styles.levelProgressValueWeb,
+                        ]}
+                      >
+                        {levelProgress.progression.maxLevelReached}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.levelProgressLabel,
+                          { color: "#B0C4DE" },
+                          Platform.OS !== "web" && styles.levelProgressLabelMobile,
+                          Platform.OS === "web" && styles.levelProgressLabelWeb,
+                        ]}
+                      >
+                        Max Quest
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.starContainer,
+                        Platform.OS === "web" && styles.starContainerWeb,
+                      ]}
+                    >
+                      {[...Array(3)].map((_, i) => (
+                        <MaterialCommunityIcons
+                          key={i}
+                          name="star"
+                          size={Platform.OS === "web" ? 12 : 10} // Smaller stars on mobile
+                          color={
+                            i <
+                            Math.min(
+                              levelProgress.progression.maxLevelReached / 5,
+                              3
+                            )
+                              ? "#FFD700"
+                              : "rgba(255,255,255,0.3)"
+                          }
+                        />
+                      ))}
+                    </View>
+                  </View>
+                  <View
                     style={[
-                      styles.levelProgressLabel,
-                      { color: "#B0C4DE" },
-                      Platform.OS !== "web" && styles.levelProgressLabelMobile,
-                      Platform.OS === "web" && styles.levelProgressLabelWeb,
+                      styles.levelProgressStat,
+                      Platform.OS === "web" && styles.levelProgressStatWeb,
                     ]}
                   >
-                    XP
-                  </Text>
+                    <View
+                      style={[
+                        styles.levelIconContainer,
+                        { backgroundColor: "rgba(16, 185, 129, 0.2)" },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="counter"
+                        size={Platform.OS === "web" ? 24 : 18} // Smaller icon on mobile
+                        color="#10B981"
+                      />
+                    </View>
+                    <View
+                      style={
+                        Platform.OS === "web" && styles.levelProgressContentWeb
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.levelProgressValue,
+                          { color: "#10B981" },
+                          Platform.OS !== "web" && styles.levelProgressValueMobile,
+                          Platform.OS === "web" && styles.levelProgressValueWeb,
+                        ]}
+                      >
+                        {levelProgress.progression.combinedScore}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.levelProgressLabel,
+                          { color: "#B0C4DE" },
+                          Platform.OS !== "web" && styles.levelProgressLabelMobile,
+                          Platform.OS === "web" && styles.levelProgressLabelWeb,
+                        ]}
+                      >
+                        XP
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.badgeContainer,
+                        Platform.OS === "web" && styles.badgeContainerWeb,
+                      ]}
+                    >
+                      {levelProgress.progression.combinedScore > 500 && (
+                        <MaterialCommunityIcons
+                          name="shield-check"
+                          size={Platform.OS === "web" ? 14 : 12}
+                          color="#10B981"
+                        />
+                      )}
+                      {levelProgress.progression.combinedScore > 1000 && (
+                        <MaterialCommunityIcons
+                          name="medal"
+                          size={Platform.OS === "web" ? 14 : 12}
+                          color="#FFD700"
+                        />
+                      )}
+                    </View>
+                  </View>
                 </View>
-                <View
-                  style={[
-                    styles.badgeContainer,
-                    Platform.OS === "web" && styles.badgeContainerWeb,
-                  ]}
-                >
-                  {levelProgress.progression.combinedScore > 500 && (
-                    <MaterialCommunityIcons
-                      name="shield-check"
-                      size={Platform.OS === "web" ? 14 : 12}
-                      color="#10B981"
-                    />
-                  )}
-                  {levelProgress.progression.combinedScore > 1000 && (
-                    <MaterialCommunityIcons
-                      name="medal"
-                      size={Platform.OS === "web" ? 14 : 12}
-                      color="#FFD700"
-                    />
-                  )}
-                </View>
-              </View>
-            </View>
+              </>
+            )}
           </View>
         )}
       </View>
@@ -2397,15 +2423,28 @@ const handleImportCyberQuestsWeb = () => {
         >
           {/* Enhanced Parallax Background using selected background */}
           {(() => {
-            const bgHeight = 400; // Match this to the actual image height
+            const isWebMap = Platform.OS === "web";
+            const backgroundWidth = isWebMap
+              ? webMapStripWidth * webMapBackgroundScale
+              : webMapStripWidth;
+            const backgroundLeft = isWebMap
+              ? webMapStripLeft - (backgroundWidth - webMapStripWidth) / 2
+              : webMapStripLeft;
+            const bgHeight = isWebMap
+              ? Math.max(420, viewportHeight * 0.72) * webMapBackgroundScale
+              : 400; // Keep web tiles tall enough so full image height is visible
             const totalHeight =
               modules.length > 0 ? modules.length * 200 + 600 : 800;
-            const overlap = 2;
-            const tileStep = bgHeight - overlap;
-            const topBuffer = bgHeight;
-            const bottomBuffer = Math.max(viewportHeight + bgHeight, bgHeight * 2);
+            // Slight web overlap + pixel snapping reduces visible seams between repeated tiles.
+            const overlap = isWebMap ? 8 : 2;
+            const snappedBgHeight = Math.round(bgHeight);
+            const tileStep = Math.max(1, Math.round(snappedBgHeight - overlap));
+            const topBuffer = isWebMap ? Math.round(snappedBgHeight * 1.2) : snappedBgHeight;
+            const bottomBuffer = isWebMap
+              ? Math.max(viewportHeight + snappedBgHeight * 1.5, snappedBgHeight * 2.5)
+              : Math.max(viewportHeight + snappedBgHeight, snappedBgHeight * 2);
             const renderSpan = totalHeight + topBuffer + bottomBuffer;
-            const numImages = Math.ceil(renderSpan / tileStep) + 1;
+            const numImages = Math.ceil(renderSpan / tileStep) + (isWebMap ? 2 : 1);
 
             return Array.from({ length: numImages }).map((_, i) => (
               <Animated.Image
@@ -2416,10 +2455,10 @@ const handleImportCyberQuestsWeb = () => {
                   {
                     position: "absolute",
                     // Start above the map and render beyond bottom so zoom-out never exposes gaps.
-                    top: -topBuffer + i * tileStep,
-                    height: bgHeight,
-                    width: webMapStripWidth,
-                    left: webMapStripLeft,
+                    top: Math.round(-topBuffer + i * tileStep),
+                    height: snappedBgHeight,
+                    width: backgroundWidth,
+                    left: backgroundLeft,
                     zIndex: -1,
                     transform: [
                       {
@@ -2432,7 +2471,7 @@ const handleImportCyberQuestsWeb = () => {
                     ],
                   },
                 ]}
-                resizeMode="cover"
+                resizeMode={isWebMap ? "contain" : "cover"}
                 onError={() =>
                   console.log(
                     `Failed to load background image: ${selectedBackground.id}`
@@ -3493,6 +3532,14 @@ const styles = StyleSheet.create({
   progressBarContainer: {
     width: "90%" // Slightly narrower
   },
+  progressBarContainerAndroid: {
+    width: "84%",
+    height: 6,
+    marginTop: 4,
+    borderRadius: 999,
+    overflow: "hidden",
+    backgroundColor: "rgba(41, 121, 255, 0.2)",
+  },
   progressBar: {
     height: "100%",
     borderRadius: 2,
@@ -3930,8 +3977,28 @@ const styles = StyleSheet.create({
   levelProgressHeader: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 8,
     gap: 6,
+  },
+  levelProgressHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  playerStatsToggleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: "rgba(148, 163, 184, 0.2)",
+  },
+  playerStatsToggleText: {
+    color: "#E2E8F0",
+    fontSize: 12,
+    fontWeight: "700",
   },
   levelProgressTitle: {
     fontSize: 14,
@@ -5326,7 +5393,7 @@ const styles = StyleSheet.create({
   mapBackground: {
     ...Platform.select({
       web: {
-        objectFit: "cover",
+        objectFit: "contain",
         opacity: 0.9, // Slightly reduce opacity to blend better
       },
       default: {

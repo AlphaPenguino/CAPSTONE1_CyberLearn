@@ -283,10 +283,10 @@ export default function GameArcade() {
     {
       id: "knowledge-relay",
       title: "🏃‍♂️ Knowledge Relay Race",
-      description: "Team vs Team (5v5) - First to 20 correct answers wins!",
+      description: "Team vs Team - Most Points Wins!",
       icon: require("../../assets/images/happy1.png"),
       color: "#10B981",
-      players: "5v5 Teams",
+      players: "Team vs Team",
       mode: "Turn-based",
     },
     {
@@ -295,17 +295,17 @@ export default function GameArcade() {
       description: "Buzzer battle - race to answer first!",
       icon: require("../../assets/images/happy2.png"),
       color: "#F59E0B",
-      players: "3v3 / 4v4",
+      players: "Team vs Team",
       mode: "Real-time",
     },
     {
       id: "digital-defenders",
       title: "🛡️ Digital Defenders",
-      description: "Co-op dungeon crawler - defend against digital threats!",
+      description: "Co-op card game",
       icon: require("../../assets/images/shield.png"),
       color: "#8B5CF6",
       players: "2-4 Co-op",
-      mode: "Turn-based RPG",
+      mode: "Turn-based Card Game",
     },
   ];
 
@@ -316,6 +316,10 @@ export default function GameArcade() {
       router.push("/(tabs)/quick-play");
     } else if (gameId === "knowledge-relay") {
       router.push("/(tabs)/knowledge-relay");
+    } else if (gameId === "quiz-showdown") {
+      router.push("/(tabs)/quiz-showdown");
+    } else if (gameId === "digital-defenders") {
+      router.push("/(tabs)/digital-defenders");
     } else if (multiplayerModes.find((mode) => mode.id === gameId)) {
       router.push(`/multiplayer/${gameId}`);
     } else {

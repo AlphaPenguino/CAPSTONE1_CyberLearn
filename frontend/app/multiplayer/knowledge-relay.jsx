@@ -157,6 +157,7 @@ export default function KnowledgeRelay() {
   // UI state
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [showResult, setShowResult] = useState(false);
+  const [isAnswerLocked, setIsAnswerLocked] = useState(false);
   // Track if the last submitted answer was correct so we only reveal the correct answer when appropriate
   const [lastAnswerCorrect, setLastAnswerCorrect] = useState(null);
   // Track the question index that was just answered so we don't highlight on a new question
@@ -193,6 +194,7 @@ export default function KnowledgeRelay() {
 
     socket.on("kr-answer-result", (data) => {
       console.log("Answer result:", data);
+      setIsAnswerLocked(false);
       // Store the question index that was answered BEFORE applying new game state
       answeredQuestionIndexRef.current = gameData.currentQuestionIndex;
       setGameData(data.gameState);
@@ -242,7 +244,8 @@ export default function KnowledgeRelay() {
     });
 
     socket.on("kr-timer-update", (data) => {
-      setGameData((prev) => ({ ...prev, timer: data.timer }));
+      const safeTimer = Math.max(0, Number(data?.timer) || 0);
+      setGameData((prev) => ({ ...prev, timer: safeTimer }));
     });
 
     socket.on("kr-timeout-occurred", (data) => {
@@ -320,6 +323,7 @@ export default function KnowledgeRelay() {
 
     socket.on("kr-error", (data) => {
       console.error("Socket error:", data.message);
+      setIsAnswerLocked(false);
       setErrorMessage(data.message);
       setIsConnecting(false);
       Alert.alert("Error", data.message);
@@ -455,9 +459,11 @@ export default function KnowledgeRelay() {
   };
 
   const handleAnswerSelect = (answerIndex) => {
-    if (selectedAnswer !== null || showResult) return;
+    if (isAnswerLocked || selectedAnswer !== null || showResult) return;
+    if (!isMyTurn()) return;
     if (!socketRef.current) return;
 
+    setIsAnswerLocked(true);
     setSelectedAnswer(answerIndex);
 
     socketRef.current.emit("kr-submit-answer", {
@@ -708,7 +714,7 @@ export default function KnowledgeRelay() {
             }}
           >
             <MaterialCommunityIcons name="refresh" size={20} color="#10b981" />
-            <Text style={styles.actionsMenuItemText}>Refresh Global</Text>
+            <Text style={styles.actionsMenuItemText}>Refresh</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionsMenuItem}
@@ -839,8 +845,14 @@ export default function KnowledgeRelay() {
       return;
     }
 
+    const normalizedPoints = Math.max(
+      1,
+      Math.min(10, Number.parseInt(editingQuestionData.points, 10) || 1)
+    );
+
     const questionToSave = {
       ...editingQuestionData,
+      points: normalizedPoints,
       id:
         editingQuestionIndex >= 0
           ? instructorQuestions[editingQuestionIndex].id
@@ -1326,32 +1338,52 @@ export default function KnowledgeRelay() {
         animationType="fade"
         transparent={true}
       >
-        <View style={styles.uploadModalOverlay}>
-          <View style={styles.resultModalContainer}>
-            <View style={styles.successIconContainer}>
+        <View style={styles.loadSuccessOverlay}>
+          <View style={styles.loadSuccessCard}>
+            <LinearGradient
+              colors={["#ecfdf5", "#d1fae5"]}
+              style={styles.loadSuccessAccentBar}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
+
+            <View style={styles.loadSuccessIconContainer}>
               <MaterialCommunityIcons
-                name="check-circle"
-                size={60}
-                color="#10b981"
+                name="trophy-award"
+                size={52}
+                color="#0f766e"
               />
             </View>
 
-            <Text style={styles.resultModalTitle}>Load Successful!</Text>
+            <Text style={styles.loadSuccessTitle}>Load Successful!</Text>
 
-            <Text style={styles.resultModalMessage}>{loadResult.message}</Text>
+            <View style={styles.loadSuccessBadgeRow}>
+              <View style={styles.loadSuccessBadge}>
+                <MaterialCommunityIcons
+                  name="star-four-points"
+                  size={14}
+                  color="#0f766e"
+                />
+                <Text style={styles.loadSuccessBadgeText}>Ready To Play</Text>
+              </View>
+            </View>
 
-            <View style={styles.resultModalActions}>
+            <Text style={styles.loadSuccessMessage}>{loadResult.message}</Text>
+
+            <View style={styles.loadSuccessActions}>
               <TouchableOpacity
-                style={[
-                  styles.resultModalButton,
-                  { backgroundColor: "#10b981" },
-                ]}
+                style={styles.loadSuccessButton}
                 onPress={() => {
                   setLoadSuccessModalVisible(false);
                   setGamePhase(PHASES.ROOM_SETUP);
                 }}
               >
-                <Text style={styles.resultModalButtonText}>Continue</Text>
+                <MaterialCommunityIcons
+                  name="rocket-launch"
+                  size={18}
+                  color="#ffffff"
+                />
+                <Text style={styles.loadSuccessButtonText}>Continue</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1436,7 +1468,7 @@ export default function KnowledgeRelay() {
                 <MaterialCommunityIcons
                   name="arrow-left"
                   size={24}
-                  color="#2acde6"
+                  color="#000000"
                 />
               </TouchableOpacity>
               <Text style={styles.title}>Question Editor</Text>
@@ -1454,7 +1486,7 @@ export default function KnowledgeRelay() {
                 <MaterialCommunityIcons
                   name="dots-vertical"
                   size={26}
-                  color="#3b82f6"
+                  color="#000000"
                 />
               </TouchableOpacity>
             </View>
@@ -1482,10 +1514,10 @@ export default function KnowledgeRelay() {
                         {question.question}
                       </Text>
                       <View style={styles.questionMeta}>
-                        <Text style={styles.categoryText}>
+                        <Text style={styles.categoryBadge}>
                           {question.category}
                         </Text>
-                        <Text style={styles.difficultyText}>
+                        <Text style={styles.pointsBadge}>
                           {question.points} pts
                         </Text>
                       </View>
@@ -1536,15 +1568,45 @@ export default function KnowledgeRelay() {
             {/* Question Editor Modal */}
             <Modal
               visible={isQuestionModalVisible}
-              animationType="slide"
-              presentationStyle="pageSheet"
+              animationType={
+                Platform.OS === "web" && editingQuestionIndex < 0
+                  ? "fade"
+                  : "slide"
+              }
+              transparent={Platform.OS === "web" && editingQuestionIndex < 0}
+              presentationStyle={
+                Platform.OS === "web" && editingQuestionIndex < 0
+                  ? undefined
+                  : "pageSheet"
+              }
+              onRequestClose={() => setIsQuestionModalVisible(false)}
             >
-              <View style={styles.modalContainer}>
+              <View
+                style={
+                  Platform.OS === "web" && editingQuestionIndex < 0
+                    ? styles.webQuestionModalOverlay
+                    : styles.modalContainer
+                }
+              >
+                <View
+                  style={
+                    Platform.OS === "web" && editingQuestionIndex < 0
+                      ? styles.webQuestionModalCard
+                      : styles.modalContainer
+                  }
+                >
                 <LinearGradient
                   colors={screenGradient}
                   style={styles.gradient}
                 >
-                  <SafeAreaView style={styles.modalSafeArea}>
+                  <SafeAreaView
+                    style={[
+                      styles.modalSafeArea,
+                      Platform.OS === "web" &&
+                        editingQuestionIndex < 0 &&
+                        styles.webQuestionModalSafeArea,
+                    ]}
+                  >
                     {/* Modal Header */}
                     <View style={styles.modalHeader}>
                       <TouchableOpacity
@@ -1554,7 +1616,7 @@ export default function KnowledgeRelay() {
                         <MaterialCommunityIcons
                           name="close"
                           size={24}
-                          color="#2acde6"
+                          color="#000000"
                         />
                       </TouchableOpacity>
                       <Text style={styles.modalTitle}>
@@ -1603,6 +1665,24 @@ export default function KnowledgeRelay() {
                               category: text,
                             })
                           }
+                        />
+                      </View>
+
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.label}>Points</Text>
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="1-10"
+                          placeholderTextColor="#64748b"
+                          keyboardType="number-pad"
+                          value={String(editingQuestionData.points ?? 1)}
+                          onChangeText={(text) => {
+                            const numericOnly = text.replace(/[^0-9]/g, "");
+                            setEditingQuestionData({
+                              ...editingQuestionData,
+                              points: numericOnly === "" ? "" : numericOnly,
+                            });
+                          }}
                         />
                       </View>
 
@@ -1660,6 +1740,7 @@ export default function KnowledgeRelay() {
                     </ScrollView>
                   </SafeAreaView>
                 </LinearGradient>
+                </View>
               </View>
             </Modal>
 
@@ -1748,7 +1829,7 @@ export default function KnowledgeRelay() {
               <MaterialCommunityIcons
                 name="arrow-left"
                 size={24}
-                color="#2acde6"
+                color="#000000"
               />
             </TouchableOpacity>
             <Text style={styles.title}>Knowledge Relay</Text>
@@ -1835,7 +1916,7 @@ export default function KnowledgeRelay() {
               <MaterialCommunityIcons
                 name="arrow-left"
                 size={24}
-                color="#2acde6"
+                color="#000000"
               />
             </TouchableOpacity>
             <Text style={styles.teamSelectionTitle}>Select Your Team</Text>
@@ -1929,6 +2010,40 @@ export default function KnowledgeRelay() {
     const currentQuestion = getCurrentQuestion();
     const currentPlayer = getCurrentPlayer();
     const myTurn = isMyTurn();
+    const isAndroidCompact = Platform.OS === "android";
+    const GameplayBodyWrapper = isAndroidCompact ? View : ScrollView;
+    const gameplayBodyWrapperProps = isAndroidCompact
+      ? { style: [styles.gameplayContentContainer, styles.androidGameplayFitContainer] }
+      : {
+          contentContainerStyle: styles.gameplayContentContainer,
+          showsVerticalScrollIndicator: false,
+        };
+    const gameplayControls = (
+      <View style={styles.gameControls}>
+        <TouchableOpacity
+          style={styles.passButton}
+          onPress={usePass}
+          disabled={!myTurn}
+        >
+          <Text style={styles.passButtonText}>Use Pass</Text>
+          <Text style={styles.passesRemaining}>
+            {gameData.teams[gameData.currentTeam]?.passesRemaining || 0} left
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.leaderboardButton}
+          onPress={() => setShowLeaderboard(true)}
+        >
+          <MaterialCommunityIcons
+            name="trophy"
+            size={isAndroidCompact ? 18 : 20}
+            color="#2acde6"
+          />
+          <Text style={styles.leaderboardButtonText}>Leaderboard</Text>
+        </TouchableOpacity>
+      </View>
+    );
 
     if (!currentQuestion) {
       return (
@@ -1949,6 +2064,7 @@ export default function KnowledgeRelay() {
       <View style={styles.container}>
         <LinearGradient colors={screenGradient} style={styles.gradient}>
           <SafeAreaView style={styles.safeArea}>
+            <GameplayBodyWrapper {...gameplayBodyWrapperProps}>
             {/* Game Header */}
             <View style={styles.gameHeader}>
               <View style={styles.questionInfo}>
@@ -2051,7 +2167,7 @@ export default function KnowledgeRelay() {
                         styles.wrongOption,
                     ]}
                     onPress={() => handleAnswerSelect(index)}
-                    disabled={!myTurn || selectedAnswer !== null}
+                    disabled={!myTurn || selectedAnswer !== null || isAnswerLocked}
                   >
                     <Text
                       style={[
@@ -2066,32 +2182,11 @@ export default function KnowledgeRelay() {
               })}
             </View>
 
-            {/* Game Controls */}
-            <View style={styles.gameControls}>
-              <TouchableOpacity
-                style={styles.passButton}
-                onPress={usePass}
-                disabled={!myTurn}
-              >
-                <Text style={styles.passButtonText}>Use Pass</Text>
-                <Text style={styles.passesRemaining}>
-                  {gameData.teams[gameData.currentTeam]?.passesRemaining || 0}{" "}
-                  left
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.leaderboardButton}
-                onPress={() => setShowLeaderboard(true)}
-              >
-                <MaterialCommunityIcons
-                  name="trophy"
-                  size={20}
-                  color="#2acde6"
-                />
-                <Text style={styles.leaderboardButtonText}>Leaderboard</Text>
-              </TouchableOpacity>
-            </View>
+            {!isAndroidCompact && gameplayControls}
+            </GameplayBodyWrapper>
+            {isAndroidCompact && (
+              <View style={styles.androidControlsDock}>{gameplayControls}</View>
+            )}
           </SafeAreaView>
         </LinearGradient>
       </View>
@@ -2101,6 +2196,7 @@ export default function KnowledgeRelay() {
   const renderFinished = () => {
     const winningTeam = getWinningTeam();
     const playerTeam = getPlayerTeam();
+    const isAndroidCompact = Platform.OS === "android";
     const isWinner =
       playerTeam && winningTeam && playerTeam.teamId === winningTeam.teamId;
     const teamStats = getTeamStats().sort((a, b) => b.score - a.score);
@@ -2114,7 +2210,7 @@ export default function KnowledgeRelay() {
               <View style={styles.gameOverHeader}>
                 <MaterialCommunityIcons
                   name="flag-checkered"
-                  size={60}
+                  size={isAndroidCompact ? 44 : 60}
                   color={isWinner ? "#10b981" : "#2acde6"}
                 />
                 <Text style={styles.gameOverTitle}>Game Over!</Text>
@@ -2129,7 +2225,7 @@ export default function KnowledgeRelay() {
                   <View style={styles.winnerMessage}>
                     <MaterialCommunityIcons
                       name="trophy"
-                      size={40}
+                      size={isAndroidCompact ? 30 : 40}
                       color="#2acde6"
                     />
                     <Text style={styles.congratsText}>Congratulations!</Text>
@@ -2144,7 +2240,7 @@ export default function KnowledgeRelay() {
                   <View style={styles.loserMessage}>
                     <MaterialCommunityIcons
                       name="emoticon-sad"
-                      size={40}
+                      size={isAndroidCompact ? 30 : 40}
                       color="#64748b"
                     />
                     <Text style={styles.lostText}>
@@ -2185,7 +2281,7 @@ export default function KnowledgeRelay() {
                       {index === 0 && (
                         <MaterialCommunityIcons
                           name="crown"
-                          size={20}
+                          size={isAndroidCompact ? 16 : 20}
                           color="#2acde6"
                         />
                       )}
@@ -2227,7 +2323,7 @@ export default function KnowledgeRelay() {
                 >
                   <MaterialCommunityIcons
                     name="refresh"
-                    size={20}
+                    size={isAndroidCompact ? 18 : 20}
                     color="#f8fafc"
                   />
                   <Text style={styles.playAgainText}>Play Again</Text>
@@ -2239,7 +2335,7 @@ export default function KnowledgeRelay() {
                 >
                   <MaterialCommunityIcons
                     name="home"
-                    size={20}
+                    size={isAndroidCompact ? 18 : 20}
                     color="#0f172a"
                   />
                   <Text style={styles.backToMenuText}>Back to Menu</Text>
@@ -2257,20 +2353,30 @@ export default function KnowledgeRelay() {
   const renderLeaderboardModal = () => {
     const teamStats = getTeamStats().sort((a, b) => b.score - a.score);
     const playerTeam = getPlayerTeam();
+    const isWebModal = Platform.OS === "web";
 
     return (
       <Modal
         visible={showLeaderboard}
-        animationType="slide"
-        presentationStyle="pageSheet"
+        animationType={isWebModal ? "fade" : "slide"}
+        transparent={isWebModal}
+        presentationStyle={isWebModal ? undefined : "pageSheet"}
         onRequestClose={() => setShowLeaderboard(false)}
       >
-        <View style={styles.modalContainer}>
+        <View
+          style={isWebModal ? styles.webLeaderboardModalOverlay : styles.modalContainer}
+        >
+          <View style={isWebModal ? styles.webLeaderboardModalCard : styles.modalContainer}>
           <LinearGradient
             colors={screenGradient}
             style={styles.gradient}
           >
-            <SafeAreaView style={styles.modalSafeArea}>
+            <SafeAreaView
+              style={[
+                styles.modalSafeArea,
+                isWebModal && styles.webLeaderboardModalSafeArea,
+              ]}
+            >
               {/* Modal Header */}
               <View style={styles.leaderboardModalHeader}>
                 <TouchableOpacity
@@ -2280,7 +2386,7 @@ export default function KnowledgeRelay() {
                   <MaterialCommunityIcons
                     name="close"
                     size={24}
-                    color="#2acde6"
+                    color="#000000"
                   />
                 </TouchableOpacity>
                 <Text style={styles.leaderboardModalTitle}>
@@ -2290,7 +2396,12 @@ export default function KnowledgeRelay() {
               </View>
 
               {/* Leaderboard Content */}
-              <ScrollView style={styles.leaderboardModalContent}>
+              <ScrollView
+                style={[
+                  styles.leaderboardModalContent,
+                  isWebModal && styles.webLeaderboardModalContent,
+                ]}
+              >
                 <View style={styles.leaderboardContainer}>
                   <Text style={styles.leaderboardSubtitle}>
                     Current Team Rankings
@@ -2379,6 +2490,7 @@ export default function KnowledgeRelay() {
               </ScrollView>
             </SafeAreaView>
           </LinearGradient>
+          </View>
         </View>
       </Modal>
     );
@@ -2423,6 +2535,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     width: "100%",
     ...Platform.select({
+      android: {
+        marginBottom: 10,
+      },
       web: {
         maxWidth: scaleWeb(600),
         marginHorizontal: "auto",
@@ -2443,6 +2558,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 15,
     ...Platform.select({
+      android: {
+        aspectRatio: 0.82,
+        marginBottom: 8,
+        padding: 10,
+      },
       web: {
         transition: "0.2s all ease",
         cursor: "pointer",
@@ -2459,6 +2579,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
     ...Platform.select({
+      android: {
+        fontSize: 14,
+      },
       web: {
         maxWidth: "100%", // Ensure text doesn't overflow
         overflow: "hidden", // Hide overflowing text
@@ -2482,6 +2605,10 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
     ...Platform.select({
+      android: {
+        padding: 10,
+        marginBottom: 10,
+      },
       web: {
         maxWidth: scaleWeb(800),
         marginHorizontal: "auto",
@@ -2527,12 +2654,36 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: scaleWeb(20),
     ...Platform.select({
+      android: {
+        padding: 10,
+        paddingBottom: 82,
+      },
       web: {
         width: "100%",
         maxWidth: scaleWeb(1200),
       },
       default: {},
     }),
+  },
+  gameplayContentContainer: {
+    flexGrow: 1,
+    paddingBottom: 12,
+    ...Platform.select({
+      android: {
+        paddingBottom: 4,
+      },
+      default: {},
+    }),
+  },
+  androidGameplayFitContainer: {
+    flex: 1,
+    justifyContent: "flex-start",
+  },
+  androidControlsDock: {
+    position: "absolute",
+    left: 10,
+    right: 10,
+    bottom: 10,
   },
   header: {
     alignItems: "center",
@@ -2958,6 +3109,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: scaleWeb(20),
     width: "100%",
+    ...Platform.select({
+      android: {
+        marginBottom: 10,
+      },
+      default: {},
+    }),
   },
   questionInfo: {
     flex: 1,
@@ -2976,22 +3133,48 @@ const styles = StyleSheet.create({
     borderRadius: scaleWeb(20),
     paddingHorizontal: scaleWeb(15),
     paddingVertical: scaleWeb(8),
+    ...Platform.select({
+      android: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+      },
+      default: {},
+    }),
   },
   timerText: {
     color: "#f8fafc",
     fontSize: scaleWeb(18),
     fontWeight: "bold",
+    ...Platform.select({
+      android: {
+        fontSize: 15,
+      },
+      default: {},
+    }),
   },
 
   currentPlayerText: {
     fontSize: scaleWeb(18),
     color: "#3cbda2",
     fontWeight: "bold",
+    ...Platform.select({
+      android: {
+        fontSize: 16,
+      },
+      default: {},
+    }),
   },
   currentTeamText: {
     fontSize: scaleWeb(14),
     color: "#3cbda2",
     marginTop: 5,
+    ...Platform.select({
+      android: {
+        fontSize: 12,
+        marginTop: 3,
+      },
+      default: {},
+    }),
   },
   questionContainer: {
     backgroundColor: "rgba(255, 255, 255, 0.9)",
@@ -3008,6 +3191,10 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
     ...Platform.select({
+      android: {
+        padding: 12,
+        marginBottom: 10,
+      },
       web: {
         maxWidth: scaleWeb(800),
         marginHorizontal: "auto",
@@ -3021,6 +3208,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: scaleWeb(24),
     fontWeight: "600",
+    ...Platform.select({
+      android: {
+        fontSize: 15,
+        lineHeight: 20,
+      },
+      default: {},
+    }),
   },
   optionsContainer: {
     flex: 1,
@@ -3071,6 +3265,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
     ...Platform.select({
+      android: {
+        gap: 8,
+        marginTop: 0,
+      },
       web: {
         maxWidth: 800,
         marginHorizontal: "auto",
@@ -3086,6 +3284,11 @@ const styles = StyleSheet.create({
     marginRight: 10,
     alignItems: "center",
     ...Platform.select({
+      android: {
+        marginRight: 0,
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+      },
       web: {
         cursor: "pointer",
       },
@@ -3096,15 +3299,29 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
     fontSize: scaleWeb(16),
     fontWeight: "bold",
+    ...Platform.select({
+      android: {
+        fontSize: 14,
+      },
+      default: {},
+    }),
   },
   passesRemaining: {
     color: "#e2e8f0",
     fontSize: 12,
     marginTop: 2,
+    ...Platform.select({
+      android: {
+        fontSize: 11,
+      },
+      default: {},
+    }),
   },
   leaderboardButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#ffffff",
     borderRadius: scaleWeb(10),
     padding: scaleWeb(15),
@@ -3114,6 +3331,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     ...Platform.select({
+      android: {
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+      },
       web: {
         cursor: "pointer",
       },
@@ -3125,6 +3346,12 @@ const styles = StyleSheet.create({
     fontSize: scaleWeb(16),
     marginLeft: 8,
     fontWeight: "600",
+    ...Platform.select({
+      android: {
+        fontSize: 14,
+      },
+      default: {},
+    }),
   },
   // Instructor Editor Styles
   editorActions: {
@@ -3375,15 +3602,131 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  loadSuccessOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(2, 6, 23, 0.58)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadSuccessCard: {
+    width: "92%",
+    maxWidth: 460,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.98)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.35)",
+    paddingHorizontal: 24,
+    paddingVertical: 22,
+    alignItems: "center",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 7,
+  },
+  loadSuccessAccentBar: {
+    height: 8,
+    width: "48%",
+    borderRadius: 999,
+    marginBottom: 16,
+  },
+  loadSuccessIconContainer: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(16,185,129,0.18)",
+    marginBottom: 14,
+  },
+  loadSuccessTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#0f172a",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  loadSuccessBadgeRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    width: "100%",
+    marginBottom: 14,
+  },
+  loadSuccessBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "rgba(16,185,129,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(15,118,110,0.35)",
+  },
+  loadSuccessBadgeText: {
+    color: "#0f766e",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  loadSuccessMessage: {
+    fontSize: 16,
+    color: "#334155",
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 18,
+    fontWeight: "500",
+  },
+  loadSuccessActions: {
+    width: "100%",
+    alignItems: "center",
+  },
+  loadSuccessButton: {
+    width: "100%",
+    maxWidth: 260,
+    backgroundColor: "#0f766e",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    shadowColor: "#0f766e",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+    ...Platform.select({
+      web: {
+        cursor: "pointer",
+      },
+      default: {},
+    }),
+  },
+  loadSuccessButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "800",
+  },
 
   addQuestionButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#10b981",
-    borderRadius: 10,
-    padding: 15,
+    backgroundColor: "#0b8f6b",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
     marginBottom: 20,
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(236, 253, 245, 0.65)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 4,
     ...Platform.select({
       web: {
         maxWidth: 600,
@@ -3393,16 +3736,17 @@ const styles = StyleSheet.create({
     }),
   },
   addQuestionText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "800",
     marginLeft: 10,
+    letterSpacing: 0.2,
   },
   questionsContainer: {
     flex: 1,
     width: "100%",
-    borderRadius: 12,
-    padding: 15,
+    borderRadius: 16,
+    padding: 10,
     ...Platform.select({
       web: {
         maxWidth: 1000,
@@ -3412,19 +3756,19 @@ const styles = StyleSheet.create({
     }),
   },
   questionCard: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 15,
-    padding: 15,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
+    borderColor: "rgba(148,163,184,0.35)",
+    shadowColor: "#0f172a",
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
     elevation: 5,
   },
   questionHeader: {
@@ -3438,26 +3782,42 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   questionTitle: {
-    fontSize: 16,
-    color: "#1a5344",
-    fontWeight: "bold",
-    marginBottom: 5,
+    fontSize: 17,
+    color: "#0f172a",
+    fontWeight: "700",
+    marginBottom: 8,
   },
   questionMeta: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     alignItems: "center",
+    gap: 8,
   },
-  categoryText: {
+  categoryBadge: {
     fontSize: 12,
-    color: "#1a5344",
-    backgroundColor: "rgba(146, 234, 204, 0.8)",
+    color: "#0f172a",
+    backgroundColor: "rgba(226, 232, 240, 0.95)",
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 5,
+    borderRadius: 999,
+    fontWeight: "700",
   },
-  difficultyText: {
+  difficultyBadge: {
     fontSize: 12,
+    color: "#0f766e",
+    backgroundColor: "rgba(16,185,129,0.16)",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    fontWeight: "700",
+  },
+  pointsBadge: {
+    fontSize: 12,
+    color: "#4338ca",
+    backgroundColor: "rgba(99,102,241,0.14)",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
     fontWeight: "bold",
   },
   questionActions: {
@@ -3497,6 +3857,27 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   // Modal Styles
+  webQuestionModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(2, 6, 23, 0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  webQuestionModalCard: {
+    width: "92%",
+    maxWidth: 760,
+    maxHeight: "90%",
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.3)",
+  },
+  webQuestionModalSafeArea: {
+    width: "100%",
+    maxWidth: "100%",
+    padding: 16,
+  },
   modalContainer: {
     flex: 1,
     ...Platform.select({
@@ -3525,7 +3906,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "#475569",
+    borderBottomColor: "rgba(148,163,184,0.45)",
     width: "100%",
   },
   modalBackButton: {
@@ -3538,17 +3919,17 @@ const styles = StyleSheet.create({
     }),
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0f172a",
     flex: 1,
     textAlign: "center",
   },
   saveButton: {
-    backgroundColor: "#10b981",
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
+    backgroundColor: "#0f766e",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
     ...Platform.select({
       web: {
         cursor: "pointer",
@@ -3559,7 +3940,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#ffffff",
     fontSize: 14,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
   modalContent: {
     flex: 1,
@@ -3585,11 +3966,11 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     flexDirection: "row",
-    backgroundColor: "rgba(146, 234, 204, 0.8)",
+    backgroundColor: "rgba(226,232,240,0.9)",
     borderRadius: 10,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#475569",
+    borderColor: "rgba(148,163,184,0.5)",
   },
   pickerOption: {
     flex: 1,
@@ -3603,14 +3984,15 @@ const styles = StyleSheet.create({
     }),
   },
   selectedPicker: {
-    backgroundColor: "#2acde6",
+    backgroundColor: "#0f766e",
   },
   pickerText: {
     fontSize: 14,
-    color: "#e2e8f0",
+    color: "#334155",
+    fontWeight: "600",
   },
   selectedPickerText: {
-    color: "#92eacc",
+    color: "#f8fafc",
     fontWeight: "bold",
   },
   pointsDisplay: {
@@ -3661,6 +4043,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: scaleWeb(20),
     ...Platform.select({
+      android: {
+        padding: 10,
+      },
       web: {
         width: "100%",
         maxWidth: scaleWeb(900),
@@ -3684,6 +4069,9 @@ const styles = StyleSheet.create({
     shadowRadius: scaleWeb(18),
     elevation: 4,
     ...Platform.select({
+      android: {
+        padding: 12,
+      },
       web: {
         maxWidth: scaleWeb(760),
       },
@@ -3693,6 +4081,12 @@ const styles = StyleSheet.create({
   gameOverHeader: {
     alignItems: "center",
     marginBottom: scaleWeb(18),
+    ...Platform.select({
+      android: {
+        marginBottom: 10,
+      },
+      default: {},
+    }),
   },
   gameOverTitle: {
     fontSize: scaleWeb(32),
@@ -3701,12 +4095,26 @@ const styles = StyleSheet.create({
     marginTop: scaleWeb(10),
     textAlign: "center",
     letterSpacing: 0.4,
+    ...Platform.select({
+      android: {
+        fontSize: 24,
+        marginTop: 6,
+      },
+      default: {},
+    }),
   },
   gameOverSubtitle: {
     fontSize: scaleWeb(14),
     color: "#334155",
     marginTop: scaleWeb(6),
     fontWeight: "500",
+    ...Platform.select({
+      android: {
+        fontSize: 12,
+        marginTop: 3,
+      },
+      default: {},
+    }),
   },
   resultMessageContainer: {
     alignItems: "center",
@@ -3714,6 +4122,9 @@ const styles = StyleSheet.create({
     marginBottom: scaleWeb(22),
     width: "100%",
     ...Platform.select({
+      android: {
+        marginBottom: 10,
+      },
       web: {
         maxWidth: scaleWeb(650),
       },
@@ -3728,6 +4139,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(16, 185, 129, 0.45)",
     width: "100%",
+    ...Platform.select({
+      android: {
+        padding: 12,
+      },
+      default: {},
+    }),
   },
   loserMessage: {
     alignItems: "center",
@@ -3737,6 +4154,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(100, 116, 139, 0.42)",
     width: "100%",
+    ...Platform.select({
+      android: {
+        padding: 12,
+      },
+      default: {},
+    }),
   },
   congratsText: {
     fontSize: scaleWeb(24),
@@ -3797,6 +4220,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.3)",
     ...Platform.select({
+      android: {
+        padding: 12,
+        marginBottom: 12,
+      },
       web: {
         maxWidth: scaleWeb(700),
       },
@@ -3821,6 +4248,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(241,245,249,0.95)",
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.22)",
+    ...Platform.select({
+      android: {
+        paddingVertical: 7,
+        paddingHorizontal: 10,
+        marginBottom: 6,
+      },
+      default: {},
+    }),
   },
   highlightedTeamRow: {
     backgroundColor: "rgba(15,118,110,0.14)",
@@ -3862,6 +4297,9 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: scaleWeb(15),
     ...Platform.select({
+      android: {
+        gap: 8,
+      },
       web: {
         maxWidth: scaleWeb(700),
       },
@@ -3882,6 +4320,9 @@ const styles = StyleSheet.create({
     shadowRadius: scaleWeb(10),
     elevation: 3,
     ...Platform.select({
+      android: {
+        padding: 11,
+      },
       web: {
         cursor: "pointer",
       },
@@ -3893,6 +4334,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#f8fafc",
     marginLeft: 5,
+    ...Platform.select({
+      android: {
+        fontSize: 14,
+      },
+      default: {},
+    }),
   },
   backToMenuButton: {
     flex: 1,
@@ -3905,6 +4352,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.55)",
     ...Platform.select({
+      android: {
+        padding: 11,
+      },
       web: {
         cursor: "pointer",
       },
@@ -3916,8 +4366,38 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0f172a",
     marginLeft: 5,
+    ...Platform.select({
+      android: {
+        fontSize: 14,
+      },
+      default: {},
+    }),
   },
   // Leaderboard Modal Styles
+  webLeaderboardModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(2, 6, 23, 0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  webLeaderboardModalCard: {
+    width: "92%",
+    maxWidth: 760,
+    maxHeight: "88%",
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.3)",
+  },
+  webLeaderboardModalSafeArea: {
+    width: "100%",
+    maxWidth: "100%",
+    padding: 16,
+  },
+  webLeaderboardModalContent: {
+    maxHeight: 560,
+  },
   leaderboardModalHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -4151,8 +4631,15 @@ const styles = StyleSheet.create({
   },
   moreMenuButton: {
     padding: 10,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.45)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
     ...Platform.select({
       web: {
         cursor: "pointer",
@@ -4162,16 +4649,23 @@ const styles = StyleSheet.create({
   },
   actionsMenuOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(2,6,23,0.42)",
     justifyContent: "flex-end",
     padding: 20,
   },
   actionsMenuContainer: {
-    backgroundColor: "#92eacc",
-    borderRadius: 16,
-    paddingVertical: 14,
+    backgroundColor: "rgba(255,255,255,0.98)",
+    borderRadius: 18,
+    paddingVertical: 16,
     paddingHorizontal: 18,
     width: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.35)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 6,
     ...Platform.select({
       web: {
         maxWidth: 600,
@@ -4181,19 +4675,23 @@ const styles = StyleSheet.create({
     }),
   },
   actionsMenuTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 10,
-    paddingHorizontal: 4,
+    color: "#0f172a",
+    fontSize: 17,
+    fontWeight: "800",
+    marginBottom: 12,
+    paddingHorizontal: 8,
   },
   actionsMenuItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
     borderRadius: 10,
     gap: 12,
+    backgroundColor: "rgba(241,245,249,0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.25)",
+    marginBottom: 8,
     ...Platform.select({
       web: {
         cursor: "pointer",
@@ -4202,12 +4700,13 @@ const styles = StyleSheet.create({
     }),
   },
   actionsMenuItemText: {
-    color: COLORS.textPrimary,
+    color: "#0f172a",
     fontSize: 15,
-    fontWeight: "500",
+    fontWeight: "700",
   },
   actionsMenuCloseItem: {
-    marginTop: 6,
-    backgroundColor: "rgba(248,113,113,0.08)",
+    marginTop: 4,
+    backgroundColor: "rgba(254,226,226,0.72)",
+    borderColor: "rgba(239,68,68,0.26)",
   },
 });

@@ -477,6 +477,27 @@ class QuizShowdownGame {
     this.answeringTeam = null;
   }
 
+  // Reset the current match while keeping the room and players.
+  restartGame() {
+    this.gameState = "lobby";
+    this.status = "waiting";
+    this.currentQuestionIndex = 0;
+    this.buzzedTeam = null;
+    this.answeringTeam = null;
+    this.bothTeamsAnswered = false;
+    this.roundResults = [];
+
+    this.teamA.score = 0;
+    this.teamB.score = 0;
+    this.teamA.reset();
+    this.teamB.reset();
+
+    // Shuffle for a fresh rematch experience.
+    this.questions = this.shuffleArray(this.questions);
+
+    return { success: true };
+  }
+
   // Get game state for clients
   getGameState() {
     return {
