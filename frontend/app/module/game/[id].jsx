@@ -1661,14 +1661,7 @@ function hashPassword(password) {
             <Text style={styles.questDescription}>{module?.description}</Text>
 
             <View style={styles.questStats}>
-              <View style={styles.statItem}>
-                <MaterialCommunityIcons
-                  name="shield-sword"
-                  size={24}
-                  color="#4CAF50"
-                />
-                <Text style={styles.statText}>{quizzes.length} Battles</Text>
-              </View>
+
               <View style={styles.statItem}>
                 <MaterialCommunityIcons
                   name="target"
@@ -1683,14 +1676,7 @@ function hashPassword(password) {
                   Challenges
                 </Text>
               </View>
-              <View style={styles.statItem}>
-                <MaterialCommunityIcons
-                  name="trophy"
-                  size={24}
-                  color="#FFD700"
-                />
-                <Text style={styles.statText}>Epic Rewards</Text>
-              </View>
+
             </View>
 
             <TouchableOpacity
@@ -1868,20 +1854,8 @@ function hashPassword(password) {
                     </View>
                   )}
                   <View style={styles.rewardItem}>
-                    <MaterialCommunityIcons
-                      name="medal"
-                      size={20}
-                      color="#FF9800"
-                    />
-                    <Text style={styles.rewardText}>
-                      {starRating === 3
-                        ? "Legendary Badge"
-                        : starRating === 2
-                        ? "Epic Badge"
-                        : starRating === 1
-                        ? "Quest Badge"
-                        : "Participation Badge"}
-                    </Text>
+
+
                   </View>
                   {starRating === 3 && (
                     <View style={styles.rewardItem}>

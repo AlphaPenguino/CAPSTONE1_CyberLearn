@@ -9,6 +9,7 @@ import {
   ScrollView,
   Modal,
   Platform,
+  ImageBackground,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -264,6 +265,8 @@ const SAMPLE_QS_QUESTIONS = [
 
 // Mock room data - sample rooms for reference
 const PREMIUM_GRADIENT = ["#caf1c8", "#5fd2cd"];
+const SHOWDOWN_BG = require("../../assets/images/showdownbg.png");
+const QUIZ_BG_GRADIENT = ["rgba(0,0,0,0.62)", "rgba(0,0,0,0.44)"];
 
 export default function QuizShowdown() {
   const router = useRouter();
@@ -1907,8 +1910,14 @@ export default function QuizShowdown() {
 
   if (gamePhase === "instructor") {
     return (
-      <SafeAreaView style={styles.container}>
-        <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
+      <ImageBackground
+        source={SHOWDOWN_BG}
+        style={styles.container}
+        resizeMode="cover"
+        imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+      >
+        <LinearGradient colors={QUIZ_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
+          <SafeAreaView style={styles.safeArea}>
           {renderImportDocsModal?.()}
           {renderActionsMenuModal?.()}
           <View style={styles.editorContainer}>
@@ -1920,7 +1929,7 @@ export default function QuizShowdown() {
                 <MaterialCommunityIcons
                   name="arrow-left"
                   size={24}
-                  color="#3b82f6"
+                  color="#ffffff"
                 />
               </TouchableOpacity>
               <View style={styles.editorHeaderMeta}>
@@ -2296,8 +2305,9 @@ export default function QuizShowdown() {
               </View>
             </View>
           </Modal>
+          </SafeAreaView>
         </LinearGradient>
-      </SafeAreaView>
+      </ImageBackground>
     );
   }
 
@@ -2325,15 +2335,21 @@ export default function QuizShowdown() {
 
   // Main game screen (buzzer and question phases)
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
+    <ImageBackground
+      source={SHOWDOWN_BG}
+      style={styles.container}
+      resizeMode="cover"
+      imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+    >
+      <LinearGradient colors={QUIZ_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
+        <SafeAreaView style={styles.safeArea}>
         {/* Header - Fixed */}
         <View style={styles.gameHeader}>
           <TouchableOpacity style={styles.backButton} onPress={leaveGame}>
             <MaterialCommunityIcons
               name="arrow-left"
               size={24}
-              color="#3b82f6"
+              color="#ffffff"
             />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Quiz Showdown</Text>
@@ -2608,7 +2624,6 @@ export default function QuizShowdown() {
             </View>
           )}
         </ScrollView>
-      </LinearGradient>
 
       {/* Leave Game Confirmation Modal */}
       <Modal visible={showLeaveGameModal} transparent animationType="fade">
@@ -2639,7 +2654,9 @@ export default function QuizShowdown() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+        </SafeAreaView>
+      </LinearGradient>
+    </ImageBackground>
   );
 }
 
@@ -2659,8 +2676,14 @@ const LobbyScreen = ({
   isJoiningRoom,
   instructorPrivilege,
 }) => (
-  <SafeAreaView style={styles.container}>
-    <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
+  <ImageBackground
+    source={SHOWDOWN_BG}
+    style={styles.container}
+    resizeMode="cover"
+    imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+  >
+    <LinearGradient colors={QUIZ_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
+      <SafeAreaView style={styles.safeArea}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.lobbyScrollContent}
@@ -2670,7 +2693,7 @@ const LobbyScreen = ({
             style={styles.lobbyBackButton}
             onPress={() => router.push("/(tabs)/game")}
           >
-            <MaterialCommunityIcons name="arrow-left" size={22} color="#0f172a" />
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#ffffff" />
           </TouchableOpacity>
           <View style={styles.titleContainer}>
             <View style={styles.lobbyHeroIconWrap}>
@@ -2800,8 +2823,9 @@ const LobbyScreen = ({
           )}
         </View>
       </ScrollView>
+      </SafeAreaView>
     </LinearGradient>
-  </SafeAreaView>
+  </ImageBackground>
 );
 
 const TeamSelectScreen = ({
@@ -2820,11 +2844,17 @@ const TeamSelectScreen = ({
   setShowLeaveGameModal,
   confirmLeaveGame,
 }) => (
-  <SafeAreaView style={styles.container}>
-    <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
+  <ImageBackground
+    source={SHOWDOWN_BG}
+    style={styles.container}
+    resizeMode="cover"
+    imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+  >
+    <LinearGradient colors={QUIZ_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
+      <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={leaveGame}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color="#3b82f6" />
+          <MaterialCommunityIcons name="arrow-left" size={24} color="#ffffff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Room: {currentRoom?.name}</Text>
         <Text style={styles.headerSubtitle}>#{currentRoom?.id}</Text>
@@ -3017,13 +3047,20 @@ const TeamSelectScreen = ({
           </View>
         </View>
       </Modal>
+      </SafeAreaView>
     </LinearGradient>
-  </SafeAreaView>
+  </ImageBackground>
 );
 
 const CountdownScreen = ({ countdown, currentQuestion, roundNumber }) => (
-  <SafeAreaView style={styles.container}>
-    <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
+  <ImageBackground
+    source={SHOWDOWN_BG}
+    style={styles.container}
+    resizeMode="cover"
+    imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+  >
+    <LinearGradient colors={QUIZ_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
+      <SafeAreaView style={styles.safeArea}>
       <View style={styles.countdownContainer}>
         <Text style={styles.countdownRound}>Round {roundNumber}</Text>
         <Text style={styles.countdownSubtext}>
@@ -3056,8 +3093,9 @@ const CountdownScreen = ({ countdown, currentQuestion, roundNumber }) => (
             : "First to buzz gets to answer!"}
         </Text>
       </View>
+      </SafeAreaView>
     </LinearGradient>
-  </SafeAreaView>
+  </ImageBackground>
 );
 
 const ResultsScreen = ({
@@ -3075,8 +3113,14 @@ const ResultsScreen = ({
       : null;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient colors={PREMIUM_GRADIENT} style={styles.gradient}>
+    <ImageBackground
+      source={SHOWDOWN_BG}
+      style={styles.container}
+      resizeMode="cover"
+      imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+    >
+      <LinearGradient colors={QUIZ_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
+        <SafeAreaView style={styles.safeArea}>
         <View style={styles.resultsContainer}>
           <MaterialCommunityIcons name="trophy" size={80} color="#2acde6" />
           <Text style={styles.resultsTitle}>
@@ -3138,8 +3182,9 @@ const ResultsScreen = ({
             </TouchableOpacity>
           </View>
         </View>
+        </SafeAreaView>
       </LinearGradient>
-    </SafeAreaView>
+    </ImageBackground>
   );
 };
 
@@ -3250,12 +3295,40 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  safeArea: {
+    flex: 1,
+    width: "100%",
+    ...Platform.select({
+      web: {
+        maxWidth: 1200,
+        alignSelf: "center",
+        marginHorizontal: "auto",
+      },
+      default: {},
+    }),
+  },
+  relayBackgroundImageWeb: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  relayBackgroundOverlay: {
+    flex: 1,
+    ...Platform.select({
+      web: {
+        alignItems: "center",
+      },
+      default: {},
+    }),
+  },
   scrollView: {
     flex: 1,
     ...Platform.select({
       web: {
         width: "100%",
         maxWidth: 900, // Wider fixed width for web
+        alignSelf: "center",
+        marginHorizontal: "auto",
       },
       default: {},
     }),
@@ -3271,6 +3344,8 @@ const styles = StyleSheet.create({
       web: {
         width: "100%",
         maxWidth: 900, // Wider fixed width for web
+        alignSelf: "center",
+        marginHorizontal: "auto",
       },
       default: {},
     }),
@@ -3296,6 +3371,8 @@ const styles = StyleSheet.create({
       web: {
         width: "100%",
         maxWidth: 900,
+        marginHorizontal: "auto",
+        alignSelf: "center",
       },
       default: {},
     }),
@@ -3358,8 +3435,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "800",
     color: "#0f172a",
+    color: "#f8fafc",
     textAlign: "center",
     marginBottom: 16,
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   connectionStatusRow: {
     alignItems: "center",
@@ -3399,6 +3480,8 @@ const styles = StyleSheet.create({
       web: {
         width: "100%",
         maxWidth: 900,
+        marginHorizontal: "auto",
+        alignSelf: "center",
       },
       default: {},
     }),
@@ -3539,6 +3622,8 @@ const styles = StyleSheet.create({
       web: {
         width: "100%",
         maxWidth: 1100,
+        marginHorizontal: "auto",
+        alignSelf: "center",
       },
       default: {},
     }),
@@ -3600,6 +3685,8 @@ const styles = StyleSheet.create({
       web: {
         width: "100%",
         maxWidth: 900,
+        marginHorizontal: "auto",
+        alignSelf: "center",
       },
       default: {},
     }),
@@ -3637,6 +3724,8 @@ const styles = StyleSheet.create({
       web: {
         width: "100%",
         maxWidth: 1000,
+        marginHorizontal: "auto",
+        alignSelf: "center",
       },
       default: {},
     }),
@@ -3716,6 +3805,8 @@ const styles = StyleSheet.create({
       web: {
         width: "100%",
         maxWidth: 900,
+        marginHorizontal: "auto",
+        alignSelf: "center",
       },
       default: {},
     }),
@@ -3745,14 +3836,22 @@ const styles = StyleSheet.create({
 
   lobbyTitle: {
     color: "#0f172a",
+    color: "#f8fafc",
     fontSize: 28,
     fontWeight: "800",
     marginTop: 4,
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   lobbySubtitle: {
     color: "#475569",
+    color: "#dbeafe",
     fontSize: 15,
     marginTop: 4,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
   inputLabel: {
@@ -3765,7 +3864,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(74, 124, 89, 0.2)",
     borderRadius: 12,
     padding: 16,
-    color: "#ffffff",
+    color: "#000000",
     fontSize: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
@@ -3835,6 +3934,7 @@ const styles = StyleSheet.create({
   },
   waitingText: {
     color: "#475569",
+    color: "#e2e8f0",
     fontSize: 13,
     textAlign: "center",
     fontStyle: "italic",
@@ -4013,16 +4113,24 @@ const styles = StyleSheet.create({
 
   teamSelectTitle: {
     color: "#0f172a",
+    color: "#f8fafc",
     fontSize: 24,
     fontWeight: "800",
     textAlign: "center",
     marginBottom: 6,
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   teamSelectHint: {
     color: "#475569",
+    color: "#dbeafe",
     textAlign: "center",
     fontSize: 13,
     marginBottom: 18,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
   teamSelectName: {
@@ -4079,8 +4187,12 @@ const styles = StyleSheet.create({
   },
   countdownSubtext: {
     color: COLORS.textSecondary,
+    color: "#e2e8f0",
     fontSize: 18,
     marginBottom: 40,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   countdownCircle: {
     width: 150,
@@ -4102,10 +4214,14 @@ const styles = StyleSheet.create({
   },
   countdownInstructions: {
     color: COLORS.textSecondary,
+    color: "#e2e8f0",
     fontSize: 16,
     fontWeight: "500",
     marginTop: 20,
     textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
   buzzedTeamContainer: {
@@ -4195,13 +4311,18 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: "#000",
+    color: "#f8fafc",
     fontSize: 20,
     fontWeight: "bold",
     marginLeft: 16,
     flex: 1,
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   headerSubtitle: {
     color: COLORS.textSecondary,
+    color: "#dbeafe",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -4214,7 +4335,7 @@ const styles = StyleSheet.create({
     borderColor: "#b88b2cff",
   },
   roundText: {
-    color: "#0f383fff",
+    color: "#102a43",
     fontSize: 14,
     fontWeight: "bold",
   },
@@ -4237,9 +4358,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 0,
     top: -25,
-    color: "#2acde6",
+    color: "#f8fafc",
     fontSize: 14,
     fontWeight: "bold",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
   teamCard: {
@@ -4335,11 +4459,14 @@ const styles = StyleSheet.create({
     }),
   },
   statusText: {
-    color: COLORS.textSecondary,
+    color: "#e2e8f0",
     fontSize: 14,
     fontWeight: "600",
     textAlign: "center",
     marginBottom: 12,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
   // Question Display Styles
@@ -4351,12 +4478,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   pointsText: {
-    color: "rgba(19, 78, 87, 1), 61, 68, 1)ff",
+    color: "#bae6fd",
     fontSize: 12,
     fontWeight: "bold",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   questionText: {
-    color: COLORS.textPrimary,
+    color: "#f8fafc",
     fontSize: 22, // Smaller font size for mobile
     fontWeight: "600",
     lineHeight: 30, // Adjusted line height for mobile
@@ -4371,6 +4501,9 @@ const styles = StyleSheet.create({
       },
       default: {},
     }),
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   choiceButton: {
     backgroundColor: "#35d091",
@@ -4448,9 +4581,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   questionTimerText: {
-    color: "#12464eff",
+    color: "#e2e8f0",
     fontSize: 16,
     fontWeight: "bold",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
   // Answer Result Styles
@@ -4568,7 +4704,7 @@ const styles = StyleSheet.create({
   },
 
   modalTitle: {
-    color: "#ffffff",
+    color: "#000000",
     fontSize: 20,
     fontWeight: "bold",
     textAlign: "center",

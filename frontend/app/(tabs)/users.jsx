@@ -69,7 +69,6 @@ export default function UsersScreen({ hideHeader = false }) {
     email: "",
     password: "",
     role: "student", // Default role
-    section: "", // Added section field
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [imageErrors, setImageErrors] = useState({});
@@ -350,7 +349,6 @@ export default function UsersScreen({ hideHeader = false }) {
         email: "",
         password: "",
         role: "student",
-        section: "", // Clear the section field too
       });
       setModalVisible(false);
 
@@ -1027,17 +1025,6 @@ export default function UsersScreen({ hideHeader = false }) {
                     setNewUser({ ...newUser, password: text })
                   }
                 />
-                {newUser.role === "student" && (
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Section (e.g. CS101, optional)"
-                    placeholderTextColor={colors.textSecondary}
-                    value={newUser.section}
-                    onChangeText={(text) =>
-                      setNewUser({ ...newUser, section: text })
-                    }
-                  />
-                )}
                 <Text style={styles.roleLabel}>Role:</Text>
                 <View style={styles.roleContainer}>
                   {["student", "instructor", "admin"].map((role) => (
@@ -1052,8 +1039,6 @@ export default function UsersScreen({ hideHeader = false }) {
                         setNewUser({
                           ...newUser,
                           role,
-                          // Clear section when switching away from student
-                          section: role === "student" ? newUser.section : "",
                         })
                       }
                     >

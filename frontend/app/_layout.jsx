@@ -1,4 +1,4 @@
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Slot, usePathname, useRouter, useSegments } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -47,6 +47,7 @@ function AppContent() {
   // Ensure we don't redirect until auth state is hydrated from storage
   const [authReady, setAuthReady] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
   const segments = useSegments();
   const { checkAuth, logout, user, token } = useAuthStore();
   const { isDarkMode } = useTheme();
@@ -166,6 +167,18 @@ function AppContent() {
       }
     }
   }, [user, token, segments, mounted, authReady, router]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+
+    // Keep a stable branded title regardless of nested route path.
+    document.title = "cyberlearn";
+    const syncTitleId = setTimeout(() => {
+      document.title = "cyberlearn";
+    }, 0);
+
+    return () => clearTimeout(syncTitleId);
+  }, [pathname]);
 
   return (
     <>

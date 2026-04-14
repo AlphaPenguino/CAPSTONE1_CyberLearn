@@ -12,6 +12,7 @@ import {
   Vibration,
   Platform,
   TextInput,
+  ImageBackground,
 } from "react-native";
 // Removed unused AsyncStorage import
 // import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -41,6 +42,8 @@ if (IS_UNSUPPORTED_PLATFORM) {
 const { width: screenWidth } = Dimensions.get("window");
 
 const PREMIUM_GRADIENT = ["#caf1c8", "#5fd2cd"];
+const DEFENDERS_BG = require("../../assets/images/defendersbg.png");
+const DEFENDERS_BG_GRADIENT = ["rgba(0,0,0,0.68)", "rgba(0,0,0,0.5)"];
 const PREMIUM_SURFACE = "rgba(255, 255, 255, 0.92)";
 const PREMIUM_SURFACE_ALT = "rgba(255, 255, 255, 0.85)";
 const PREMIUM_TEXT = "#0f172a";
@@ -2261,7 +2264,7 @@ function DigitalDefenders() {
 
         {/* Player Name Display */}
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Your Name</Text>
+
           <View style={styles.playerNameDisplay}>
             <MaterialCommunityIcons
               name="account"
@@ -2646,7 +2649,7 @@ function DigitalDefenders() {
               <MaterialCommunityIcons
                 name={isMyTurn ? "account" : "account-outline"}
                 size={16}
-                color={isMyTurn ? "#fff" : "#1a5344"}
+                color={isMyTurn ? "#fff" : "#e2e8f0"}
               />
               <Text
                 style={[
@@ -2810,7 +2813,12 @@ function DigitalDefenders() {
                             {card.name || card.text}
                           </Text>
                         </View>
-                        <Text style={styles.cardDescription}>
+                        <Text
+                          style={[
+                            styles.cardDescription,
+                            isSelected && styles.cardDescriptionOnDark,
+                          ]}
+                        >
                           {card.description || card.text}
                         </Text>
                         <View style={styles.toolIndicator}>
@@ -2989,7 +2997,7 @@ function DigitalDefenders() {
             style={styles.restartButton}
             onPress={() => setGameState("lobby")}
           >
-            <MaterialCommunityIcons name="restart" size={20} color="#3b82f6" />
+            <MaterialCommunityIcons name="restart" size={20} color="#ffffff" />
             <Text style={styles.restartButtonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
@@ -3552,7 +3560,13 @@ function DigitalDefenders() {
   );
 
   return (
-    <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
+    <ImageBackground
+      source={DEFENDERS_BG}
+      style={styles.container}
+      resizeMode="cover"
+      imageStyle={Platform.OS === "web" ? styles.defendersBackgroundImageWeb : undefined}
+    >
+      <LinearGradient colors={DEFENDERS_BG_GRADIENT} style={styles.defendersBackgroundOverlay}>
       <SafeAreaView style={styles.safeArea}>
         {renderImportDocsModal?.()}
         <View style={styles.header}>
@@ -3564,7 +3578,7 @@ function DigitalDefenders() {
               <MaterialCommunityIcons
                 name="arrow-left"
                 size={24}
-                  color={PREMIUM_TEXT}
+                color="#f8fafc"
               />
             </TouchableOpacity>
             <Text style={styles.title}>🛡️ Digital Defenders</Text>
@@ -3605,7 +3619,8 @@ function DigitalDefenders() {
         {renderUploadSuccessModal()}
         {renderUploadFailureModal()}
       </SafeAreaView>
-    </LinearGradient>
+      </LinearGradient>
+    </ImageBackground>
   );
 }
 
@@ -3616,33 +3631,56 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  defendersBackgroundImageWeb: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  defendersBackgroundOverlay: {
+    flex: 1,
+    ...Platform.select({
+      web: {
+        alignItems: "center",
+      },
+      default: {},
+    }),
+  },
   safeArea: {
     flex: 1,
+    width: "100%",
+    ...Platform.select({
+      web: {
+        maxWidth: 1200,
+        alignSelf: "center",
+      },
+      default: {},
+    }),
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(15, 23, 42, 0.1)",
+    paddingTop: 4,
+    paddingBottom: 6,
+    borderBottomWidth: 0,
     position: "relative",
     justifyContent: "center",
-    minHeight: 64,
-    backgroundColor: PREMIUM_SURFACE_ALT,
+    minHeight: 48,
+    backgroundColor: "transparent",
   },
   titleContainer: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     width: "100%",
     paddingHorizontal: 4,
   },
   backButton: {
-    padding: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
     marginRight: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(15, 23, 42, 0.08)",
+    borderRadius: 0,
+    backgroundColor: "transparent",
   },
   debugButton: {
     padding: 5,
@@ -3654,12 +3692,15 @@ const styles = StyleSheet.create({
     borderRadius: 15,
   },
   title: {
-    fontSize: 25,
+    fontSize: 23,
     fontWeight: "800",
-    color: PREMIUM_TEXT,
-    textAlign: "center",
-    alignSelf: "center",
+    color: "#f8fafc",
+    textAlign: "left",
+    alignSelf: "flex-start",
     letterSpacing: 0.2,
+    textShadowColor: "rgba(0,0,0,0.4)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   loadingContainer: {
     flex: 1,
@@ -3669,9 +3710,12 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 18,
-    color: COLORS.textPrimary,
+    color: "#f8fafc",
     textAlign: "center",
     marginBottom: 10,
+    textShadowColor: "rgba(0,0,0,0.4)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   loadingSubtext: {
     fontSize: 14,
@@ -3701,14 +3745,20 @@ const styles = StyleSheet.create({
   gameTitle: {
     fontSize: 30,
     fontWeight: "800",
-    color: PREMIUM_TEXT,
+    color: "#f8fafc",
     marginTop: 15,
     marginBottom: 6,
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   gameSubtitle: {
     fontSize: 16,
-    color: "#00000",
+    color: "#dbeafe",
     fontWeight: "600",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   lobbyErrorText: {
     fontSize: 16,
@@ -3724,9 +3774,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 19,
     fontWeight: "800",
-    color: PREMIUM_TEXT,
+    color: "#f8fafc",
     marginBottom: 15,
     textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   playerCountButtons: {
     flexDirection: "row",
@@ -3970,7 +4023,7 @@ const styles = StyleSheet.create({
   },
   waitingText: {
     fontSize: 16,
-    color: PREMIUM_MUTED,
+    color: "#ffffff",
     textAlign: "center",
     marginBottom: 15,
     fontStyle: "italic",
@@ -3996,8 +4049,11 @@ const styles = StyleSheet.create({
   waveText: {
     fontSize: 18,
     fontWeight: "bold",
-    color: COLORS.textPrimary,
+    color: "#f8fafc",
     marginBottom: 5,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   healthContainer: {
     flexDirection: "row",
@@ -4005,7 +4061,7 @@ const styles = StyleSheet.create({
   },
   actionsText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: "#dbeafe",
   },
   countdownContainer: {
     alignItems: "center",
@@ -4049,19 +4105,22 @@ const styles = StyleSheet.create({
     borderColor: "#2acde6",
   },
   otherTurnIndicator: {
-    backgroundColor: "rgba(139, 92, 246, 0.1)",
-    borderColor: "#2acde6",
+    backgroundColor: "rgba(15, 23, 42, 0.46)",
+    borderColor: "rgba(191, 219, 254, 0.5)",
   },
   turnIndicatorText: {
     fontSize: 12,
     fontWeight: "600",
     marginLeft: 4,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   myTurnText: {
     color: "#fff",
   },
   otherTurnText: {
-    color: "#1a5344",
+    color: "#e2e8f0",
   },
   waitingTurnText: {
     fontSize: 10,
@@ -4148,14 +4207,20 @@ const styles = StyleSheet.create({
   handTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: COLORS.textPrimary,
+    color: "#f8fafc",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   deckStatus: {
     alignItems: "flex-end",
   },
   deckCount: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: "#dbeafe",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   deckWarning: {
     fontSize: 10,
@@ -4271,13 +4336,25 @@ const styles = StyleSheet.create({
   cardName: {
     fontSize: 14,
     fontWeight: "bold",
-    color: COLORS.textPrimary,
+    color: "#f8fafc",
     flex: 1,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   cardDescription: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: "#dbeafe",
     lineHeight: 16,
+    textShadowColor: "rgba(0,0,0,0.3)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  cardDescriptionOnDark: {
+    color: "#e2e8f0",
+    textShadowColor: "rgba(0, 0, 0, 0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   answerCardContent: {
     flex: 1,
@@ -4898,7 +4975,7 @@ const styles = StyleSheet.create({
 
   // Turn Order Selection Styles
   turnOrderInstructions: {
-    backgroundColor: "rgba(74, 124, 89, 0.2)",
+    backgroundColor: "rgba(74, 124, 89, 0.5)",
     borderRadius: 15,
     padding: 20,
     marginBottom: 30,
@@ -4907,7 +4984,7 @@ const styles = StyleSheet.create({
   instructionsTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: COLORS.textPrimary,
+    color: "#ffffff",
     marginBottom: 10,
     textAlign: "center",
   },
@@ -4920,7 +4997,7 @@ const styles = StyleSheet.create({
   },
   turnOrderProgressText: {
     fontSize: 14,
-    color: "#1a5344",
+    color: "#90d8c1",
     fontWeight: "600",
   },
   positionGrid: {

@@ -18,8 +18,8 @@ if (envApiUrl) {
     API_URL = "https://capstone-backend-deploy.onrender.com/api";
   } else {
     // Local web dev (localhost)
-    API_URL = "http://localhost:3000/api";
-    //API_URL = "https://capstone-backend-deploy.onrender.com/api";
+    //API_URL = "http://localhost:3000/api";
+    API_URL = "https://capstone-backend-deploy.onrender.com/api";
   }
 } else {
   // Native mobile — always use deployed backend in production

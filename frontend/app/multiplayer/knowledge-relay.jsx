@@ -10,6 +10,7 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  ImageBackground,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -58,6 +59,9 @@ const PHASES = {
   FINISHED: "finished",
   INSTRUCTOR_EDITOR: "instructor_editor",
 };
+
+const RELAY_RACE_BG = require("../../assets/images/relayracebg.png");
+const RELAY_BG_GRADIENT = ["rgba(0,0,0,0.65)", "rgba(0,0,0,0.45)"];
 
 // Sample JSON structure for Knowledge Relay questions
 const SAMPLE_KR_QUESTIONS = [
@@ -1454,8 +1458,13 @@ export default function KnowledgeRelay() {
   // Instructor Editor Render Function
   const renderInstructorEditor = () => {
     return (
-      <View style={styles.container}>
-        <LinearGradient colors={screenGradient} style={styles.gradient}>
+      <ImageBackground
+        source={RELAY_RACE_BG}
+        style={styles.container}
+        resizeMode="cover"
+        imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+      >
+        <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
           <SafeAreaView style={styles.safeArea}>
             {renderImportDocsModal?.()}
             {renderActionsMenuModal?.()}
@@ -1468,7 +1477,7 @@ export default function KnowledgeRelay() {
                 <MaterialCommunityIcons
                   name="arrow-left"
                   size={24}
-                  color="#000000"
+                  color="#FFFFFF"
                 />
               </TouchableOpacity>
               <Text style={styles.title}>Question Editor</Text>
@@ -1748,7 +1757,7 @@ export default function KnowledgeRelay() {
             {renderUploadModal()}
           </SafeAreaView>
         </LinearGradient>
-      </View>
+      </ImageBackground>
     );
   };
 
@@ -1818,8 +1827,13 @@ export default function KnowledgeRelay() {
 
   // Render functions
   const renderRoomSetup = () => (
-    <View style={styles.container}>
-      <LinearGradient colors={screenGradient} style={styles.gradient}>
+    <ImageBackground
+      source={RELAY_RACE_BG}
+      style={styles.container}
+      resizeMode="cover"
+      imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+    >
+      <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.header}>
             <TouchableOpacity
@@ -1829,7 +1843,7 @@ export default function KnowledgeRelay() {
               <MaterialCommunityIcons
                 name="arrow-left"
                 size={24}
-                color="#000000"
+                color="#FFFFFF"
               />
             </TouchableOpacity>
             <Text style={styles.title}>Knowledge Relay</Text>
@@ -1904,19 +1918,24 @@ export default function KnowledgeRelay() {
           </View>
         </SafeAreaView>
       </LinearGradient>
-    </View>
+    </ImageBackground>
   );
 
   const renderTeamSelection = () => (
-    <View style={styles.container}>
-      <LinearGradient colors={screenGradient} style={styles.gradient}>
+    <ImageBackground
+      source={RELAY_RACE_BG}
+      style={styles.container}
+      resizeMode="cover"
+      imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+    >
+      <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.teamSelectionHeader}>
             <TouchableOpacity style={styles.backButton} onPress={leaveGame}>
               <MaterialCommunityIcons
                 name="arrow-left"
                 size={24}
-                color="#000000"
+                color="#FFFFFF"
               />
             </TouchableOpacity>
             <Text style={styles.teamSelectionTitle}>Select Your Team</Text>
@@ -2003,7 +2022,7 @@ export default function KnowledgeRelay() {
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
-    </View>
+    </ImageBackground>
   );
 
   const renderGameplay = () => {
@@ -2047,22 +2066,29 @@ export default function KnowledgeRelay() {
 
     if (!currentQuestion) {
       return (
-        <View style={styles.container}>
-          <LinearGradient
-            colors={screenGradient}
-            style={styles.gradient}
-          >
+        <ImageBackground
+          source={RELAY_RACE_BG}
+          style={styles.container}
+          resizeMode="cover"
+          imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+        >
+          <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
             <SafeAreaView style={styles.safeArea}>
               <Text style={styles.title}>Loading...</Text>
             </SafeAreaView>
           </LinearGradient>
-        </View>
+        </ImageBackground>
       );
     }
 
     return (
-      <View style={styles.container}>
-        <LinearGradient colors={screenGradient} style={styles.gradient}>
+      <ImageBackground
+        source={RELAY_RACE_BG}
+        style={styles.container}
+        resizeMode="cover"
+        imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+      >
+        <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
           <SafeAreaView style={styles.safeArea}>
             <GameplayBodyWrapper {...gameplayBodyWrapperProps}>
             {/* Game Header */}
@@ -2189,7 +2215,7 @@ export default function KnowledgeRelay() {
             )}
           </SafeAreaView>
         </LinearGradient>
-      </View>
+      </ImageBackground>
     );
   };
 
@@ -2202,8 +2228,13 @@ export default function KnowledgeRelay() {
     const teamStats = getTeamStats().sort((a, b) => b.score - a.score);
 
     return (
-      <View style={styles.container}>
-        <LinearGradient colors={screenGradient} style={styles.gradient}>
+      <ImageBackground
+        source={RELAY_RACE_BG}
+        style={styles.container}
+        resizeMode="cover"
+        imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
+      >
+        <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
           <SafeAreaView style={styles.safeArea}>
             <View style={styles.finishedContainer}>
               {/* Game Over Header */}
@@ -2345,7 +2376,7 @@ export default function KnowledgeRelay() {
             </View>
           </SafeAreaView>
         </LinearGradient>
-      </View>
+      </ImageBackground>
     );
   };
 
@@ -2641,6 +2672,20 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  relayBackgroundImageWeb: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  relayBackgroundOverlay: {
+    flex: 1,
+    ...Platform.select({
+      web: {
+        alignItems: "center",
+      },
+      default: {},
+    }),
+  },
   gradient: {
     flex: 1,
     ...Platform.select({
@@ -2649,6 +2694,14 @@ const styles = StyleSheet.create({
       },
       default: {},
     }),
+  },
+  gameplayBackground: {
+    flex: 1,
+    width: "100%",
+  },
+  gameplayOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(7, 25, 43, 0.56)",
   },
   safeArea: {
     flex: 1,
@@ -2699,16 +2752,22 @@ const styles = StyleSheet.create({
   teamSelectionTitle: {
     fontSize: scaleWeb(30),
     fontWeight: "800",
-    color: "#0f172a",
+    color: "#f8fafc",
     textAlign: "center",
     letterSpacing: 0.3,
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   teamSelectionSubtitle: {
     marginTop: scaleWeb(6),
     fontSize: scaleWeb(14),
-    color: "#334155",
+    color: "#dbeafe",
     textAlign: "center",
     fontWeight: "500",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   roomBadge: {
     marginTop: scaleWeb(10),
@@ -2716,12 +2775,12 @@ const styles = StyleSheet.create({
     paddingVertical: scaleWeb(7),
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(15,118,110,0.45)",
-    backgroundColor: "rgba(15,118,110,0.1)",
+    borderColor: "rgba(255,255,255,0.35)",
+    backgroundColor: "rgba(15,23,42,0.55)",
   },
   roomBadgeText: {
     fontSize: scaleWeb(13),
-    color: "#0f766e",
+    color: "#f8fafc",
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -2730,17 +2789,19 @@ const styles = StyleSheet.create({
     left: 0,
     top: 10,
     padding: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.32)",
   },
   title: {
     fontSize: scaleWeb(28),
     fontWeight: "800",
-    color: "#0f172a",
+    color: "#ffffff",
     textAlign: "center",
     letterSpacing: 0.3,
   },
   subtitle: {
     fontSize: scaleWeb(16),
-    color: "#334155",
+    color: "#ffffff",
     marginTop: scaleWeb(5),
   },
   content: {
@@ -2807,7 +2868,7 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: scaleWeb(28),
     fontWeight: "800",
-    color: "#0f172a",
+    color: "#ffffff",
     textAlign: "center",
     marginBottom: scaleWeb(20),
   },
@@ -4081,9 +4142,15 @@ const styles = StyleSheet.create({
   gameOverHeader: {
     alignItems: "center",
     marginBottom: scaleWeb(18),
+    backgroundColor: "rgba(2, 6, 23, 0.36)",
+    borderRadius: scaleWeb(14),
+    paddingVertical: scaleWeb(10),
+    paddingHorizontal: scaleWeb(14),
     ...Platform.select({
       android: {
         marginBottom: 10,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
       },
       default: {},
     }),
@@ -4091,10 +4158,13 @@ const styles = StyleSheet.create({
   gameOverTitle: {
     fontSize: scaleWeb(32),
     fontWeight: "800",
-    color: "#0f172a",
+    color: "#f8fafc",
     marginTop: scaleWeb(10),
     textAlign: "center",
     letterSpacing: 0.4,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
     ...Platform.select({
       android: {
         fontSize: 24,
@@ -4105,9 +4175,13 @@ const styles = StyleSheet.create({
   },
   gameOverSubtitle: {
     fontSize: scaleWeb(14),
-    color: "#334155",
+    color: "#e2e8f0",
     marginTop: scaleWeb(6),
     fontWeight: "500",
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
     ...Platform.select({
       android: {
         fontSize: 12,
