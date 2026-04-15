@@ -2467,6 +2467,19 @@ function DigitalDefenders() {
   const renderTurnOrderSelection = () => {
     const playerCount = roomData?.players?.length || 0;
     const positions = Array.from({ length: playerCount }, (_, i) => i + 1);
+    const orderedSelections = Array.from(turnOrderSelections.entries()).sort(
+      (a, b) => a[1].position - b[1].position
+    );
+
+    const getOrdinalLabel = (position) => {
+      const mod100 = position % 100;
+      if (mod100 >= 11 && mod100 <= 13) return `${position}th`;
+      const mod10 = position % 10;
+      if (mod10 === 1) return `${position}st`;
+      if (mod10 === 2) return `${position}nd`;
+      if (mod10 === 3) return `${position}rd`;
+      return `${position}th`;
+    };
 
     return (
       <View style={styles.lobbyContainer}>
@@ -2476,13 +2489,25 @@ function DigitalDefenders() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.logoContainer}>
-            <MaterialCommunityIcons
-              name="reorder-horizontal"
-              size={80}
-              color="#2acde6"
-            />
+            <View style={styles.turnOrderHeroIconWrap}>
+              <MaterialCommunityIcons
+                name="sword-cross"
+                size={46}
+                color="#9af8ff"
+              />
+            </View>
             <Text style={styles.gameTitle}>🛡️ Digital Defenders</Text>
             <Text style={styles.gameSubtitle}>Choose Your Turn Order</Text>
+            <View style={styles.turnOrderProgressChip}>
+              <MaterialCommunityIcons
+                name="account-group-outline"
+                size={16}
+                color="#e8fcff"
+              />
+              <Text style={styles.turnOrderProgressText}>
+                {readyPlayersCount}/{playerCount} players locked in
+              </Text>
+            </View>
           </View>
 
           {/* Instructions */}
@@ -2491,8 +2516,8 @@ function DigitalDefenders() {
             <Text style={styles.instructionsText}>
               Pick when you want to take your turn. Position 1 goes first!
             </Text>
-            <Text style={styles.progressText}>
-              {readyPlayersCount}/{playerCount} players ready
+            <Text style={styles.turnOrderHelperText}>
+              Locked positions cannot be claimed by another player.
             </Text>
           </View>
 
@@ -2521,7 +2546,17 @@ function DigitalDefenders() {
                   ]}
                   onPress={() => selectTurnPosition(position)}
                   disabled={isTaken || (mySelectedPosition && !isMySelection)}
+                  activeOpacity={0.86}
                 >
+                  <View style={styles.positionStateBadge}>
+                    <Text style={styles.positionStateBadgeText}>
+                      {isMySelection
+                        ? "LOCKED"
+                        : isTaken
+                        ? "TAKEN"
+                        : "OPEN"}
+                    </Text>
+                  </View>
                   <Text
                     style={[
                       styles.positionButtonText,
@@ -2540,13 +2575,7 @@ function DigitalDefenders() {
                       isTaken && !isMySelection && styles.positionLabelTaken,
                     ]}
                   >
-                    {position === 1
-                      ? "First"
-                      : position === 2
-                      ? "Second"
-                      : position === 3
-                      ? "Third"
-                      : "Fourth"}
+                    {getOrdinalLabel(position)}
                   </Text>
                   {takenBy && (
                     <Text
@@ -2569,18 +2598,19 @@ function DigitalDefenders() {
               <Text style={styles.currentSelectionsTitle}>
                 Current Selections:
               </Text>
-              {Array.from(turnOrderSelections.entries())
-                .sort((a, b) => a[1].position - b[1].position)
-                .map(([selectedPlayerId, selection]) => (
-                  <View key={selectedPlayerId} style={styles.selectionItem}>
-                    <Text style={styles.selectionText}>
-                      Position {selection.position}:{" "}
-                      {selectedPlayerId === playerId
-                        ? "You"
-                        : selection.playerName}
-                    </Text>
-                  </View>
-                ))}
+              {orderedSelections.map(([selectedPlayerId, selection]) => (
+                <View key={selectedPlayerId} style={styles.selectionItem}>
+                  <MaterialCommunityIcons
+                    name="shield-account-outline"
+                    size={16}
+                    color="#dffcff"
+                  />
+                  <Text style={styles.selectionText}>
+                    Position {selection.position}: {" "}
+                    {selectedPlayerId === playerId ? "You" : selection.playerName}
+                  </Text>
+                </View>
+              ))}
             </View>
           )}
 
@@ -2590,6 +2620,11 @@ function DigitalDefenders() {
               <Text style={styles.finalTurnOrderTitle}>Final Turn Order:</Text>
               {finalTurnOrder.map((player, index) => (
                 <View key={player.socketId} style={styles.finalOrderItem}>
+                  <MaterialCommunityIcons
+                    name="medal-outline"
+                    size={16}
+                    color="#dffcff"
+                  />
                   <Text style={styles.finalOrderText}>
                     {index + 1}. {player.playerName}
                   </Text>
@@ -3863,7 +3898,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   editorButtonText: {
-    color: PREMIUM_TEXT,
+    color: "#ffffff",
     fontSize: 16,
     fontWeight: "700",
   },
@@ -4975,68 +5010,129 @@ const styles = StyleSheet.create({
 
   // Turn Order Selection Styles
   turnOrderInstructions: {
-    backgroundColor: "rgba(74, 124, 89, 0.5)",
-    borderRadius: 15,
-    padding: 20,
+    backgroundColor: "rgba(7, 29, 40, 0.72)",
+    borderRadius: 18,
+    padding: 22,
     marginBottom: 30,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(150, 243, 252, 0.35)",
+  },
+  turnOrderHeroIconWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 1,
+    borderColor: "rgba(145, 242, 247, 0.62)",
+    backgroundColor: "rgba(8, 41, 53, 0.78)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  turnOrderProgressChip: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "rgba(5, 48, 60, 0.75)",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(140, 239, 246, 0.4)",
   },
   instructionsTitle: {
     fontSize: 24,
-    fontWeight: "bold",
-    color: "#ffffff",
-    marginBottom: 10,
+    fontWeight: "800",
+    color: "#f7feff",
+    marginBottom: 8,
     textAlign: "center",
   },
   instructionsText: {
     fontSize: 16,
-    color: "rgba(255, 255, 255, 0.8)",
+    color: "rgba(240, 252, 255, 0.96)",
     textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 15,
+    lineHeight: 23,
+    marginBottom: 12,
+  },
+  turnOrderHelperText: {
+    fontSize: 14,
+    color: "rgba(219, 246, 251, 0.92)",
+    textAlign: "center",
+    lineHeight: 20,
+    fontWeight: "600",
   },
   turnOrderProgressText: {
-    fontSize: 14,
-    color: "#90d8c1",
-    fontWeight: "600",
+    fontSize: 13,
+    color: "#f0feff",
+    fontWeight: "700",
   },
   positionGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: 15,
+    gap: 14,
     marginBottom: 30,
   },
   positionButton: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "rgba(74, 124, 89, 0.2)",
+    width: Platform.OS === "web" ? 136 : 126,
+    minHeight: Platform.OS === "web" ? 142 : 128,
+    borderRadius: 24,
+    backgroundColor: "rgba(8, 32, 45, 0.78)",
     borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderColor: "rgba(145, 242, 247, 0.34)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
   },
   positionButtonSelected: {
-    backgroundColor: "#2acde6",
-    borderColor: "#2acde6",
-    shadowColor: "#1a5344",
+    backgroundColor: "rgba(40, 187, 214, 0.26)",
+    borderColor: "#8cf2ff",
+    shadowColor: "#2acde6",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.44,
+    shadowRadius: 10,
+    elevation: 10,
   },
   positionButtonTaken: {
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
-    borderColor: "rgba(74, 124, 89, 0.3)",
+    backgroundColor: "rgba(33, 53, 66, 0.62)",
+    borderColor: "rgba(116, 151, 171, 0.42)",
   },
   positionButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.62,
+  },
+  positionStateBadge: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(11, 62, 77, 0.86)",
+    borderWidth: 1,
+    borderColor: "rgba(141, 239, 246, 0.34)",
+  },
+  positionStateBadgeText: {
+    fontSize: 10,
+    letterSpacing: 0.4,
+    color: "#e7fdff",
+    fontWeight: "800",
   },
   positionButtonText: {
-    fontSize: 32,
-    fontWeight: "bold",
+    fontSize: 34,
+    fontWeight: "800",
     color: "#ffffff",
     marginBottom: 5,
   },
@@ -5044,86 +5140,109 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   positionButtonTextTaken: {
-    color: "rgba(255, 255, 255, 0.6)",
+    color: "rgba(218, 237, 247, 0.9)",
   },
   positionLabel: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.8)",
-    fontWeight: "600",
+    fontSize: 13,
+    color: "rgba(232, 247, 254, 0.95)",
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
   },
   positionLabelSelected: {
     color: "#ffffff",
   },
   positionLabelTaken: {
-    color: "rgba(255, 255, 255, 0.5)",
+    color: "rgba(204, 222, 233, 0.88)",
   },
   playerNameOnPosition: {
     fontSize: 12,
-    color: "rgba(255, 255, 255, 0.7)",
-    marginTop: 5,
+    color: "#effdff",
+    marginTop: 7,
     textAlign: "center",
+    backgroundColor: "rgba(7, 44, 56, 0.8)",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    overflow: "hidden",
+    maxWidth: "90%",
   },
   playerNameOnPositionSelected: {
     color: "#ffffff",
-    fontWeight: "bold",
+    fontWeight: "800",
   },
   currentSelections: {
-    backgroundColor: "rgba(74, 124, 89, 0.15)",
-    borderRadius: 15,
+    backgroundColor: "rgba(6, 31, 44, 0.72)",
+    borderRadius: 18,
     padding: 20,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(145, 242, 247, 0.28)",
   },
   currentSelectionsTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#ffffff",
+    fontWeight: "800",
+    color: "#f6feff",
     marginBottom: 15,
     textAlign: "center",
   },
   selectionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingVertical: 8,
     paddingHorizontal: 15,
-    backgroundColor: "rgba(74, 124, 89, 0.2)",
+    backgroundColor: "rgba(10, 49, 62, 0.72)",
     borderRadius: 10,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "rgba(150, 230, 238, 0.24)",
   },
   selectionText: {
-    fontSize: 16,
+    flex: 1,
+    fontSize: 15,
     color: "#ffffff",
-    textAlign: "center",
+    textAlign: "left",
+    fontWeight: "600",
   },
   finalTurnOrder: {
-    backgroundColor: "rgba(139, 92, 246, 0.2)",
-    borderRadius: 15,
+    backgroundColor: "rgba(13, 36, 51, 0.78)",
+    borderRadius: 18,
     padding: 20,
     marginBottom: 20,
     borderWidth: 2,
-    borderColor: "#2acde6",
+    borderColor: "rgba(150, 244, 252, 0.62)",
   },
   finalTurnOrderTitle: {
     fontSize: 20,
-    fontWeight: "bold",
-    color: "#1a5344",
+    fontWeight: "800",
+    color: "#f6feff",
     marginBottom: 15,
     textAlign: "center",
   },
   finalOrderItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 15,
-    backgroundColor: "rgba(74, 124, 89, 0.2)",
+    backgroundColor: "rgba(10, 49, 62, 0.8)",
     borderRadius: 10,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "rgba(154, 236, 244, 0.26)",
   },
   finalOrderText: {
+    flex: 1,
     fontSize: 18,
     color: "#ffffff",
-    fontWeight: "600",
-    textAlign: "center",
+    fontWeight: "700",
+    textAlign: "left",
   },
   gameStartingSoon: {
     fontSize: 16,
-    color: "#1a5344",
-    fontWeight: "600",
+    color: "#e3fdff",
+    fontWeight: "700",
     textAlign: "center",
     marginTop: 15,
     fontStyle: "italic",

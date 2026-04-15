@@ -3,6 +3,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Image,
   TextInput,
@@ -83,6 +84,12 @@ export default function UsersScreen({ hideHeader = false }) {
   const [analyticsModalVisible, setAnalyticsModalVisible] = useState(false);
   const [studentAnalytics, setStudentAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [profileModalLoading, setProfileModalLoading] = useState(false);
+  const [profileModalError, setProfileModalError] = useState(null);
+  const [selectedProfileData, setSelectedProfileData] = useState(null);
+  const [profileDataCache, setProfileDataCache] = useState({});
+  const [sectionsCatalog, setSectionsCatalog] = useState(null);
   const [backupModalVisible, setBackupModalVisible] = useState(false);
   const [bulkImportModalVisible, setBulkImportModalVisible] = useState(false);
   const [backupInProgress, setBackupInProgress] = useState(false);
@@ -537,6 +544,204 @@ export default function UsersScreen({ hideHeader = false }) {
     }
   };
 
+  const getNormalizedRole = (account) =>
+    (account?.privilege || account?.role || "student").toLowerCase();
+
+  const getSubjectCode = (subject) =>
+    subject?.subjectCode || subject?.sectionCode || "N/A";
+
+  const fetchSectionsCatalog = async () => {
+    if (Array.isArray(sectionsCatalog)) {
+      return sectionsCatalog;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/sections?page=1&limit=500&sort=createdAt&direction=desc`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!response.ok) {
+        setSectionsCatalog([]);
+        return [];
+      }
+
+      const payload = await response.json();
+      const sections = Array.isArray(payload?.sections) ? payload.sections : [];
+      setSectionsCatalog(sections);
+      return sections;
+    } catch (err) {
+      console.warn("Unable to fetch sections for profile modal:", err);
+      setSectionsCatalog([]);
+      return [];
+    }
+  };
+
+  const openUserProfileModal = async (userItem) => {
+    const baseRole = getNormalizedRole(userItem);
+    const fallbackProfile = {
+      basic: {
+        _id: String(userItem?._id || ""),
+        username: userItem?.username || "N/A",
+        fullName: userItem?.fullName || userItem?.username || "N/A",
+        email: userItem?.email || "N/A",
+        profileImage: userItem?.profileImage || userItem?.profilePicture || null,
+        role: baseRole,
+      },
+      student:
+        baseRole === "student"
+          ? {
+              level: userItem?.gamification?.level || 1,
+              totalXP: userItem?.gamification?.totalXP || 0,
+              totalGamesPlayed: userItem?.analytics?.totalGamesPlayed || 0,
+              cyberQuestGamesPlayed:
+                userItem?.analytics?.gamesByType?.cyberQuest || 0,
+              progress: {
+                unlockedModules: 0,
+                completedModules: 0,
+              },
+              enrolledSubjects: [],
+            }
+          : null,
+      instructor:
+        baseRole === "instructor"
+          ? {
+              handledSubjects: [],
+              availableSubjects: [],
+            }
+          : null,
+    };
+
+    setProfileModalVisible(true);
+    setProfileModalError(null);
+    setSelectedProfileData(fallbackProfile);
+
+    if (profileDataCache[userItem._id]) {
+      setSelectedProfileData(profileDataCache[userItem._id]);
+      return;
+    }
+
+    try {
+      setProfileModalLoading(true);
+
+      const userResponse = await fetch(`${API_URL}/users/${userItem._id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      let fetchedUser = userItem;
+      if (userResponse.ok) {
+        const payload = await userResponse.json();
+        if (payload?.success && payload?.user) {
+          fetchedUser = payload.user;
+        }
+      }
+
+      const role = getNormalizedRole(fetchedUser);
+      const userId = String(fetchedUser?._id || userItem._id);
+      const allSections = await fetchSectionsCatalog();
+
+      const enrolledSubjects = allSections.filter((section) => {
+        const studentIds = Array.isArray(section?.students)
+          ? section.students.map((studentId) => String(studentId))
+          : [];
+        const isInStudentsArray = studentIds.includes(userId);
+
+        const sectionCodes = Array.isArray(fetchedUser?.sections)
+          ? fetchedUser.sections
+          : [];
+        const matchesSectionCode =
+          String(fetchedUser?.section || "") === String(section?.sectionCode || "") ||
+          sectionCodes.includes(section?.sectionCode);
+
+        return isInStudentsArray || matchesSectionCode;
+      });
+
+      const handledSubjects = allSections.filter((section) => {
+        const primaryInstructor = String(
+          section?.instructor?._id || section?.instructor || ""
+        );
+        const additionalInstructors = Array.isArray(section?.instructors)
+          ? section.instructors.map((inst) => String(inst?._id || inst))
+          : [];
+        const createdBy = String(section?.createdBy?._id || section?.createdBy || "");
+
+        return (
+          primaryInstructor === userId ||
+          additionalInstructors.includes(userId) ||
+          createdBy === userId
+        );
+      });
+
+      const availableSubjects = allSections.filter((section) => {
+        const isHandled = handledSubjects.some(
+          (handled) => String(handled?._id) === String(section?._id)
+        );
+        return !isHandled && section?.archived !== true && section?.isActive !== false;
+      });
+
+      let studentProgress = null;
+      if (role === "student") {
+        try {
+          const progressResponse = await fetch(
+            `${API_URL}/progress/debug/${encodeURIComponent(userId)}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          if (progressResponse.ok) {
+            studentProgress = await progressResponse.json();
+          }
+        } catch (progressErr) {
+          console.warn("Unable to fetch student progress:", progressErr);
+        }
+      }
+
+      const compiledProfile = {
+        basic: {
+          _id: userId,
+          username: fetchedUser?.username || "N/A",
+          fullName: fetchedUser?.fullName || fetchedUser?.username || "N/A",
+          email: fetchedUser?.email || "N/A",
+          profileImage: fetchedUser?.profileImage || fetchedUser?.profilePicture || null,
+          role,
+        },
+        student:
+          role === "student"
+            ? {
+                level: fetchedUser?.gamification?.level || 1,
+                totalXP: fetchedUser?.gamification?.totalXP || 0,
+                totalGamesPlayed: fetchedUser?.analytics?.totalGamesPlayed || 0,
+                cyberQuestGamesPlayed:
+                  fetchedUser?.analytics?.gamesByType?.cyberQuest || 0,
+                progress: {
+                  unlockedModules:
+                    studentProgress?.globalProgress?.unlockedModules || 0,
+                  completedModules:
+                    studentProgress?.globalProgress?.completedModules || 0,
+                },
+                enrolledSubjects,
+              }
+            : null,
+        instructor:
+          role === "instructor"
+            ? {
+                handledSubjects,
+                availableSubjects,
+              }
+            : null,
+      };
+
+      setSelectedProfileData(compiledProfile);
+      setProfileDataCache((prev) => ({ ...prev, [userItem._id]: compiledProfile }));
+    } catch (err) {
+      // Keep showing fallback data while surfacing non-blocking fetch issues.
+      setProfileModalError(err.message || "Some profile details could not be loaded");
+    } finally {
+      setProfileModalLoading(false);
+    }
+  };
+
   // Mark image as having error
   const handleImageError = (userId) => {
     setImageErrors((prev) => ({
@@ -584,7 +789,6 @@ export default function UsersScreen({ hideHeader = false }) {
 
   // Render item for FlatList
   const renderItem = ({ item }) => {
-    // First check for profileImage (auth), then profilePicture (user route) for compatibility
     const userImage = item.profileImage || item.profilePicture;
     const hasImageError = imageErrors[item._id];
     const role = item.role || item.privilege || "student";
@@ -592,53 +796,58 @@ export default function UsersScreen({ hideHeader = false }) {
     const archived = item.isArchived;
 
     return (
-      <TouchableOpacity style={styles.userCard}>
-        <View style={styles.userInfo}>
-          {userImage && !hasImageError ? (
-            <Image
-              source={{ uri: getCompatibleImageUrl(userImage) }}
-              style={[styles.avatar, { borderColor: roleColor }]}
-              onError={() => handleImageError(item._id)}
-            />
-          ) : (
-            <View style={[styles.avatarFallback, { borderColor: roleColor }]}>
-              <MaterialCommunityIcons
-                name={getRoleIcon(role)}
-                size={28}
-                color={roleColor}
+      <View style={styles.userCard}>
+        <TouchableOpacity
+          style={styles.userInfoPressable}
+          onPress={() => openUserProfileModal(item)}
+          activeOpacity={0.84}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        >
+          <View style={styles.userInfo}>
+            {userImage && !hasImageError ? (
+              <Image
+                source={{ uri: getCompatibleImageUrl(userImage) }}
+                style={[styles.avatar, { borderColor: roleColor }]}
+                onError={() => handleImageError(item._id)}
               />
-            </View>
-          )}
+            ) : (
+              <View style={[styles.avatarFallback, { borderColor: roleColor }]}> 
+                <MaterialCommunityIcons
+                  name={getRoleIcon(role)}
+                  size={28}
+                  color={roleColor}
+                />
+              </View>
+            )}
 
-          <View style={styles.userDetails}>
-            <Text
-              style={[
-                styles.username,
-                archived && {
-                  textDecorationLine: "line-through",
-                  opacity: 0.6,
-                },
-              ]}
-            >
-              {item.fullName || item.username} {archived ? "(Archived)" : ""}
-            </Text>
-            <Text style={styles.email}>{item.email}</Text>
-            <View style={[styles.roleBadge, { backgroundColor: roleColor }]}>
-              <MaterialCommunityIcons
-                name={getRoleIcon(role)}
-                size={14}
-                color="#FFF"
-                style={styles.roleIcon}
-              />
-              <Text style={styles.roleText}>{role}</Text>
+            <View style={styles.userDetails}>
+              <Text
+                style={[
+                  styles.username,
+                  archived && {
+                    textDecorationLine: "line-through",
+                    opacity: 0.6,
+                  },
+                ]}
+              >
+                {item.fullName || item.username} {archived ? "(Archived)" : ""}
+              </Text>
+              <Text style={styles.email}>{item.email}</Text>
+              <View style={[styles.roleBadge, { backgroundColor: roleColor }]}> 
+                <MaterialCommunityIcons
+                  name={getRoleIcon(role)}
+                  size={14}
+                  color="#FFF"
+                  style={styles.roleIcon}
+                />
+                <Text style={styles.roleText}>{role}</Text>
+              </View>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {user?.privilege === "admin" && (
+        {user?.privilege === "admin" ? (
           <View style={styles.userActions}>
-            {/* Analytics button - only for students */}
-            {item.privilege === "student" && ""}
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => openPasswordModal(item)}
@@ -676,8 +885,8 @@ export default function UsersScreen({ hideHeader = false }) {
               />
             </TouchableOpacity>
           </View>
-        )}
-      </TouchableOpacity>
+        ) : null}
+      </View>
     );
   };
 
@@ -1392,6 +1601,307 @@ export default function UsersScreen({ hideHeader = false }) {
               </View>
             </View>
           </Modal>
+
+          {/* User Profile Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={profileModalVisible}
+            onRequestClose={() => {
+              setProfileModalVisible(false);
+              setProfileModalError(null);
+            }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.profileModalContent}>
+                <View style={[styles.modalHeader, styles.profileModalHeader]}>
+                  <Text style={[styles.modalTitle, styles.profileModalTitle]}>
+                    User Profile
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.profileCloseButton}
+                    onPress={() => {
+                      setProfileModalVisible(false);
+                      setProfileModalError(null);
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="close"
+                      size={22}
+                      color={colors.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {profileModalLoading && !selectedProfileData ? (
+                  <View style={styles.centeredMini}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={styles.loadingText}>Loading user profile...</Text>
+                  </View>
+                ) : selectedProfileData ? (
+                  <ScrollView
+                    style={styles.profileScrollArea}
+                    contentContainerStyle={styles.profileScrollContent}
+                    showsVerticalScrollIndicator={true}
+                  >
+                    {profileModalError ? (
+                      <View style={styles.profileInlineWarning}>
+                        <MaterialCommunityIcons
+                          name="alert-circle-outline"
+                          size={16}
+                          color={colors.warning || "#FF9800"}
+                        />
+                        <Text style={styles.profileInlineWarningText}>
+                          {profileModalError}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <LinearGradient
+                      colors={[
+                        "rgba(95, 210, 205, 0.28)",
+                        "rgba(202, 241, 200, 0.18)",
+                      ]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.profileHero}
+                    >
+                      <View style={styles.profileHeroTop}>
+                        <View style={styles.profileAvatarBadge}>
+                          {selectedProfileData.basic.profileImage &&
+                          !imageErrors[selectedProfileData.basic._id] ? (
+                            <Image
+                              source={{
+                                uri: getCompatibleImageUrl(
+                                  selectedProfileData.basic.profileImage
+                                ),
+                              }}
+                              style={styles.profileAvatarImage}
+                              onError={() =>
+                                handleImageError(selectedProfileData.basic._id)
+                              }
+                            />
+                          ) : (
+                            <MaterialCommunityIcons
+                              name="account-circle-outline"
+                              size={40}
+                              color={colors.primary}
+                            />
+                          )}
+                        </View>
+                        <View style={styles.profileHeroTextWrap}>
+                          <Text style={styles.profileHeroName}>
+                            {selectedProfileData.basic.fullName}
+                          </Text>
+                          <Text style={styles.profileHeroUsername}>
+                            @{selectedProfileData.basic.username}
+                          </Text>
+                        </View>
+                        <View style={styles.profileRoleBadgePill}>
+                          <Text style={styles.profileRoleBadgeText}>
+                            {selectedProfileData.basic.role}
+                          </Text>
+                        </View>
+                      </View>
+                    </LinearGradient>
+
+                    <View style={styles.profileCard}>
+                      <Text style={styles.profileCardTitle}>Account Details</Text>
+                      <View style={styles.profileInfoRow}>
+                        <Text style={styles.profileInfoLabel}>Username</Text>
+                        <Text style={styles.profileInfoValue}>
+                          {selectedProfileData.basic.username}
+                        </Text>
+                      </View>
+                      <View style={styles.profileInfoDivider} />
+                      <View style={styles.profileInfoRow}>
+                        <Text style={styles.profileInfoLabel}>Name</Text>
+                        <Text style={styles.profileInfoValue}>
+                          {selectedProfileData.basic.fullName}
+                        </Text>
+                      </View>
+                      <View style={styles.profileInfoDivider} />
+                      <View style={styles.profileInfoRow}>
+                        <Text style={styles.profileInfoLabel}>Email</Text>
+                        <Text style={styles.profileInfoValue}>
+                          {selectedProfileData.basic.email}
+                        </Text>
+                      </View>
+                      <View style={styles.profileInfoDivider} />
+                      <View style={styles.profileInfoRow}>
+                        <Text style={styles.profileInfoLabel}>Role</Text>
+                        <Text style={styles.profileInfoValue}>
+                          {selectedProfileData.basic.role}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {selectedProfileData.student && (
+                      <>
+                        <View style={styles.profileCard}>
+                          <Text style={styles.profileCardTitle}>
+                            Student CyberQuest Progress
+                          </Text>
+                          <View style={styles.profileStatsWrap}>
+                            <View style={styles.profileStatChip}>
+                              <Text style={styles.profileStatLabel}>Level</Text>
+                              <Text style={styles.profileStatValue}>
+                                {selectedProfileData.student.level}
+                              </Text>
+                            </View>
+                            <View style={styles.profileStatChip}>
+                              <Text style={styles.profileStatLabel}>XP</Text>
+                              <Text style={styles.profileStatValue}>
+                                {selectedProfileData.student.totalXP}
+                              </Text>
+                            </View>
+                            <View style={styles.profileStatChip}>
+                              <Text style={styles.profileStatLabel}>All Games</Text>
+                              <Text style={styles.profileStatValue}>
+                                {selectedProfileData.student.totalGamesPlayed}
+                              </Text>
+                            </View>
+                            <View style={styles.profileStatChip}>
+                              <Text style={styles.profileStatLabel}>CyberQuest</Text>
+                              <Text style={styles.profileStatValue}>
+                                {selectedProfileData.student.cyberQuestGamesPlayed}
+                              </Text>
+                            </View>
+                            <View style={styles.profileStatChip}>
+                              <Text style={styles.profileStatLabel}>Unlocked</Text>
+                              <Text style={styles.profileStatValue}>
+                                {selectedProfileData.student.progress.unlockedModules}
+                              </Text>
+                            </View>
+                            <View style={styles.profileStatChip}>
+                              <Text style={styles.profileStatLabel}>Completed</Text>
+                              <Text style={styles.profileStatValue}>
+                                {selectedProfileData.student.progress.completedModules}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        <View style={styles.profileCard}>
+                          <View style={styles.profileSectionHeaderRow}>
+                            <Text style={styles.profileCardTitle}>Enrolled Subjects</Text>
+                            <Text style={styles.profileSectionCount}>
+                              {selectedProfileData.student.enrolledSubjects.length}
+                            </Text>
+                          </View>
+                          {selectedProfileData.student.enrolledSubjects.length > 0 ? (
+                            selectedProfileData.student.enrolledSubjects.map((subject) => (
+                              <View
+                                key={String(subject._id)}
+                                style={styles.profileSubjectItem}
+                              >
+                                <View style={styles.profileSubjectRow}>
+                                  <MaterialCommunityIcons
+                                    name="book-open-page-variant"
+                                    size={16}
+                                    color={colors.primary}
+                                  />
+                                  <Text style={styles.profileSubjectName}>
+                                    {subject.name}
+                                  </Text>
+                                </View>
+                                <Text style={styles.profileSubjectMeta}>
+                                  Code: {getSubjectCode(subject)}
+                                </Text>
+                              </View>
+                            ))
+                          ) : (
+                            <Text style={styles.profileEmptyText}>
+                              No enrolled subjects found.
+                            </Text>
+                          )}
+                        </View>
+                      </>
+                    )}
+
+                    {selectedProfileData.instructor && (
+                      <>
+                        <View style={styles.profileCard}>
+                          <View style={styles.profileSectionHeaderRow}>
+                            <Text style={styles.profileCardTitle}>Handled Subjects</Text>
+                            <Text style={styles.profileSectionCount}>
+                              {selectedProfileData.instructor.handledSubjects.length}
+                            </Text>
+                          </View>
+                          {selectedProfileData.instructor.handledSubjects.length > 0 ? (
+                            selectedProfileData.instructor.handledSubjects.map((subject) => (
+                              <View
+                                key={String(subject._id)}
+                                style={styles.profileSubjectItem}
+                              >
+                                <View style={styles.profileSubjectRow}>
+                                  <MaterialCommunityIcons
+                                    name="school-outline"
+                                    size={16}
+                                    color={colors.primary}
+                                  />
+                                  <Text style={styles.profileSubjectName}>
+                                    {subject.name}
+                                  </Text>
+                                </View>
+                                <Text style={styles.profileSubjectMeta}>
+                                  Code: {getSubjectCode(subject)}
+                                </Text>
+                              </View>
+                            ))
+                          ) : (
+                            <Text style={styles.profileEmptyText}>
+                              No handled subjects found.
+                            </Text>
+                          )}
+                        </View>
+
+                        <View style={styles.profileCard}>
+                          <View style={styles.profileSectionHeaderRow}>
+                            <Text style={styles.profileCardTitle}>Available Subjects</Text>
+                            <Text style={styles.profileSectionCount}>
+                              {selectedProfileData.instructor.availableSubjects.length}
+                            </Text>
+                          </View>
+                          {selectedProfileData.instructor.availableSubjects.length > 0 ? (
+                            selectedProfileData.instructor.availableSubjects.map((subject) => (
+                              <View
+                                key={String(subject._id)}
+                                style={styles.profileSubjectItem}
+                              >
+                                <View style={styles.profileSubjectRow}>
+                                  <MaterialCommunityIcons
+                                    name="book-outline"
+                                    size={16}
+                                    color={colors.primary}
+                                  />
+                                  <Text style={styles.profileSubjectName}>
+                                    {subject.name}
+                                  </Text>
+                                </View>
+                                <Text style={styles.profileSubjectMeta}>
+                                  Code: {getSubjectCode(subject)}
+                                </Text>
+                              </View>
+                            ))
+                          ) : (
+                            <Text style={styles.profileEmptyText}>
+                              No available subjects found.
+                            </Text>
+                          )}
+                        </View>
+                      </>
+                    )}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.centeredMini}>
+                    <Text style={styles.profileEmptyText}>No profile data available.</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </Modal>
+
           {/* Password Change Modal */}
           <Modal
             animationType="slide"
@@ -2014,6 +2524,10 @@ const createStyles = (colors) => {
       shadowRadius: 3,
       elevation: 2,
     },
+    userInfoPressable: {
+      flex: 1,
+      borderRadius: 10,
+    },
     userInfo: { flexDirection: "row", alignItems: "center", flex: 1 },
     avatar: {
       width: 56,
@@ -2101,6 +2615,23 @@ const createStyles = (colors) => {
       shadowRadius: 6,
       elevation: 10,
     },
+    profileModalContent: {
+      backgroundColor: colors.card,
+      width: Platform.OS === "web" ? "88%" : "96%",
+      maxWidth: Platform.OS === "web" ? 760 : 560,
+      height: Platform.OS === "web" ? "85%" : "90%",
+      minHeight: Platform.OS === "web" ? 460 : 380,
+      maxHeight: Platform.OS === "web" ? "85%" : "92%",
+      borderRadius: 20,
+      padding: Platform.OS === "web" ? 20 : 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 6,
+      elevation: 10,
+    },
     bulkImportModalContent: {
       backgroundColor: colors.card,
       width: "100%",
@@ -2133,6 +2664,243 @@ const createStyles = (colors) => {
       borderBottomColor: colors.border,
     },
     modalTitle: { fontSize: 22, fontWeight: "bold", color: colors.text },
+    profileModalHeader: {
+      marginBottom: 14,
+      paddingBottom: 10,
+    },
+    profileModalTitle: {
+      fontSize: Platform.OS === "web" ? 24 : 21,
+      fontWeight: "800",
+      color: colors.text,
+      letterSpacing: 0.2,
+    },
+    profileCloseButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    profileScrollArea: {
+      flex: 1,
+      minHeight: 0,
+      width: "100%",
+    },
+    profileScrollContent: {
+      paddingBottom: 10,
+      flexGrow: 1,
+    },
+    profileHero: {
+      borderRadius: 16,
+      padding: Platform.OS === "web" ? 14 : 12,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    profileHeroTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    profileAvatarBadge: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    profileAvatarImage: {
+      width: "100%",
+      height: "100%",
+      borderRadius: 28,
+    },
+    profileHeroTextWrap: {
+      flex: 1,
+    },
+    profileHeroName: {
+      fontSize: Platform.OS === "web" ? 20 : 18,
+      fontWeight: "800",
+      color: colors.text,
+      lineHeight: 26,
+    },
+    profileHeroUsername: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: "600",
+      marginTop: 2,
+    },
+    profileRoleBadgePill: {
+      backgroundColor: colors.primary,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    profileRoleBadgeText: {
+      color: colors.primaryContrast || "#fff",
+      fontSize: 11,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    profileCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      marginBottom: 12,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 2,
+      elevation: 1,
+    },
+    profileCardTitle: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 10,
+    },
+    profileInfoRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 10,
+      paddingVertical: 6,
+    },
+    profileInfoLabel: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+    },
+    profileInfoValue: {
+      flex: 2,
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: "700",
+      textAlign: "right",
+    },
+    profileInfoDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      opacity: 0.7,
+    },
+    profileStatsWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    profileStatChip: {
+      width: Platform.OS === "web" ? "31.5%" : "48%",
+      minWidth: 120,
+      backgroundColor: colors.card,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 10,
+      paddingHorizontal: 10,
+    },
+    profileStatLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.3,
+      marginBottom: 4,
+    },
+    profileStatValue: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    profileSectionHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    profileSectionCount: {
+      minWidth: 26,
+      textAlign: "center",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      fontSize: 12,
+      fontWeight: "800",
+      color: colors.primary,
+      overflow: "hidden",
+    },
+    profileSubjectItem: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginBottom: 8,
+    },
+    profileSubjectRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 3,
+    },
+    profileSubjectName: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: colors.text,
+      flex: 1,
+    },
+    profileSubjectMeta: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    profileEmptyText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      lineHeight: 20,
+      textAlign: "center",
+      fontWeight: "600",
+    },
+    centeredMini: {
+      justifyContent: "center",
+      alignItems: "center",
+      paddingVertical: 30,
+      paddingHorizontal: 16,
+    },
+    profileInlineWarning: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: "rgba(255, 152, 0, 0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255, 152, 0, 0.35)",
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      marginBottom: 10,
+    },
+    profileInlineWarningText: {
+      flex: 1,
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.text,
+      lineHeight: 18,
+    },
     backupHintText: {
       fontSize: 14,
       color: colors.textSecondary,
