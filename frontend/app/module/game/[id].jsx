@@ -9,6 +9,8 @@ import {
   ImageBackground,
   TextInput,
   ScrollView,
+  KeyboardAvoidingView,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuthStore } from "@/store/authStore";
@@ -78,6 +80,27 @@ export default function ModuleGameQuest() {
     normalizedCurrentModuleId,
   ]);
 
+  const handleExitPress = useCallback(() => {
+    const confirmMessage =
+      "Are you sure you want to quit? Progress will be unsaved.";
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      if (window.confirm(confirmMessage)) {
+        navigateToAdventureMap();
+      }
+      return;
+    }
+
+    Alert.alert("Quit Quest", confirmMessage, [
+      { text: "No", style: "cancel" },
+      {
+        text: "Yes",
+        style: "destructive",
+        onPress: navigateToAdventureMap,
+      },
+    ]);
+  }, [navigateToAdventureMap]);
+
   // Game state
   const [module, setModule] = useState(null);
   const [quizzes, setQuizzes] = useState([]);
@@ -113,6 +136,9 @@ export default function ModuleGameQuest() {
   const [questProgress, setQuestProgress] = useState(0);
   const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
   const [incorrectAnswerCount, setIncorrectAnswerCount] = useState(0);
+  const [correctStreak, setCorrectStreak] = useState(0);
+  const MAX_HINT_STREAK = 3;
+  const isHintReady = correctStreak >= MAX_HINT_STREAK;
 
   // XP and Level tracking
   const [xpEarned, setXpEarned] = useState(0);
@@ -145,6 +171,129 @@ export default function ModuleGameQuest() {
   const slideAnim = useRef(new Animated.Value(50)).current;
   const battleAnim = useRef(new Animated.Value(0)).current;
   const deathAnim = useRef(new Animated.Value(0)).current;
+  const animatedPlayerHealth = useRef(new Animated.Value(100)).current;
+  const animatedEnemyHealth = useRef(new Animated.Value(100)).current;
+  const animatedStreakFill = useRef(new Animated.Value(0)).current;
+  const streakGlowAnim = useRef(new Animated.Value(0)).current;
+  const streakGlowLoopRef = useRef(null);
+  const playerImpactPulse = useRef(new Animated.Value(0)).current;
+  const enemyImpactPulse = useRef(new Animated.Value(0)).current;
+  const playerShake = useRef(new Animated.Value(0)).current;
+  const enemyShake = useRef(new Animated.Value(0)).current;
+
+  const triggerBattleImpact = useCallback(
+    (attacker, defender) => {
+      const attackerPulse =
+        attacker === "player" ? playerImpactPulse : enemyImpactPulse;
+      const defenderShake = defender === "player" ? playerShake : enemyShake;
+
+      attackerPulse.setValue(0);
+      defenderShake.setValue(0);
+
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(attackerPulse, {
+            toValue: 1,
+            duration: 110,
+            useNativeDriver: true,
+          }),
+          Animated.timing(attackerPulse, {
+            toValue: 0,
+            duration: 160,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(defenderShake, {
+            toValue: 1,
+            duration: 50,
+            useNativeDriver: true,
+          }),
+          Animated.timing(defenderShake, {
+            toValue: -1,
+            duration: 50,
+            useNativeDriver: true,
+          }),
+          Animated.timing(defenderShake, {
+            toValue: 1,
+            duration: 45,
+            useNativeDriver: true,
+          }),
+          Animated.timing(defenderShake, {
+            toValue: 0,
+            duration: 45,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+    },
+    [enemyImpactPulse, enemyShake, playerImpactPulse, playerShake]
+  );
+
+  useEffect(() => {
+    Animated.timing(animatedPlayerHealth, {
+      toValue: playerHealth,
+      duration: 450,
+      useNativeDriver: false,
+    }).start();
+  }, [animatedPlayerHealth, playerHealth]);
+
+  useEffect(() => {
+    Animated.timing(animatedEnemyHealth, {
+      toValue: enemyHealth,
+      duration: 450,
+      useNativeDriver: false,
+    }).start();
+  }, [animatedEnemyHealth, enemyHealth]);
+
+  useEffect(() => {
+    Animated.timing(animatedStreakFill, {
+      toValue: Math.min(correctStreak / MAX_HINT_STREAK, 1),
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+  }, [MAX_HINT_STREAK, animatedStreakFill, correctStreak]);
+
+  useEffect(() => {
+    if (isHintReady) {
+      streakGlowLoopRef.current?.stop?.();
+      streakGlowAnim.setValue(0);
+      streakGlowLoopRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(streakGlowAnim, {
+            toValue: 1,
+            duration: 420,
+            useNativeDriver: true,
+          }),
+          Animated.timing(streakGlowAnim, {
+            toValue: 0,
+            duration: 420,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      streakGlowLoopRef.current.start();
+      return () => {
+        streakGlowLoopRef.current?.stop?.();
+      };
+    }
+
+    streakGlowLoopRef.current?.stop?.();
+    streakGlowAnim.setValue(0);
+    return () => {
+      streakGlowLoopRef.current?.stop?.();
+    };
+  }, [isHintReady, streakGlowAnim]);
+
+  const handleOpenHintModal = useCallback(() => {
+    if (!isHintReady) {
+      return;
+    }
+
+    setShowHintModal(true);
+    setCorrectStreak(0);
+    setBattleMessage("Hint activated. Streak consumed.");
+  }, [isHintReady]);
 
   // Helper function to get background for current module/level
   const getBackgroundForLevel = (moduleId) => {
@@ -677,6 +826,7 @@ function hashPassword(password) {
     setBattleMessage("The quest begins! Prepare for battle!");
     setCorrectAnswerCount(0);
     setIncorrectAnswerCount(0);
+    setCorrectStreak(0);
 
     // Ensure animations are at full visibility for game content
     fadeAnim.setValue(1);
@@ -714,8 +864,10 @@ function hashPassword(password) {
     setUserAnswers(updatedAnswers);
     if (isCorrect) {
       setCorrectAnswerCount((prev) => prev + 1);
+      setCorrectStreak((prev) => Math.min(prev + 1, MAX_HINT_STREAK));
     } else {
       setIncorrectAnswerCount((prev) => prev + 1);
+      setCorrectStreak(0);
     }
 
     // Haptic feedback
@@ -739,25 +891,17 @@ function hashPassword(password) {
       setPlayerAction("attack");
       setPlayerAttackAnim(true);
       setBattleMessage("🗡️ Critical Hit! You damaged the enemy!");
+      triggerBattleImpact("player", "enemy");
       let newEnemyHealth = Math.max(0, enemyHealth - damagePerQuestion);
 
-      // Check if this is the last question and all previous were correct
+      // Check if this is the last question
       const isLastQuestion =
         currentQuestionIndex === currentQuiz.questions.length - 1 &&
         currentQuizIndex === quizzes.length - 1;
 
       if (isLastQuestion) {
-        // Count total correct answers including this one (use updatedAnswers)
-        const totalCorrect = Object.values(updatedAnswers).filter(
-          (a) => a.isCorrect
-        ).length;
-        // If all answers are correct (perfect score), force enemy HP to 0
-        if (totalCorrect === totalQuestions) {
-          newEnemyHealth = 0;
-          console.log(
-            "💯 Perfect Score! All answers correct - Enemy HP forced to 0"
-          );
-        }
+        // Ensure final hit on the last question drops enemy HP to 0.
+        newEnemyHealth = 0;
       }
 
       setEnemyHealth(newEnemyHealth);
@@ -811,6 +955,7 @@ function hashPassword(password) {
       setEnemyAction("attack");
       setEnemyAttackAnim(true);
       setBattleMessage("💥 Enemy strikes back! You took damage!");
+      triggerBattleImpact("enemy", "player");
       const newPlayerHealth = Math.max(0, playerHealth - damagePerQuestion);
       setPlayerHealth(newPlayerHealth);
       setPlayerAction("hurt");
@@ -1144,12 +1289,6 @@ function hashPassword(password) {
 
     console.log(`🎯 FINAL SCORE TO SUBMIT TO BACKEND: ${finalScore}%`);
 
-    // PERFECT VICTORY: If all answers correct (100%), ensure enemy HP is exactly 0
-    if (finalScore === 100) {
-      setEnemyHealth(0);
-      console.log("💯 Perfect Score! Enemy HP set to 0");
-    }
-
     // Calculate stars based on score percentage (matching main screen: 34/65/90)
     const stars = calculateStarRating(finalScore);
 
@@ -1164,6 +1303,13 @@ function hashPassword(password) {
 
     // Player wins if they have 50% or more health, defeated if below 50%
     const playerSurvived = playerHealth >= 50;
+
+    // On final resolution, always set the loser's health bar to zero.
+    if (playerSurvived) {
+      setEnemyHealth(0);
+    } else {
+      setPlayerHealth(0);
+    }
 
     if (playerSurvived) {
       // Player wins - enemy dies
@@ -1907,6 +2053,7 @@ function hashPassword(password) {
                       setScore(0);
                       setQuestProgress(0);
                       setStarRating(0);
+                      setCorrectStreak(0);
                       setBattleMessage("");
                     }}
                   >
@@ -1985,14 +2132,7 @@ function hashPassword(password) {
                     </Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.backToMapButton}
-                    onPress={navigateToAdventureMap}
-                  >
-                    <Text style={styles.backToMapButtonText}>
-                      ← Back to Adventure Map
-                    </Text>
-                  </TouchableOpacity>
+
                 </>
               )}
             </View>
@@ -2043,20 +2183,26 @@ function hashPassword(password) {
   }
 
   return (
-    <ImageBackground
-      source={currentBackground}
+    <KeyboardAvoidingView
       style={styles.container}
-      resizeMode={Platform.OS === "web" ? "cover" : "cover"}
-      imageStyle={
-        Platform.OS === "web"
-          ? {
-              width: "100%",
-              height: "100%",
-              resizeMode: "cover",
-            }
-          : undefined
-      }
+      behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "android" ? 8 : 0}
+      enabled={Platform.OS !== "web"}
     >
+      <ImageBackground
+        source={currentBackground}
+        style={styles.container}
+        resizeMode={Platform.OS === "web" ? "cover" : "cover"}
+        imageStyle={
+          Platform.OS === "web"
+            ? {
+                width: "100%",
+                height: "100%",
+                resizeMode: "cover",
+              }
+            : undefined
+        }
+      >
       <LinearGradient
         colors={["rgba(0,0,0,0.6)", "rgba(0,0,0,0.4)"]}
         style={styles.overlay}
@@ -2069,7 +2215,7 @@ function hashPassword(password) {
             </Text>
             {module?.type === "cyber-quest" && (
               <Text style={styles.questProgressText}>
-                Correct: {correctAnswerCount} • Incorrect: {incorrectAnswerCount} • Level: {module?.level || module?.questLevel || 1}
+                Correct: {correctAnswerCount} • Incorrect: {incorrectAnswerCount}
               </Text>
             )}
             <View style={styles.progressBar}>
@@ -2081,7 +2227,7 @@ function hashPassword(password) {
 
           <TouchableOpacity
             style={styles.exitButton}
-            onPress={() => router.back()}
+            onPress={handleExitPress}
           >
             <MaterialCommunityIcons name="close" size={24} color="#ffffff" />
           </TouchableOpacity>
@@ -2095,10 +2241,65 @@ function hashPassword(password) {
         {/* Battle Arena */}
         <View style={styles.battleArena}>
           {/* Player Character - Cyborg */}
+          <View style={styles.playerStreakWrapper}>
+            <Animated.View
+              style={[
+                styles.streakMeterContainer,
+                isHintReady && styles.streakMeterReady,
+                {
+                  opacity: streakGlowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.92, 1],
+                  }),
+                  transform: [
+                    {
+                      scale: streakGlowAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.04],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Text style={styles.streakMeterLabel}>
+                {Math.min(correctStreak, MAX_HINT_STREAK)}/{MAX_HINT_STREAK}
+              </Text>
+              <View style={styles.streakMeterTrack}>
+                <Animated.View
+                  style={[
+                    styles.streakMeterFill,
+                    {
+                      height: animatedStreakFill.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ["0%", "100%"],
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+            </Animated.View>
+
           <Animated.View
             style={[
               styles.playerCharacter,
-              { transform: [{ scale: playerAttackAnim ? 1.05 : 1 }] },
+              {
+                transform: [
+                  {
+                    translateX: playerShake.interpolate({
+                      inputRange: [-1, 0, 1],
+                      outputRange: [-8, 0, 8],
+                    }),
+                  },
+                  { scale: playerAttackAnim ? 1.05 : 1 },
+                  {
+                    scale: playerImpactPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.08],
+                    }),
+                  },
+                ],
+              },
             ]}
           >
             <CharacterSprite
@@ -2116,23 +2317,45 @@ function hashPassword(password) {
             <View style={styles.healthBarContainer}>
               <Text style={styles.healthLabel}>Player</Text>
               <View style={styles.healthBar}>
-                <View
+                <Animated.View
                   style={[
                     styles.healthFill,
                     styles.playerHealthFill,
-                    { width: `${playerHealth}%` },
+                    {
+                      width: animatedPlayerHealth.interpolate({
+                        inputRange: [0, 100],
+                        outputRange: ["0%", "100%"],
+                      }),
+                    },
                   ]}
                 />
               </View>
               <Text style={styles.healthPoints}>{playerHealth}/100</Text>
             </View>
           </Animated.View>
+          </View>
 
           {/* Enemy Character - Difficulty Based */}
           <Animated.View
             style={[
               styles.enemyCharacter,
-              { transform: [{ scale: enemyAttackAnim ? 1.05 : 1 }] },
+              {
+                transform: [
+                  {
+                    translateX: enemyShake.interpolate({
+                      inputRange: [-1, 0, 1],
+                      outputRange: [-8, 0, 8],
+                    }),
+                  },
+                  { scale: enemyAttackAnim ? 1.05 : 1 },
+                  {
+                    scale: enemyImpactPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.08],
+                    }),
+                  },
+                ],
+              },
             ]}
           >
             <CharacterSprite
@@ -2150,11 +2373,16 @@ function hashPassword(password) {
             <View style={styles.healthBarContainer}>
               <Text style={styles.healthLabel}>{getEnemySprites().name}</Text>
               <View style={styles.healthBar}>
-                <View
+                <Animated.View
                   style={[
                     styles.healthFill,
                     styles.enemyHealthFill,
-                    { width: `${enemyHealth}%` },
+                    {
+                      width: animatedEnemyHealth.interpolate({
+                        inputRange: [0, 100],
+                        outputRange: ["0%", "100%"],
+                      }),
+                    },
                   ]}
                 />
               </View>
@@ -2172,6 +2400,7 @@ function hashPassword(password) {
               style={styles.questionScrollContainer}
               showsVerticalScrollIndicator={true}
               nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
             >
               <View style={styles.questionHeader}>
                 <MaterialCommunityIcons
@@ -2183,16 +2412,42 @@ function hashPassword(password) {
                   {quizzes[currentQuizIndex]?.title}
                 </Text>
                 {/* Hint Button */}
-                <TouchableOpacity
-                  style={styles.hintButton}
-                  onPress={() => setShowHintModal(true)}
+                <Animated.View
+                  style={
+                    isHintReady
+                      ? {
+                          opacity: streakGlowAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.9, 1],
+                          }),
+                          transform: [
+                            {
+                              scale: streakGlowAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [1, 1.06],
+                              }),
+                            },
+                          ],
+                        }
+                      : null
+                  }
                 >
-                  <MaterialCommunityIcons
-                    name="information"
-                    size={20}
-                    color={COLORS.primary}
-                  />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.hintButton,
+                      !isHintReady && styles.hintButtonDisabled,
+                      isHintReady && styles.hintButtonReady,
+                    ]}
+                    onPress={handleOpenHintModal}
+                    disabled={!isHintReady}
+                  >
+                    <MaterialCommunityIcons
+                      name="information"
+                      size={20}
+                      color={isHintReady ? "#FFD700" : "#7E8899"}
+                    />
+                  </TouchableOpacity>
+                </Animated.View>
               </View>
 
               <Text style={styles.questionText}>
@@ -2780,7 +3035,8 @@ function hashPassword(password) {
           </View>
         )}
       </LinearGradient>
-    </ImageBackground>
+      </ImageBackground>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -2960,6 +3216,48 @@ const styles = {
       alignSelf: "center",
     }),
   },
+  playerStreakWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  streakMeterContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    paddingHorizontal: 4,
+  },
+  streakMeterReady: {
+    shadowColor: "#FFD700",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  streakMeterLabel: {
+    color: "#FFD700",
+    fontSize: 12,
+    fontWeight: "bold",
+    marginBottom: 6,
+  },
+  streakMeterTrack: {
+    width: 12,
+    height: Platform.OS === "web" ? 120 : 100,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,215,0,0.45)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+  streakMeterFill: {
+    width: "100%",
+    backgroundColor: "#FFD700",
+    borderRadius: 8,
+    shadowColor: "#FFD700",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 5,
+  },
   playerCharacter: {
     alignItems: "center",
     justifyContent: "center",
@@ -3058,6 +3356,20 @@ const styles = {
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(255,215,0,0.3)",
+  },
+  hintButtonDisabled: {
+    backgroundColor: "rgba(80,80,80,0.32)",
+    borderColor: "rgba(126,136,153,0.45)",
+    opacity: 0.65,
+  },
+  hintButtonReady: {
+    backgroundColor: "rgba(255,215,0,0.2)",
+    borderColor: "rgba(255,215,0,0.95)",
+    shadowColor: "#FFD700",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 7,
+    elevation: 5,
   },
   currentQuizTitle: {
     color: COLORS.primary,

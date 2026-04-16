@@ -14,6 +14,12 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import bcrypt from "bcryptjs";
 
+import {
+  generateTemporaryPassword,
+  isTruthyFlag,
+  sendNewAccountEmail,
+} from "../utils/accountProvisioning.js";
+
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -286,7 +292,12 @@ router.post(
   authorizeRole(["admin"]),
   async (req, res) => {
     try {
-      const { csvData, preprocessed = false } = req.body;
+      const {
+        csvData,
+        preprocessed = false,
+        sendAccountNotification,
+      } = req.body;
+      const shouldSendAccountNotification = isTruthyFlag(sendAccountNotification);
 
       console.log("Bulk import request received:", {
         dataLength: csvData?.length,
@@ -364,11 +375,22 @@ router.post(
             }
 
             const userId = new mongoose.Types.ObjectId();
-            newUserIds.push(userId);
+
+            const resolvedPassword = shouldSendAccountNotification
+              ? generateTemporaryPassword()
+              : password;
+
+            if (!resolvedPassword || resolvedPassword.length < 8) {
+              results.errors.push({
+                row: userData,
+                error: "Password must be at least 8 characters",
+              });
+              continue;
+            }
 
             // Hash password before bulk insert (since insertMany doesn't trigger pre-save middleware)
             const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(password, salt);
+            const hashedPassword = await bcrypt.hash(resolvedPassword, salt);
 
             usersToCreate.push({
               _id: userId,
@@ -381,12 +403,19 @@ router.post(
                 profileImage ||
                 `https://api.dicebear.com/9.x/bottts/svg?seed=${username}`,
             });
+            newUserIds.push(userId);
 
             results.success.push({
               username: username.toLowerCase(),
               email: email.toLowerCase(),
               role: role,
+              emailed: !shouldSendAccountNotification,
             });
+
+            if (shouldSendAccountNotification) {
+              results.success[results.success.length - 1].temporaryPassword =
+                resolvedPassword;
+            }
           }
 
           // Bulk create users
@@ -395,6 +424,24 @@ router.post(
 
             // Bulk initialize progress for all new users
             await bulkInitializeUserProgress(newUserIds);
+
+            if (shouldSendAccountNotification) {
+              for (const createdUser of results.success) {
+                try {
+                  await sendNewAccountEmail({
+                    to: createdUser.email,
+                    fullName: createdUser.fullName || createdUser.username,
+                    username: createdUser.username,
+                    temporaryPassword: createdUser.temporaryPassword,
+                  });
+                  createdUser.emailed = true;
+                  delete createdUser.temporaryPassword;
+                } catch (emailError) {
+                  createdUser.emailed = false;
+                  createdUser.emailError = emailError.message;
+                }
+              }
+            }
           }
         } catch (bulkError) {
           console.error("Error in bulk operation:", {
@@ -403,11 +450,15 @@ router.post(
             timestamp: new Date().toISOString(),
           });
           // Fallback to sequential processing
-          return await sequentialUserProcessing(csvData, results, res);
+          return await sequentialUserProcessing(csvData, results, res, {
+            sendAccountNotification: shouldSendAccountNotification,
+          });
         }
       } else {
         // Fallback to sequential processing for non-preprocessed data
-        return await sequentialUserProcessing(csvData, results, res);
+        return await sequentialUserProcessing(csvData, results, res, {
+          sendAccountNotification: shouldSendAccountNotification,
+        });
       }
 
       console.log("Bulk import completed successfully:", {
@@ -1488,7 +1539,12 @@ async function bulkInitializeUserProgress(userIds) {
 }
 
 // Sequential processing fallback
-async function sequentialUserProcessing(csvData, results, res) {
+async function sequentialUserProcessing(
+  csvData,
+  results,
+  res,
+  { sendAccountNotification = false } = {}
+) {
   for (const userData of csvData) {
     try {
       const {
@@ -1505,10 +1561,22 @@ async function sequentialUserProcessing(csvData, results, res) {
       const userFullName = fullName || fullname || username;
 
       // Validation
-      if (!username || !email || !password) {
+      const resolvedPassword = sendAccountNotification
+        ? generateTemporaryPassword()
+        : password;
+
+      if (!username || !email || !resolvedPassword) {
         results.errors.push({
           row: userData,
           error: "Missing required fields (username, email, password)",
+        });
+        continue;
+      }
+
+      if (resolvedPassword.length < 8) {
+        results.errors.push({
+          row: userData,
+          error: "Password must be at least 8 characters",
         });
         continue;
       }
@@ -1535,7 +1603,7 @@ async function sequentialUserProcessing(csvData, results, res) {
         username: username.toLowerCase(),
         fullName: userFullName,
         email: email.toLowerCase(),
-        password, // Will be hashed by the User model middleware
+        password: resolvedPassword, // Will be hashed by the User model middleware
         privilege: role,
         profileImage:
           profileImage ||
@@ -1551,7 +1619,26 @@ async function sequentialUserProcessing(csvData, results, res) {
         username: newUser.username,
         email: newUser.email,
         role: newUser.privilege,
+        emailed: !sendAccountNotification,
       });
+
+      if (sendAccountNotification) {
+        try {
+          await sendNewAccountEmail({
+            to: newUser.email,
+            fullName: newUser.fullName,
+            username: newUser.username,
+            temporaryPassword: resolvedPassword,
+          });
+          results.success[results.success.length - 1].emailed = true;
+        } catch (emailError) {
+          results.success[results.success.length - 1].emailed = false;
+          results.success[results.success.length - 1].emailError =
+            emailError.message;
+          results.success[results.success.length - 1].temporaryPassword =
+            resolvedPassword;
+        }
+      }
     } catch (userError) {
       results.errors.push({
         row: userData,

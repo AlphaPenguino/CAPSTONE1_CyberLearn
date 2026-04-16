@@ -11,6 +11,11 @@ import fs from "fs";
 import Module from "../models/Module.js";
 import Quiz from "../models/Quiz.js";
 import Section from "../models/Section.js";
+import {
+  generateTemporaryPassword,
+  isTruthyFlag,
+  sendNewAccountEmail,
+} from "../utils/accountProvisioning.js";
 
 const router = express.Router();
 
@@ -1049,10 +1054,16 @@ router.post(
         role,
         profilePicture,
         section,
+        sendAccountNotification,
       } = req.body;
 
+      const shouldSendAccountNotification = isTruthyFlag(sendAccountNotification);
+      const resolvedPassword = shouldSendAccountNotification
+        ? generateTemporaryPassword()
+        : password;
+
       // Validation
-      if (!username || !fullName || !email || !password) {
+      if (!username || !fullName || !email || !resolvedPassword) {
         return res.status(400).json({
           success: false,
           message:
@@ -1061,7 +1072,7 @@ router.post(
       }
 
       // Use same validation as auth routes
-      if (password.length < 8) {
+      if (resolvedPassword.length < 8) {
         return res.status(400).json({
           success: false,
           message: "Password should be at least 8 characters long",
@@ -1126,7 +1137,7 @@ router.post(
         username: username.toLowerCase(),
         fullName: fullName.trim(),
         email: email.toLowerCase(),
-        password, // The User model will hash this automatically via middleware
+        password: resolvedPassword, // The User model will hash this automatically via middleware
         profileImage,
         section: userSection,
         privilege,
@@ -1139,6 +1150,28 @@ router.post(
 
       // Generate token
       const token = generateToken(newUser._id, newUser.privilege);
+
+      let accountNotification = {
+        requested: shouldSendAccountNotification,
+        sent: false,
+      };
+
+      if (shouldSendAccountNotification) {
+        try {
+          await sendNewAccountEmail({
+            to: newUser.email,
+            fullName: newUser.fullName,
+            username: newUser.username,
+            temporaryPassword: resolvedPassword,
+          });
+          accountNotification.sent = true;
+        } catch (emailError) {
+          console.error("Error sending account creation email:", emailError);
+          accountNotification.error = emailError.message;
+          // Fallback for admins so credentials are not lost when email delivery fails.
+          accountNotification.temporaryPassword = resolvedPassword;
+        }
+      }
 
       // Don't return password
       const userResponse = {
@@ -1154,9 +1187,13 @@ router.post(
 
       res.status(201).json({
         success: true,
-        message: "User created successfully",
+        message:
+          shouldSendAccountNotification && accountNotification.sent
+            ? "User created successfully. Account email sent."
+            : "User created successfully",
         user: userResponse,
         token,
+        accountNotification,
       });
     } catch (error) {
       // Enhanced error logging for deployment debugging

@@ -62,7 +62,7 @@ export default function Settings() {
   }, [user?.username, isEditingUsername]);
 
   // Use dark blue in light mode instead of the default yellow for settings accents
-  const highlightColor = isDarkMode ? colors.primary : "#1976d2";
+  const highlightColor = isDarkMode ? colors.primary : "#000000";
   const screenGradient = isDarkMode ? ["#0f172a", "#111827"] : ["#caf1c8", "#5fd2cd"];
   const premiumCardStyle = {
     backgroundColor: isDarkMode
@@ -905,7 +905,7 @@ export default function Settings() {
           App Version
         </Text>
         <Text style={[styles.aboutValue, { color: colors.textSecondary }]}>
-          1.0.8.1
+          1.0.9
         </Text>
       </View>
 

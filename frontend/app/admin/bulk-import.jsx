@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   useWindowDimensions,
+  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -30,6 +31,14 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
   const [importing, setImporting] = useState(false);
   const [processingStep, setProcessingStep] = useState("");
   const [results, setResults] = useState(null);
+  const [sendAccountNotification, setSendAccountNotification] = useState(false);
+
+  useEffect(() => {
+    // Prevent stale CSV validation when switching import mode.
+    setCsvData(null);
+    setSelectedFile(null);
+    setResults(null);
+  }, [sendAccountNotification]);
 
   const createStyles = () => {
     const isWeb = Platform.OS === "web";
@@ -96,6 +105,33 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
         color: colors.textSecondary,
         marginBottom: 8,
         lineHeight: 20,
+      },
+      notificationToggleRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        marginBottom: 12,
+      },
+      notificationToggleTextWrap: {
+        flex: 1,
+      },
+      notificationToggleTitle: {
+        color: colors.text,
+        fontSize: 13,
+        fontWeight: "700",
+        marginBottom: 2,
+      },
+      notificationToggleHint: {
+        color: colors.textSecondary,
+        fontSize: 12,
+        lineHeight: 16,
       },
       exampleCard: {
         backgroundColor: colors.surface,
@@ -348,7 +384,8 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
     );
   }
 
-  const parseCsvText = (text) => {
+  const parseCsvText = (text, options = {}) => {
+    const shouldSendAccountNotification = options.sendAccountNotification === true;
     try {
       const lines = text.trim().split("\n");
       if (lines.length < 2) {
@@ -356,7 +393,9 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
       }
 
       const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-      const requiredHeaders = ["username", "email", "password"]; // section removed
+      const requiredHeaders = shouldSendAccountNotification
+        ? ["username", "email"]
+        : ["username", "email", "password"]; // section removed
 
       for (const required of requiredHeaders) {
         if (!headers.includes(required)) {
@@ -381,9 +420,15 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
         });
 
         // Validate required fields
-        if (!rowData.username || !rowData.email || !rowData.password) {
+        if (
+          !rowData.username ||
+          !rowData.email ||
+          (!shouldSendAccountNotification && !rowData.password)
+        ) {
           validationErrors.push(
-            `Row ${i + 1}: Missing required fields (username, email, password)`
+            shouldSendAccountNotification
+              ? `Row ${i + 1}: Missing required fields (username, email)`
+              : `Row ${i + 1}: Missing required fields (username, email, password)`
           );
           continue;
         }
@@ -408,9 +453,13 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
         duplicateCheck.add(uniqueKey);
 
         // Validate password length
-        if (rowData.password.length < 6) {
+        if (
+          !shouldSendAccountNotification &&
+          rowData.password &&
+          rowData.password.length < 8
+        ) {
           validationErrors.push(
-            `Row ${i + 1}: Password must be at least 6 characters`
+            `Row ${i + 1}: Password must be at least 8 characters`
           );
           continue;
         }
@@ -475,7 +524,9 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
         }
 
         // Parse the CSV content
-        const parsedData = parseCsvText(fileContent);
+        const parsedData = parseCsvText(fileContent, {
+          sendAccountNotification,
+        });
         setCsvData(parsedData);
 
         Alert.alert(
@@ -492,7 +543,8 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
     }
   };
 
-  const validateAndProcessData = (data) => {
+  const validateAndProcessData = (data, options = {}) => {
+    const shouldSendAccountNotification = options.sendAccountNotification === true;
     if (!data || data.length === 0) {
       throw new Error("No valid data to process");
     }
@@ -514,9 +566,12 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
         throw new Error(`Row ${index + 2}: Invalid email format`);
       }
 
-      if (!processed.password || processed.password.length < 6) {
+      if (
+        !shouldSendAccountNotification &&
+        (!processed.password || processed.password.length < 8)
+      ) {
         throw new Error(
-          `Row ${index + 2}: Password must be at least 6 characters`
+          `Row ${index + 2}: Password must be at least 8 characters`
         );
       }
 
@@ -540,7 +595,9 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
 
       // Frontend preprocessing and validation
       console.log("Preprocessing CSV data...");
-      const processedData = validateAndProcessData(csvData);
+      const processedData = validateAndProcessData(csvData, {
+        sendAccountNotification,
+      });
 
       setProcessingStep(`Sending ${processedData.length} users to server...`);
       console.log(
@@ -581,6 +638,7 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
         body: JSON.stringify({
           csvData: processedData,
           preprocessed: true, // Flag to indicate data is already validated
+          sendAccountNotification,
         }),
         signal: controller.signal,
       });
@@ -644,13 +702,20 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
   const isImportEnabled = !importing && !!csvData && csvData.length > 0;
 
   const loadSampleData = () => {
-    const sampleCsv = `username,email,password,role,fullName
+    const sampleCsv = sendAccountNotification
+      ? `username,email,role,fullName
+student6,student6@example.com,student,Student Six
+student7,student7@example.com,student,Student Seven
+instructor2,instructor2@example.com,instructor,Instructor Two`
+      : `username,email,password,role,fullName
 student6,student6@example.com,password123,student,Student Six
 student7,student7@example.com,password123,student,Student Seven
 instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
 
     try {
-      const parsedData = parseCsvText(sampleCsv);
+      const parsedData = parseCsvText(sampleCsv, {
+        sendAccountNotification,
+      });
       setCsvData(parsedData);
       setSelectedFile({ name: "sample-data.csv", size: sampleCsv.length });
       Alert.alert(
@@ -663,7 +728,9 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
   };
 
   const downloadSampleCsv = async () => {
-    const sampleCsv = `username,email,password,role,fullName\nstudent6,student6@example.com,password123,student,Student Six\nstudent7,student7@example.com,password123,student,Student Seven\ninstructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
+    const sampleCsv = sendAccountNotification
+      ? `username,email,role,fullName\nstudent6,student6@example.com,student,Student Six\nstudent7,student7@example.com,student,Student Seven\ninstructor2,instructor2@example.com,instructor,Instructor Two`
+      : `username,email,password,role,fullName\nstudent6,student6@example.com,password123,student,Student Six\nstudent7,student7@example.com,password123,student,Student Seven\ninstructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
     try {
       if (Platform.OS === "web") {
         const blob = new Blob([sampleCsv], { type: "text/csv" });
@@ -730,29 +797,51 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
       >
         <View style={styles.instructionsCard}>
           <Text style={styles.instructionsTitle}>Instructions</Text>
+          <View style={styles.notificationToggleRow}>
+            <View style={styles.notificationToggleTextWrap}>
+              <Text style={styles.notificationToggleTitle}>
+                Send notification to email.
+              </Text>
+              <Text style={styles.notificationToggleHint}>
+                When enabled, CSV password values are ignored and generated automatically.
+              </Text>
+            </View>
+            <Switch
+              value={sendAccountNotification}
+              onValueChange={setSendAccountNotification}
+            />
+          </View>
           <Text style={styles.instructionText}>
-            1. Prepare your CSV file with the required columns: username, email,
-            password
+            1. Prepare your CSV file with required columns: username and email
+            {sendAccountNotification ? "" : ", plus password"}
+          </Text>
+
+          {sendAccountNotification && (
+            <Text style={styles.instructionText}>
+              Password column is optional in this mode and will be ignored if present.
+            </Text>
+          )}
+          <Text style={styles.instructionText}>
+            2. Upload your CSV file using the file picker below
           </Text>
           <Text style={styles.instructionText}>
-            2. Optional columns: role (defaults to &quot;student&quot;),
-            fullName, profileImage
-          </Text>
-          <Text style={styles.instructionText}>
-            3. Upload your CSV file using the file picker below
-          </Text>
-          <Text style={styles.instructionText}>
-            4. Click &quot;Import Users&quot; to process the data
+            3. Click &quot;Import Users&quot; to process the data
           </Text>
 
           <View style={styles.exampleCard}>
             <Text style={styles.exampleText}>
               Example CSV format:{"\n"}
-              username,email,password,role,fullName{"\n"}
-              student1,student1@example.com,password123,student,Student One
+              {sendAccountNotification
+                ? "username,email,role,fullName"
+                : "username,email,password,role,fullName"}
               {"\n"}
-              instructor1,instructor1@example.com,instructor123,instructor,Instructor
-              One
+              {sendAccountNotification
+                ? "student1,student1@example.com,student,Student One"
+                : "student1,student1@example.com,password123,student,Student One"}
+              {"\n"}
+              {sendAccountNotification
+                ? "instructor1,instructor1@example.com,instructor,Instructor One"
+                : "instructor1,instructor1@example.com,instructor123,instructor,Instructor One"}
             </Text>
           </View>
         </View>

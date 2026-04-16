@@ -302,6 +302,7 @@ export default function Create() {
     const [showQuestionTypes, setShowQuestionTypes] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [loadingQuestData, setLoadingQuestData] = useState(false);
+    const [loadedQuizSnapshot, setLoadedQuizSnapshot] = useState(null);
 
     // Modal state for success/error messages
     const [showModal, setShowModal] = useState(false);
@@ -480,6 +481,7 @@ export default function Create() {
           const data = await response.json();
           if (data.success && data.cyberQuest) {
             const quest = data.cyberQuest;
+            const migratedQuestions = migrateSortingItems(quest.questions || []);
             setQuestData({
               title: quest.title,
               description: quest.description,
@@ -487,7 +489,14 @@ export default function Create() {
               selectedSection: quest.subject || quest.section_id,
               difficulty: quest.difficulty,
               level: quest.level || 1,
-              questions: migrateSortingItems(quest.questions || []),
+              questions: migratedQuestions,
+            });
+            setLoadedQuizSnapshot({
+              title: quest.title || "",
+              description: quest.description || "",
+              difficulty: quest.difficulty || "medium",
+              level: quest.level || 1,
+              questions: migratedQuestions,
             });
           }
         } else {
@@ -513,6 +522,7 @@ export default function Create() {
           level: 1,
           questions: [],
         });
+        setLoadedQuizSnapshot(null);
         setIsEditing(false);
       } else if (editQuestId) {
         // We have an edit ID and we're not in create mode - load quest data
@@ -571,6 +581,86 @@ export default function Create() {
           ...prevData,
           level: 1,
         }));
+      }
+    };
+
+    const buildQuizBankPayload = (source = questData) => ({
+      title: source?.title || "Untitled Quiz Bank",
+      description: source?.description || "",
+      difficulty: source?.difficulty || "medium",
+      level: source?.level || 1,
+      questions: migrateSortingItems(Array.isArray(source?.questions) ? source.questions : []),
+    });
+
+    const saveQuizBankJson = async (payload, fallbackName = "quiz-bank") => {
+      if (!Array.isArray(payload?.questions) || payload.questions.length === 0) {
+        showCustomModal(
+          "No Questions",
+          "There are no quiz questions to export yet.",
+          "error"
+        );
+        return;
+      }
+
+      const safeName = String(payload.title || fallbackName)
+        .trim()
+        .replace(/[^a-z0-9_-]+/gi, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase();
+      const fileName = `${safeName || fallbackName}.json`;
+      const jsonString = JSON.stringify(payload, null, 2);
+
+      if (Platform.OS === "web") {
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+      } else {
+        const fileUri = FileSystem.documentDirectory + fileName;
+        await FileSystem.writeAsStringAsync(fileUri, jsonString);
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/json",
+            dialogTitle: "Export Quiz Bank",
+            UTI: "public.json",
+          });
+        }
+      }
+
+      setShowImportExportMenu(false);
+      showCustomModal("Success", "Quiz bank exported successfully.", "success");
+    };
+
+    const handleExportCurrentQuizBank = async () => {
+      try {
+        await saveQuizBankJson(buildQuizBankPayload(questData), "quiz-bank-current");
+      } catch (error) {
+        console.error("Error exporting current quiz bank:", error);
+        showCustomModal(
+          "Export Error",
+          error.message || "Failed to export current quiz bank.",
+          "error"
+        );
+      }
+    };
+
+    const handleExportLoadedQuizBank = async () => {
+      try {
+        const source = loadedQuizSnapshot || questData;
+        await saveQuizBankJson(buildQuizBankPayload(source), "quiz-bank-loaded");
+      } catch (error) {
+        console.error("Error exporting loaded quiz bank:", error);
+        showCustomModal(
+          "Export Error",
+          error.message || "Failed to export loaded quiz bank.",
+          "error"
+        );
       }
     };
 
@@ -2796,6 +2886,71 @@ export default function Create() {
             </View>
           ) : (
             <>
+              {/* Quiz Bank quick actions */}
+              <View
+                style={[
+                  styles.quizBankCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.quizBankHeaderRow}>
+                  <Ionicons name="library-outline" size={20} color={highlightColor} />
+                  <Text style={[styles.quizBankTitle, { color: colors.text }]}>Quiz Bank</Text>
+                </View>
+                <Text style={[styles.quizBankSubtitle, { color: colors.textSecondary }]}> 
+                  Import a quiz bank into fields or export quiz data from this map.
+                </Text>
+
+                <View style={styles.quizBankActionsRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.quizBankActionButton,
+                      {
+                        backgroundColor: `${highlightColor}15`,
+                        borderColor: `${highlightColor}60`,
+                      },
+                    ]}
+                    onPress={handleImportJSON}
+                  >
+                    <Ionicons name="cloud-upload-outline" size={18} color={highlightColor} />
+                    <Text style={[styles.quizBankActionText, { color: colors.text }]}>Import Quiz Bank</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.quizBankActionButton,
+                      {
+                        backgroundColor: `${highlightColor}15`,
+                        borderColor: `${highlightColor}60`,
+                      },
+                    ]}
+                    onPress={handleExportCurrentQuizBank}
+                  >
+                    <Ionicons name="cloud-download-outline" size={18} color={highlightColor} />
+                    <Text style={[styles.quizBankActionText, { color: colors.text }]}>Export Current Quiz Bank</Text>
+                  </TouchableOpacity>
+
+                  {isEditing && (
+                    <TouchableOpacity
+                      style={[
+                        styles.quizBankActionButton,
+                        {
+                          backgroundColor: `${highlightColor}15`,
+                          borderColor: `${highlightColor}60`,
+                        },
+                      ]}
+                      onPress={handleExportLoadedQuizBank}
+                    >
+                      <Ionicons name="archive-outline" size={18} color={highlightColor} />
+                      <Text style={[styles.quizBankActionText, { color: colors.text }]}>Export Loaded Quiz Bank</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
               {/* Quest Title */}
               <View style={styles.inputGroup}>
                 <Text
@@ -7026,6 +7181,43 @@ const styles = StyleSheet.create({
     },
   inputGroup: {
     marginBottom: Platform.OS === "web" ? 24 : 20,
+  },
+  quizBankCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: Platform.OS === "web" ? 22 : 18,
+  },
+  quizBankHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  quizBankTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  quizBankSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  quizBankActionsRow: {
+    gap: 8,
+  },
+  quizBankActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  quizBankActionText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
   inputLabel: {
     fontSize: Platform.OS === "web" ? 16 : 15,

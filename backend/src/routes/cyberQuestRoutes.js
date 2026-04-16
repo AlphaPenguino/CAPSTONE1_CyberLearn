@@ -514,12 +514,12 @@ router.post(
       // Validate questions count
       if (
         !Array.isArray(questions) ||
-        questions.length < 3 ||
+        questions.length < 1 ||
         questions.length > 50
       ) {
         return res.status(400).json({
           success: false,
-          message: "Must provide between 3 and 10 questions",
+          message: "Must provide between 1 and 50 questions",
         });
       }
 
@@ -527,12 +527,10 @@ router.post(
       for (let i = 0; i < questions.length; i++) {
         const question = questions[i];
 
-        if (!question.text || question.text.trim().length < 10) {
+        if (!question.text || question.text.trim().length === 0) {
           return res.status(400).json({
             success: false,
-            message: `Question ${
-              i + 1
-            }: Text must be at least 10 characters long`,
+            message: `Question ${i + 1}: Text is required`,
           });
         }
 
@@ -928,7 +926,7 @@ router.put(
         // Validate questions count
         if (
           !Array.isArray(questions) ||
-          questions.length < 3 ||
+          questions.length < 1 ||
           questions.length > 50
         ) {
           return res.status(400).json({
@@ -941,12 +939,10 @@ router.put(
         for (let i = 0; i < questions.length; i++) {
           const question = questions[i];
 
-          if (!question.text || question.text.trim().length < 10) {
+          if (!question.text || question.text.trim().length === 0) {
             return res.status(400).json({
               success: false,
-              message: `Question ${
-                i + 1
-              }: Text must be at least 10 characters long`,
+              message: `Question ${i + 1}: Text is required`,
             });
           }
 

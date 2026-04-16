@@ -1293,10 +1293,18 @@ const handleImportCyberQuestsWeb = () => {
   const showPlayerStatsDetails =
     Platform.OS !== "android" || isPlayerStatsExpanded;
 
+  const showPrivilegedNoSubjectsState =
+    isInstructorOrAdmin &&
+    !loading &&
+    !error &&
+    modules.length === 0 &&
+    userSubjects.length === 0;
+
   const showWebMapBackdrop =
     Platform.OS === "web" &&
     !!selectedBackground?.image &&
-    !(!!selectedSubject && !loading && !error && modules.length === 0);
+    !(!!selectedSubject && !loading && !error && modules.length === 0) &&
+    !showPrivilegedNoSubjectsState;
 
   const screenGradient = isDarkMode
     ? ["#020617", "#0B1220"]
@@ -2164,7 +2172,7 @@ const handleImportCyberQuestsWeb = () => {
               {selectedSubject.name} doesn&apos;t have any cyber quests yet.{" "}
               {isinstructor
                 ? "Create some cyber quests to get started!"
-                : "Your instructor hasn&apos;t created any cyber quests for this subject yet."}
+                : "Your instructor hasn't created any cyber quests for this subject yet."}
             </Text>
 
             {/* Container for buttons to avoid stretching */}

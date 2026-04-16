@@ -19,7 +19,6 @@ const questionSchema = new mongoose.Schema(
       type: String,
       required: [true, "Question text is required"],
       trim: true,
-      minlength: [10, "Question text must be at least 10 characters long"],
     },
     // For Multiple Choice
     choices: {
@@ -220,9 +219,9 @@ const cyberQuestSchema = new mongoose.Schema(
       required: true,
       validate: {
         validator: function (questions) {
-          return questions.length >= 3 && questions.length <= 50;
+          return questions.length >= 1 && questions.length <= 50;
         },
-        message: "A Cyber Quest must have between 3 and 10 questions",
+        message: "A Cyber Quest must have between 1 and 50 questions",
       },
     },
 
@@ -294,8 +293,8 @@ cyberQuestSchema.methods.validateQuestions = function () {
   const errors = [];
 
   this.questions.forEach((question, index) => {
-    if (!question.text || question.text.trim().length < 10) {
-      errors.push(`Question ${index + 1}: Text must be at least 10 characters`);
+    if (!question.text || question.text.trim().length === 0) {
+      errors.push(`Question ${index + 1}: Text is required`);
       return;
     }
 

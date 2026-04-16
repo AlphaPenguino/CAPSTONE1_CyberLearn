@@ -223,7 +223,7 @@ export default function ForgotPassword() {
                     Please also check your spam or junk folder.
                   </Text>
                   <TouchableOpacity
-                    style={[styles.button, { marginTop: 12 }]}
+                    style={[styles.button, styles.authActionButton]}
                     onPress={() => {
                       setResetSent(false);
                       setEmail("");
@@ -235,15 +235,8 @@ export default function ForgotPassword() {
                   <TouchableOpacity
                     style={[
                       styles.button,
-                      {
-                        flexDirection: "row",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        marginTop: 10,
-                        backgroundColor: "transparent",
-                        borderWidth: 1,
-                        borderColor: COLORS.primary,
-                      },
+                      styles.authActionButton,
+                      styles.authOutlineButton,
                     ]}
                     onPress={() => router.replace("/")}
                   >
@@ -251,9 +244,9 @@ export default function ForgotPassword() {
                       name="arrow-back-outline"
                       size={20}
                       color={COLORS.primary}
-                      style={{ marginRight: 8 }}
+                      style={styles.authActionIcon}
                     />
-                    <Text style={[styles.buttonText, { color: COLORS.primary }]}>
+                    <Text style={[styles.buttonText, styles.authOutlineButtonText]}>
                       Return to Login
                     </Text>
                   </TouchableOpacity>

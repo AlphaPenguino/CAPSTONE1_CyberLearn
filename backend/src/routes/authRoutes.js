@@ -50,6 +50,26 @@ const generateToken = (userId, privilege) => {
   });
 };
 
+const validatePasswordPolicy = (password = "") => {
+  const checks = {
+    minLength: password.length >= 8,
+    hasLower: /[a-z]/.test(password),
+    hasUpper: /[A-Z]/.test(password),
+    hasNumber: /\d/.test(password),
+    hasSpecial: /[^A-Za-z0-9]/.test(password),
+  };
+
+  return {
+    ...checks,
+    hasNumberOrSpecial: checks.hasNumber || checks.hasSpecial,
+    isValid:
+      checks.minLength &&
+      checks.hasLower &&
+      checks.hasUpper &&
+      (checks.hasNumber || checks.hasSpecial),
+  };
+};
+
 router.post("/register", async (req, res) => {
   try {
     const { email, username, fullName, password } = req.body;
@@ -223,10 +243,14 @@ router.post("/change-password", async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    if (newPassword.length < 8) {
+    const passwordPolicy = validatePasswordPolicy(newPassword);
+    if (!passwordPolicy.isValid) {
       return res
         .status(400)
-        .json({ message: "New password must be at least 8 characters" });
+        .json({
+          message:
+            "New password must be at least 8 characters and include lowercase, uppercase, and at least one number or special character",
+        });
     }
 
     const user = await User.findOne({ email });
@@ -552,10 +576,12 @@ router.post("/reset-password/confirm", async (req, res) => {
     }
 
     // Password validation
-    if (newPassword.length < 8) {
+    const passwordPolicy = validatePasswordPolicy(newPassword);
+    if (!passwordPolicy.isValid) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 8 characters long",
+        message:
+          "New password must be at least 8 characters and include lowercase, uppercase, and at least one number or special character",
       });
     }
 

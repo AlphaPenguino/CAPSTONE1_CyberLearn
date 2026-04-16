@@ -18,15 +18,60 @@ import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../constants/custom-colors.js";
 import { API_URL } from "../../constants/api.js";
 
+const evaluatePassword = (password = "") => {
+  const checks = {
+    minLength: password.length >= 8,
+    hasLower: /[a-z]/.test(password),
+    hasUpper: /[A-Z]/.test(password),
+    hasNumber: /\d/.test(password),
+    hasSpecial: /[^A-Za-z0-9]/.test(password),
+  };
+
+  const hasNumberOrSpecial = checks.hasNumber || checks.hasSpecial;
+
+  let score = 0;
+  if (checks.minLength) score += 1;
+  if (checks.hasLower) score += 1;
+  if (checks.hasUpper) score += 1;
+  if (checks.hasNumber) score += 1;
+  if (checks.hasSpecial) score += 1;
+  if (password.length >= 12) score += 1;
+
+  let level = "Too weak";
+  let color = COLORS.error;
+
+  if (score >= 6) {
+    level = "Very strong";
+    color = COLORS.success;
+  } else if (score >= 4) {
+    level = "Strong";
+    color = COLORS.primary;
+  } else if (score >= 3) {
+    level = "Weak";
+    color = COLORS.warning;
+  }
+
+  return {
+    checks,
+    hasNumberOrSpecial,
+    level,
+    color,
+    isPolicySatisfied:
+      checks.minLength && checks.hasLower && checks.hasUpper && hasNumberOrSpecial,
+  };
+};
+
 export default function ResetPassword() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [hasTouchedNewPassword, setHasTouchedNewPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [tokenValid, setTokenValid] = useState(true);
   const [tokenError, setTokenError] = useState("");
+  const passwordEvaluation = evaluatePassword(newPassword);
 
   const router = useRouter();
   const { token } = useLocalSearchParams();
@@ -56,11 +101,12 @@ export default function ResetPassword() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      const msg = "Password must be at least 8 characters long.";
+    if (!passwordEvaluation.isPolicySatisfied) {
+      const msg =
+        "Password requirements not satisfied: minimum 8 characters, at least one lowercase letter, at least one uppercase letter, and at least one number or special character.";
       Platform.OS === "web"
         ? alert(msg)
-        : Alert.alert("Password Too Short", msg);
+        : Alert.alert("Weak Password", msg);
       return;
     }
 
@@ -151,7 +197,7 @@ export default function ResetPassword() {
                   </Text>
                   <Text style={styles.successText}>{tokenError}</Text>
                   <TouchableOpacity
-                    style={[styles.button, { marginTop: 16 }]}
+                    style={[styles.button, styles.authActionButton]}
                     onPress={() => router.replace("/forgot-password")}
                   >
                     <Text style={styles.buttonText}>Request New Reset Link</Text>
@@ -159,15 +205,8 @@ export default function ResetPassword() {
                   <TouchableOpacity
                     style={[
                       styles.button,
-                      {
-                        marginTop: 10,
-                        backgroundColor: "transparent",
-                        borderWidth: 1,
-                        borderColor: COLORS.primary,
-                        flexDirection: "row",
-                        justifyContent: "center",
-                        alignItems: "center",
-                      },
+                      styles.authActionButton,
+                      styles.authOutlineButton,
                     ]}
                     onPress={() => router.replace("/")}
                   >
@@ -175,9 +214,9 @@ export default function ResetPassword() {
                       name="arrow-back-outline"
                       size={18}
                       color={COLORS.primary}
-                      style={{ marginRight: 6 }}
+                      style={styles.authActionIcon}
                     />
-                    <Text style={[styles.buttonText, { color: COLORS.primary }]}>
+                    <Text style={[styles.buttonText, styles.authOutlineButtonText]}>
                       Return to Login
                     </Text>
                   </TouchableOpacity>
@@ -217,8 +256,7 @@ export default function ResetPassword() {
               {!resetSuccess ? (
                 <>
                   <Text style={styles.instructionText}>
-                    Enter your new password below. Make sure it&apos;s at least
-                    8 characters.
+                    Enter your new password below and meet the required password rules.
                   </Text>
 
                   {/* New Password */}
@@ -236,6 +274,7 @@ export default function ResetPassword() {
                         placeholderTextColor={COLORS.primary}
                         value={newPassword}
                         onChangeText={setNewPassword}
+                        onFocus={() => setHasTouchedNewPassword(true)}
                         secureTextEntry={!showPassword}
                         autoCapitalize="none"
                         autoCorrect={false}
@@ -253,6 +292,81 @@ export default function ResetPassword() {
                       </TouchableOpacity>
                     </View>
                   </View>
+
+                  {hasTouchedNewPassword && newPassword.length > 0 && (
+                    <View style={{ marginTop: 2, marginBottom: 8 }}>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: COLORS.textSecondary }}>
+                        Password Strength
+                      </Text>
+                      <Text
+                        style={{
+                          marginTop: 3,
+                          marginBottom: 6,
+                          fontSize: 13,
+                          fontWeight: "700",
+                          color: passwordEvaluation.color,
+                        }}
+                      >
+                        {passwordEvaluation.level}
+                      </Text>
+
+                      <View style={{ gap: 4 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons
+                            name={passwordEvaluation.checks.minLength ? "checkmark-circle" : "close-circle"}
+                            size={14}
+                            color={passwordEvaluation.checks.minLength ? COLORS.success : COLORS.error}
+                          />
+                          <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                            At least 8 characters
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons
+                            name={passwordEvaluation.checks.hasLower ? "checkmark-circle" : "close-circle"}
+                            size={14}
+                            color={passwordEvaluation.checks.hasLower ? COLORS.success : COLORS.error}
+                          />
+                          <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                            At least one lowercase letter
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons
+                            name={passwordEvaluation.checks.hasUpper ? "checkmark-circle" : "close-circle"}
+                            size={14}
+                            color={passwordEvaluation.checks.hasUpper ? COLORS.success : COLORS.error}
+                          />
+                          <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                            At least one uppercase letter
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons
+                            name={passwordEvaluation.checks.hasNumber ? "checkmark-circle" : "close-circle"}
+                            size={14}
+                            color={passwordEvaluation.checks.hasNumber ? COLORS.success : COLORS.error}
+                          />
+                          <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                            At least one number
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons
+                            name={passwordEvaluation.checks.hasSpecial ? "checkmark-circle" : "close-circle"}
+                            size={14}
+                            color={passwordEvaluation.checks.hasSpecial ? COLORS.success : COLORS.error}
+                          />
+                          <Text style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                            At least one special character
+                          </Text>
+                        </View>
+                        <Text style={{ marginTop: 2, fontSize: 11, color: COLORS.textSecondary, opacity: 0.9 }}>
+                          Requirement: include at least one number OR one special character.
+                        </Text>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Confirm Password */}
                   <View style={styles.inputGroup}>
@@ -338,7 +452,7 @@ export default function ResetPassword() {
                     new password.
                   </Text>
                   <TouchableOpacity
-                    style={[styles.button, { marginTop: 16 }]}
+                    style={[styles.button, styles.authActionButton]}
                     onPress={() => router.replace("/")}
                   >
                     <Text style={styles.buttonText}>Go to Login</Text>

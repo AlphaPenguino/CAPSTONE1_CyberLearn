@@ -128,6 +128,29 @@ container: {
     color: COLORS.white,
     fontSize: 16,
     fontWeight: "600",
+    textAlign: "center",
+  },
+  authActionButton: {
+    width: "100%",
+    minHeight: 52,
+    height: "auto",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 12,
+  },
+  authOutlineButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  authOutlineButtonText: {
+    color: COLORS.primary,
+  },
+  authActionIcon: {
+    marginRight: 8,
   },
   footer: {
     flexDirection: "row",

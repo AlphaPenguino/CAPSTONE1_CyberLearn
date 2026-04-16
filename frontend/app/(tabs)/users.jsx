@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Switch,
 } from "react-native";
 import React, { useState, useEffect, useRef } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -71,6 +72,7 @@ export default function UsersScreen({ hideHeader = false }) {
     password: "",
     role: "student", // Default role
   });
+  const [sendAccountNotification, setSendAccountNotification] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [imageErrors, setImageErrors] = useState({});
   const [roleFilter, setRoleFilter] = useState("all"); // all | student | instructor | admin
@@ -323,25 +325,34 @@ export default function UsersScreen({ hideHeader = false }) {
   // Add new user
   const handleAddUser = async () => {
     // Validate input
-    if (
-      !newUser.username ||
-      !newUser.fullName ||
-      !newUser.email ||
-      !newUser.password
-    ) {
+    if (!newUser.username || !newUser.fullName || !newUser.email) {
       Alert.alert("Validation Error", "Please fill all required fields");
+      return;
+    }
+
+    if (!sendAccountNotification && !newUser.password) {
+      Alert.alert("Validation Error", "Please provide a password");
       return;
     }
 
     try {
       setLoading(true);
+      const payload = {
+        ...newUser,
+        sendAccountNotification,
+      };
+
+      if (sendAccountNotification) {
+        payload.password = "";
+      }
+
       const response = await fetch(`${API_URL}/users`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(newUser),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -357,11 +368,13 @@ export default function UsersScreen({ hideHeader = false }) {
         password: "",
         role: "student",
       });
+      setSendAccountNotification(false);
       setModalVisible(false);
 
       // Refresh user list
       fetchUsers(1); // ensure new user appears at top
-      Alert.alert("Success", "User created successfully");
+      const data = await response.json();
+      Alert.alert("Success", data.message || "User created successfully");
     } catch (err) {
       showAlert("Error", err.message);
     } finally {
@@ -1181,13 +1194,21 @@ export default function UsersScreen({ hideHeader = false }) {
             animationType="slide"
             transparent={true}
             visible={modalVisible}
-            onRequestClose={() => setModalVisible(false)}
+            onRequestClose={() => {
+              setModalVisible(false);
+              setSendAccountNotification(false);
+            }}
           >
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Add New User</Text>
-                  <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setModalVisible(false);
+                      setSendAccountNotification(false);
+                    }}
+                  >
                     <MaterialCommunityIcons
                       name="close"
                       size={24}
@@ -1224,16 +1245,33 @@ export default function UsersScreen({ hideHeader = false }) {
                     setNewUser({ ...newUser, username: text })
                   }
                 />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  placeholderTextColor={colors.textSecondary}
-                  secureTextEntry
-                  value={newUser.password}
-                  onChangeText={(text) =>
-                    setNewUser({ ...newUser, password: text })
-                  }
-                />
+                <View style={styles.notificationToggleRow}>
+                  <View style={styles.notificationToggleTextWrap}>
+                    <Text style={styles.notificationToggleTitle}>
+                      Send notification to email.
+                    </Text>
+                    <Text style={styles.notificationToggleHint}>
+                      When enabled, CyberLearn sends credentials to the user email.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={sendAccountNotification}
+                    onValueChange={setSendAccountNotification}
+                  />
+                </View>
+
+                {!sendAccountNotification && (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    placeholderTextColor={colors.textSecondary}
+                    secureTextEntry
+                    value={newUser.password}
+                    onChangeText={(text) =>
+                      setNewUser({ ...newUser, password: text })
+                    }
+                  />
+                )}
                 <Text style={styles.roleLabel}>Role:</Text>
                 <View style={styles.roleContainer}>
                   {["student", "instructor", "admin"].map((role) => (
@@ -2972,6 +3010,35 @@ const createStyles = (colors) => {
     },
     roleOptionText: { color: colors.text, marginLeft: 6, fontWeight: "500" },
     roleOptionTextSelected: { color: "#FFFFFF", fontWeight: "bold" },
+    notificationToggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      marginBottom: 14,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    notificationToggleTextWrap: {
+      flex: 1,
+      paddingRight: 6,
+    },
+    notificationToggleTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "700",
+      marginBottom: 2,
+    },
+    notificationToggleHint: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "600",
+    },
     submitButton: {
       backgroundColor: colors.primary,
       paddingVertical: 14,
