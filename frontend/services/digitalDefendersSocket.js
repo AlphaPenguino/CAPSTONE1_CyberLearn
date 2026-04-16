@@ -5,6 +5,7 @@ class DigitalDefendersSocketService {
   constructor() {
     this.socket = null;
     this.callbacks = new Map();
+    this.currentRoomCode = null;
   }
 
   connect() {
@@ -210,6 +211,7 @@ class DigitalDefendersSocketService {
       "with player:",
       playerName
     );
+    this.currentRoomCode = roomId;
     this.socket.emit("join-room", { roomCode: roomId, playerName });
   }
 
@@ -286,6 +288,15 @@ class DigitalDefendersSocketService {
     }
     console.log("Leaving Digital Defenders room:", roomId);
     this.socket.emit("leave-room", { roomCode: roomId });
+    this.currentRoomCode = null;
+  }
+
+  setCurrentRoomCode(roomCode) {
+    this.currentRoomCode = roomCode || null;
+  }
+
+  getCurrentRoomCode() {
+    return this.currentRoomCode;
   }
 
   // Event handling
@@ -324,6 +335,7 @@ class DigitalDefendersSocketService {
       this.socket.disconnect();
       this.socket = null;
     }
+    this.currentRoomCode = null;
     this.callbacks.clear();
   }
 

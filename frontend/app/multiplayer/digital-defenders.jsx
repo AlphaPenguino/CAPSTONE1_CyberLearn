@@ -18,6 +18,7 @@ import {
 // import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -242,7 +243,9 @@ const SAMPLE_DD_QUESTIONS = [
 
 function DigitalDefenders() {
   const router = useRouter();
+  const navigation = useNavigation();
   const isMountedRef = useRef(true);
+  const isQuittingRef = useRef(false);
   const { user, token } = useAuthStore();
   const { settings } = useSettings();
   const { showNotification } = useNotifications();
@@ -1564,6 +1567,80 @@ function DigitalDefenders() {
     setIsCreator(false);
     setGameState("lobby");
   };
+
+  useEffect(() => {
+    digitalDefendersSocket.setCurrentRoomCode(roomData?.id || null);
+  }, [roomData?.id]);
+
+  const performQuitAndDisconnect = useCallback(
+    (onComplete) => {
+      if (isQuittingRef.current) return;
+      isQuittingRef.current = true;
+
+      try {
+        if (roomData?.id && digitalDefendersSocket.isConnected()) {
+          digitalDefendersSocket.leaveRoom(roomData.id);
+        }
+      } catch (error) {
+        console.warn("Failed to notify room leave during quit:", error);
+      }
+
+      try {
+        digitalDefendersSocket.disconnect();
+      } catch (error) {
+        console.warn("Failed to disconnect socket during quit:", error);
+      }
+
+      setRoomData(null);
+      setRoomId("");
+      setPlayerId(null);
+      setIsCreator(false);
+      setIsConnected(false);
+      setGameState("lobby");
+
+      if (typeof onComplete === "function") {
+        onComplete();
+      }
+
+      setTimeout(() => {
+        isQuittingRef.current = false;
+      }, 300);
+    },
+    [roomData?.id]
+  );
+
+  const requestQuitConfirmation = useCallback(
+    (onConfirm) => {
+      showAlert("Quit Match", "Are you sure you want to quit?", [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes",
+          style: "destructive",
+          onPress: () => performQuitAndDisconnect(onConfirm),
+        },
+      ]);
+    },
+    [performQuitAndDisconnect]
+  );
+
+  useEffect(() => {
+    if (!navigation?.addListener) {
+      return undefined;
+    }
+
+    const unsubscribe = navigation.addListener("beforeRemove", (event) => {
+      if (isQuittingRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      requestQuitConfirmation(() => {
+        navigation.dispatch(event.data.action);
+      });
+    });
+
+    return unsubscribe;
+  }, [navigation, requestQuitConfirmation]);
 
   const selectTurnPosition = (position) => {
     if (!roomData?.id || mySelectedPosition) {
@@ -3608,7 +3685,9 @@ function DigitalDefenders() {
           <View style={styles.titleContainer}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.push("/(tabs)/game")}
+              onPress={() =>
+                requestQuitConfirmation(() => router.push("/(tabs)/game"))
+              }
             >
               <MaterialCommunityIcons
                 name="arrow-left"
