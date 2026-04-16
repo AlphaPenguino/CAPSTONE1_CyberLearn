@@ -1805,18 +1805,6 @@ export default function UsersScreen({ hideHeader = false }) {
                                 {selectedProfileData.student.cyberQuestGamesPlayed}
                               </Text>
                             </View>
-                            <View style={styles.profileStatChip}>
-                              <Text style={styles.profileStatLabel}>Unlocked</Text>
-                              <Text style={styles.profileStatValue}>
-                                {selectedProfileData.student.progress.unlockedModules}
-                              </Text>
-                            </View>
-                            <View style={styles.profileStatChip}>
-                              <Text style={styles.profileStatLabel}>Completed</Text>
-                              <Text style={styles.profileStatValue}>
-                                {selectedProfileData.student.progress.completedModules}
-                              </Text>
-                            </View>
                           </View>
                         </View>
 

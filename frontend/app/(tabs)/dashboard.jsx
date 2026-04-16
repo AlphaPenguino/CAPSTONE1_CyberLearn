@@ -26,6 +26,7 @@ import UsersScreen from "./users";
 import LogsScreen from "./logs";
 
 const DAY_MS = 86400000;
+const DASHBOARD_GRADIENT_COLORS = ["#caf1c8", "#5fd2cd"];
 
 const startOfDay = (date) => {
   const next = new Date(date);
@@ -782,18 +783,23 @@ export default function Dashboard() {
   }
 
   return (
-    <LinearGradient colors={["#caf1c8", "#5fd2cd"]} style={styles.container}>
+    <LinearGradient colors={DASHBOARD_GRADIENT_COLORS} style={styles.container}>
       {/* Make status bar transparent so header sits flush at the very top */}
       <StatusBar style="dark" translucent backgroundColor="transparent" />
       {/* Exclude top edge so there is no extra space above the header */}
       <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: colors.surface }]}>
+        <LinearGradient
+          colors={DASHBOARD_GRADIENT_COLORS}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
           <View style={styles.headerContent}>
             <MaterialCommunityIcons
               name="view-dashboard"
               size={28}
-              color={colors.primary}
+              color={colors.text}
             />
             <View style={styles.headerText}>
               <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -812,13 +818,13 @@ export default function Dashboard() {
             <MaterialCommunityIcons
               name={refreshing ? "loading" : "refresh"}
               size={24}
-              color={colors.primary}
+              color={colors.text}
               style={{
                 transform: [{ rotateZ: refreshing ? "45deg" : "0deg" }],
               }}
             />
           </TouchableOpacity>
-        </View>
+        </LinearGradient>
 
         {/* Internal Admin Sections */}
         {isAdmin && (
@@ -1706,7 +1712,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.1)",
+    borderBottomColor: "rgba(15, 23, 42, 0.14)",
   },
   headerContent: {
     flexDirection: "row",

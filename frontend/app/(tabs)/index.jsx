@@ -1456,9 +1456,7 @@ const handleImportCyberQuestsWeb = () => {
       )}
       {/* Enhanced Header with Mobile-Optimized Layout */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          🗺️ Cyber Adventure Path
-        </Text>
+
 
         <View style={styles.headerControls}>
           {/* Subject Selector - Show if any subjects exist */}
@@ -2206,9 +2204,9 @@ const handleImportCyberQuestsWeb = () => {
           >
             {/* Section List Header */}
             <View style={styles.sectionListHeader}>
-              <Text style={styles.sectionListTitle}>🏫 Select a Subject</Text>
+              <Text style={styles.sectionListTitle}>Cyber Quest Map</Text>
               <Text style={styles.sectionListSubtitle}>
-                Choose a subject to view its cyber quests
+                Choose a subject to view its quest map
               </Text>
             </View>
 
@@ -2324,8 +2322,14 @@ const handleImportCyberQuestsWeb = () => {
               style={[
                 styles.sectionListActions,
                 {
-                  backgroundColor: colors.surface,
-                  borderTopColor: colors.border,
+                  backgroundColor:
+                    Platform.OS === "web"
+                      ? "rgba(255, 255, 255, 0.82)"
+                      : colors.surface,
+                  borderTopColor:
+                    Platform.OS === "web"
+                      ? "rgba(148, 163, 184, 0.28)"
+                      : colors.border,
                 },
               ]}
             >
@@ -2333,11 +2337,7 @@ const handleImportCyberQuestsWeb = () => {
                 style={[
                   styles.refreshSectionButton,
                   Platform.OS === "web"
-                    ? {
-                        backgroundColor: "transparent",
-                        borderWidth: 0,
-                        borderColor: "transparent",
-                      }
+                    ? styles.refreshSectionButtonWeb
                     : {
                         backgroundColor: colors.surface,
                         borderColor: colors.border,
@@ -2346,12 +2346,23 @@ const handleImportCyberQuestsWeb = () => {
                 ]}
                 onPress={fetchModules}
               >
-                <Ionicons name="refresh" size={20} color={colors.text} />
+                {Platform.OS !== "web" && (
+                  <Ionicons
+                    name="refresh"
+                    size={20}
+                    color={colors.text}
+                  />
+                )}
                 <Text
                   style={[
                     styles.refreshSectionButtonText,
-                    { color: colors.text },
+                    Platform.OS === "web" && styles.refreshSectionButtonTextWeb,
+                    {
+                      color: colors.text,
+                    },
                   ]}
+                  numberOfLines={1}
+                  ellipsizeMode="clip"
                 >
                   Refresh
                 </Text>
@@ -5060,7 +5071,14 @@ const styles = StyleSheet.create({
         maxWidth: 1240,
         width: "calc(100% - 20px)",
         marginHorizontal: "auto",
-        paddingHorizontal: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        justifyContent: "center",
+        alignItems: "center",
+        gap: 0,
+        borderTopWidth: 1,
+        borderRadius: 12,
+        boxShadow: "0 6px 16px rgba(15, 23, 42, 0.06)",
       },
       default: {},
     }),
@@ -5086,9 +5104,32 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  refreshSectionButtonWeb: {
+    flex: 0,
+    alignSelf: "center",
+    width: "auto",
+    minWidth: 132,
+    maxWidth: 260,
+    minHeight: 44,
+    backgroundColor: "rgba(248, 250, 252, 0.96)",
+    borderColor: "rgba(148, 163, 184, 0.58)",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    boxShadow: "0 3px 10px rgba(15, 23, 42, 0.1)",
+    cursor: "pointer",
+  },
   refreshSectionButtonText: {
     fontSize: 15,
     fontWeight: "700",
+  },
+  refreshSectionButtonTextWeb: {
+    fontSize: 14,
+    letterSpacing: 0.2,
+    lineHeight: 18,
+    textAlign: "center",
+    includeFontPadding: false,
   },
   createSectionButton: {
     flex: 1,
