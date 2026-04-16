@@ -3,7 +3,6 @@ import {
   View,
   ActivityIndicator,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import React, { useState, useEffect, useRef } from "react";
 import { Tabs, useRouter, usePathname } from "expo-router";
@@ -12,7 +11,6 @@ import CustomDrawer from "../../components/drawer/drawer";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import digitalDefendersSocket from "../../services/digitalDefendersSocket";
 
 export default function TabLayout() {
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -24,8 +22,6 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
-  const isInDigitalDefenders =
-    typeof pathname === "string" && pathname.includes("digital-defenders");
   const lastNonCreateRef = useRef(null); // stores last path before entering /create
 
   // Track the last route that is NOT the creator and is allowed for the user
@@ -63,47 +59,6 @@ export default function TabLayout() {
     }
     router.replace(isAdmin ? "/dashboard" : "/index");
   };
-
-  const quitDigitalDefendersAndNavigate = (targetPath) => {
-    const roomCode = digitalDefendersSocket.getCurrentRoomCode?.();
-
-    try {
-      if (roomCode && digitalDefendersSocket.isConnected?.()) {
-        digitalDefendersSocket.leaveRoom(roomCode);
-      }
-    } catch (error) {
-      console.warn("Failed to leave Digital Defenders room before tab switch:", error);
-    }
-
-    try {
-      digitalDefendersSocket.disconnect?.();
-    } catch (error) {
-      console.warn("Failed to disconnect Digital Defenders socket before tab switch:", error);
-    }
-
-    router.push(targetPath);
-  };
-
-  const getDigitalDefendersTabGuard = (targetPath) => ({
-    tabPress: (event) => {
-      if (!isInDigitalDefenders) return;
-
-      event.preventDefault();
-
-      const confirmQuit = () => quitDigitalDefendersAndNavigate(targetPath);
-
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        const confirmed = window.confirm("Are you sure you want to quit?");
-        if (confirmed) confirmQuit();
-        return;
-      }
-
-      Alert.alert("Quit Match", "Are you sure you want to quit?", [
-        { text: "No", style: "cancel" },
-        { text: "Yes", style: "destructive", onPress: confirmQuit },
-      ]);
-    },
-  });
 
   useEffect(() => {
     (async () => {
@@ -209,7 +164,6 @@ export default function TabLayout() {
       >
         <Tabs.Screen
           name="dashboard"
-          listeners={getDigitalDefendersTabGuard("/(tabs)/dashboard")}
           options={{
             title: "Admin Tools",
             tabBarIcon: ({ color, size, focused }) => (
@@ -226,7 +180,6 @@ export default function TabLayout() {
         />
         <Tabs.Screen
           name="index"
-          listeners={getDigitalDefendersTabGuard("/(tabs)/index")}
           options={{
             title: "Home",
             tabBarIcon: ({ color, size, focused }) => (
@@ -243,7 +196,6 @@ export default function TabLayout() {
 
         <Tabs.Screen
           name="game"
-          listeners={getDigitalDefendersTabGuard("/(tabs)/game")}
           options={{
             title: "Arcade",
             tabBarIcon: ({ color, size, focused }) => (
@@ -287,7 +239,6 @@ export default function TabLayout() {
 
         <Tabs.Screen
           name="instructor"
-          listeners={getDigitalDefendersTabGuard("/(tabs)/instructor")}
           options={{
             title: "Instructor Dashboard",
             tabBarIcon: ({ color, size, focused }) => (
@@ -391,7 +342,6 @@ export default function TabLayout() {
 
         <Tabs.Screen
           name="settings"
-          listeners={getDigitalDefendersTabGuard("/(tabs)/settings")}
           options={{
             title: "Settings",
             tabBarIcon: ({ color, size, focused }) => (
