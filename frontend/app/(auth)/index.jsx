@@ -2,6 +2,7 @@ import {
   Text,
   View,
   Image,
+  ImageBackground,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
@@ -71,20 +72,27 @@ export default function Login() {
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={styles.container}>
-        <View style={styles.brandContainer}>
-          <Text style={styles.brandTitle}>CyberLearn</Text>
-        </View>
-        <View style={styles.topIllustration}>
-          <Image
-            source={require("../../assets/images/robot4.png")}
-            style={styles.illustrationImage}
-            resizeMode="contain"
-          />
-        </View>
+      <ImageBackground
+        source={require("../../assets/images/loginbg.jpeg")}
+        style={styles.backgroundImage}
+        imageStyle={styles.backgroundImageAsset}
+        resizeMode="cover"
+      >
+        <View style={styles.backgroundOverlay}>
+          <View style={styles.container}>
+            <View style={styles.brandContainer}>
+              <Text style={styles.brandTitle}>CyberLearn</Text>
+            </View>
+            <View style={styles.topIllustration}>
+              <Image
+                source={require("../../assets/images/robot4.png")}
+                style={styles.illustrationImage}
+                resizeMode="contain"
+              />
+            </View>
 
-        <View style={styles.card}>
-          <View style={styles.formContainer}>
+            <View style={styles.card}>
+              <View style={styles.formContainer}>
             {/*Email is here*/}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
@@ -217,9 +225,11 @@ export default function Login() {
                 <Text style={styles.buttonText}>Login</Text>
               )}
             </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
-      </View>
+      </ImageBackground>
     </KeyboardAvoidingView>
   );
 }

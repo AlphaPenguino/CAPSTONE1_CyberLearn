@@ -6,9 +6,25 @@ const { width } = Dimensions.get("window");
 const maxWidth = 500; // Maximum width for larger screens
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    alignSelf: "center",
+  },
+  backgroundImageAsset: {
+    width: "100%",
+    height: "100%",
+    left: 0,
+    top: 0,
+  },
+  backgroundOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(5, 14, 24, 0.38)",
+  },
   container: {
     flexGrow: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: "transparent",
     padding: 24,
     justifyContent: "center",
     alignItems: "center", // Center contents horizontally
@@ -34,12 +50,12 @@ const styles = StyleSheet.create({
     }),
     fontWeight: "800",
     fontSize: 38,
-    color: COLORS.textDark,
+    color: "#F8FAFC",
     textAlign: "center",
     letterSpacing: 0.4,
-    textShadowColor: "rgba(15, 23, 42, 0.08)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowColor: "rgba(0, 0, 0, 0.45)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
   },
   illustrationImage: {
     width: width * 0.75, // 75% of screen width
@@ -49,7 +65,7 @@ const styles = StyleSheet.create({
     alignSelf: "center", // Ensure center alignment
   },
   card: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderRadius: 20,
     padding: 26,
     shadowColor: COLORS.black,
@@ -58,7 +74,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(203, 213, 225, 0.8)",
     marginTop: -24,
     width: "100%", // Take full width of container
     maxWidth: maxWidth, // But limit to maxWidth

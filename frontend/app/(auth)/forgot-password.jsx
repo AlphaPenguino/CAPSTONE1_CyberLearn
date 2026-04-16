@@ -2,6 +2,7 @@ import {
   Text,
   View,
   Image,
+  ImageBackground,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
@@ -122,21 +123,28 @@ export default function ForgotPassword() {
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <View style={styles.container}>
-          <View style={styles.brandContainer}>
-            <Text style={styles.brandTitle}>CyberLearn</Text>
-          </View>
-          <View style={styles.topIllustration}>
-            <Image
-              source={require("../../assets/images/robot3.png")}
-              style={styles.illustrationImage}
-              resizeMode="contain"
-            />
-          </View>
+      <ImageBackground
+        source={require("../../assets/images/loginbg.jpeg")}
+        style={styles.backgroundImage}
+        imageStyle={styles.backgroundImageAsset}
+        resizeMode="cover"
+      >
+        <View style={styles.backgroundOverlay}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+            <View style={styles.container}>
+              <View style={styles.brandContainer}>
+                <Text style={styles.brandTitle}>CyberLearn</Text>
+              </View>
+              <View style={styles.topIllustration}>
+                <Image
+                  source={require("../../assets/images/robot3.png")}
+                  style={styles.illustrationImage}
+                  resizeMode="contain"
+                />
+              </View>
 
-          <View style={styles.card}>
-            <View style={styles.formContainer}>
+              <View style={styles.card}>
+                <View style={styles.formContainer}>
               <View style={styles.headerContainer}>
                 <TouchableOpacity
                   style={styles.backButton}
@@ -252,10 +260,12 @@ export default function ForgotPassword() {
                   </TouchableOpacity>
                 </View>
               )}
+                </View>
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </View>
-      </ScrollView>
+      </ImageBackground>
     </KeyboardAvoidingView>
   );
 }

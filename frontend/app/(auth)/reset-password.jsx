@@ -2,6 +2,7 @@ import {
   Text,
   View,
   Image,
+  ImageBackground,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
@@ -178,13 +179,20 @@ export default function ResetPassword() {
   if (!tokenValid) {
     return (
       <KeyboardAvoidingView style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-          <View style={styles.container}>
-            <View style={styles.brandContainer}>
-              <Text style={styles.brandTitle}>CyberLearn</Text>
-            </View>
-            <View style={styles.card}>
-              <View style={styles.formContainer}>
+        <ImageBackground
+          source={require("../../assets/images/loginbg.jpeg")}
+          style={styles.backgroundImage}
+          imageStyle={styles.backgroundImageAsset}
+          resizeMode="cover"
+        >
+          <View style={styles.backgroundOverlay}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+              <View style={styles.container}>
+                <View style={styles.brandContainer}>
+                  <Text style={styles.brandTitle}>CyberLearn</Text>
+                </View>
+                <View style={styles.card}>
+                  <View style={styles.formContainer}>
                 <View style={styles.successContainer}>
                   <Ionicons
                     name="alert-circle-outline"
@@ -221,10 +229,12 @@ export default function ResetPassword() {
                     </Text>
                   </TouchableOpacity>
                 </View>
+                  </View>
+                </View>
               </View>
-            </View>
+            </ScrollView>
           </View>
-        </ScrollView>
+        </ImageBackground>
       </KeyboardAvoidingView>
     );
   }
@@ -234,21 +244,28 @@ export default function ResetPassword() {
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <View style={styles.container}>
-          <View style={styles.brandContainer}>
-            <Text style={styles.brandTitle}>CyberLearn</Text>
-          </View>
-          <View style={styles.topIllustration}>
-            <Image
-              source={require("../../assets/images/character1.png")}
-              style={styles.illustrationImage}
-              resizeMode="contain"
-            />
-          </View>
+      <ImageBackground
+        source={require("../../assets/images/loginbg.jpeg")}
+        style={styles.backgroundImage}
+        imageStyle={styles.backgroundImageAsset}
+        resizeMode="cover"
+      >
+        <View style={styles.backgroundOverlay}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+            <View style={styles.container}>
+              <View style={styles.brandContainer}>
+                <Text style={styles.brandTitle}>CyberLearn</Text>
+              </View>
+              <View style={styles.topIllustration}>
+                <Image
+                  source={require("../../assets/images/character1.png")}
+                  style={styles.illustrationImage}
+                  resizeMode="contain"
+                />
+              </View>
 
-          <View style={styles.card}>
-            <View style={styles.formContainer}>
+              <View style={styles.card}>
+                <View style={styles.formContainer}>
               <View style={styles.headerContainer}>
                 <Text style={styles.formTitle}>Reset Password</Text>
               </View>
@@ -459,10 +476,12 @@ export default function ResetPassword() {
                   </TouchableOpacity>
                 </View>
               )}
+                </View>
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </View>
-      </ScrollView>
+      </ImageBackground>
     </KeyboardAvoidingView>
   );
 }
