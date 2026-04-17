@@ -3118,26 +3118,90 @@ function DigitalDefenders() {
   };
 
   const renderVictory = () => (
-    <View style={styles.victoryContainer}>
-      <View style={styles.victoryContent}>
-        <MaterialCommunityIcons name="trophy" size={80} color="#f1c40f" />
-        <Text style={styles.victoryTitle}>Victory!</Text>
-        <Text style={styles.victoryText}>
-          Congratulations! You successfully defended your PC through all 10
-          waves!
-        </Text>
-        <View style={styles.victoryStats}>
-          <Text style={styles.victoryStatText}>Final HP: {pcHealth}/5</Text>
-          <Text style={styles.victoryStatText}>Waves Completed: 10/10</Text>
+    <View
+      style={[
+        styles.victoryContainer,
+        Platform.OS === "web" && styles.victoryContainerWeb,
+      ]}
+    >
+      <LinearGradient
+        colors={["rgba(255,255,255,0.98)", "rgba(246,253,250,0.96)"]}
+        style={[
+          styles.victoryContent,
+          Platform.OS === "web" && styles.victoryContentWeb,
+        ]}
+      >
+        <View
+          style={[
+            styles.victoryHeroBadge,
+            Platform.OS === "web" && styles.victoryHeroBadgeWeb,
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="trophy"
+            size={Platform.OS === "web" ? 52 : 42}
+            color="#f59e0b"
+          />
         </View>
+
+        <Text style={styles.victoryTitle}>Mission Complete</Text>
+        <Text
+          style={[
+            styles.victoryText,
+            Platform.OS === "web" && styles.victoryTextWeb,
+          ]}
+        >
+          You successfully defended your system through all 10 waves.
+        </Text>
+
+        <View
+          style={[
+            styles.victoryStatsRow,
+            Platform.OS === "web" && styles.victoryStatsRowWeb,
+          ]}
+        >
+          <View style={styles.victoryStatCard}>
+            <MaterialCommunityIcons
+              name="heart-pulse"
+              size={18}
+              color={PREMIUM_ACCENT_DARK}
+            />
+            <Text style={styles.victoryStatLabel}>Final HP</Text>
+            <Text style={styles.victoryStatValue}>{pcHealth}/5</Text>
+          </View>
+          <View style={styles.victoryStatCard}>
+            <MaterialCommunityIcons
+              name="shield-check"
+              size={18}
+              color={PREMIUM_ACCENT_DARK}
+            />
+            <Text style={styles.victoryStatLabel}>Waves Cleared</Text>
+            <Text style={styles.victoryStatValue}>10/10</Text>
+          </View>
+        </View>
+
+        <View style={styles.victoryTagRow}>
+          <View style={styles.victoryTagChip}>
+            <MaterialCommunityIcons
+              name="star-four-points"
+              size={14}
+              color="#f8fafc"
+            />
+            <Text style={styles.victoryTagText}>Perfect Defense Run</Text>
+          </View>
+        </View>
+
         <TouchableOpacity
-          style={styles.restartButton}
+          style={[
+            styles.victoryRestartButton,
+            Platform.OS === "web" && styles.victoryRestartButtonWeb,
+          ]}
           onPress={() => setGameState("lobby")}
         >
-          <MaterialCommunityIcons name="play" size={20} color="#3b82f6" />
-          <Text style={styles.restartButtonText}>Play Again</Text>
+          <MaterialCommunityIcons name="restart" size={19} color="#f8fafc" />
+          <Text style={styles.victoryRestartButtonText}>Play Again</Text>
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
     </View>
   );
 
@@ -3349,107 +3413,157 @@ function DigitalDefenders() {
   };
 
   // Edit form modal
-  const renderEditForm = () => (
-    <Modal visible={showEditForm} animationType="slide">
-      <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.editorHeader}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowEditForm(false)}
-            >
-              <MaterialCommunityIcons
-                name="close"
-                size={24}
-                color={PREMIUM_TEXT}
-              />
-            </TouchableOpacity>
-            <Text style={styles.editorTitle}>
-              {editingCard ? "Edit" : "Create"} Question
-            </Text>
+  const renderEditForm = () => {
+    const difficultyMeta = {
+      easy: { label: "Easy", icon: "leaf" },
+      medium: { label: "Medium", icon: "sword-cross" },
+      hard: { label: "Hard", icon: "shield-alert" },
+    };
+
+    const editFormBody = (
+      <SafeAreaView style={styles.editFormSafeArea}>
+        <View style={styles.editFormHeader}>
+          <TouchableOpacity
+            style={styles.editFormCloseButton}
+            onPress={() => setShowEditForm(false)}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={22} color={PREMIUM_TEXT} />
+          </TouchableOpacity>
+
+          <View style={styles.editFormTitleBlock}>
+            <Text style={styles.editFormTitle}>{editingCard ? "Edit Question" : "Create Question"}</Text>
+            <Text style={styles.editFormSubtitle}>Digital Defenders Question Builder</Text>
           </View>
 
-          <ScrollView style={styles.editorContent}>
-            <>
-              <Text style={styles.formLabel}>Question Text *</Text>
-              <TextInput
-                style={styles.formInput}
-                value={formData.text}
-                onChangeText={(text) =>
-                  setFormData((prev) => ({ ...prev, text }))
-                }
-                placeholder="Enter the question..."
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                multiline
-              />
+          <View style={styles.editFormHeaderBadge}>
+            <MaterialCommunityIcons name="shield-sword" size={18} color={PREMIUM_ACCENT_DARK} />
+          </View>
+        </View>
 
-              <Text style={styles.formLabel}>Correct Answer *</Text>
-              <TextInput
-                style={styles.formInput}
-                value={formData.correctAnswer}
-                onChangeText={(text) =>
-                  setFormData((prev) => ({ ...prev, correctAnswer: text }))
-                }
-                placeholder="Enter the correct answer..."
-                placeholderTextColor="rgba(255,255,255,0.5)"
-              />
+        <ScrollView
+          style={styles.editFormScroll}
+          contentContainerStyle={styles.editFormScrollContent}
+          showsVerticalScrollIndicator
+        >
+          <LinearGradient
+            colors={["rgba(255,255,255,0.98)", "rgba(246,253,250,0.96)"]}
+            style={styles.editFormHeroCard}
+          >
+            <Text style={styles.editFormHeroTitle}>Craft a polished challenge card</Text>
+            <Text style={styles.editFormHeroText}>
+              Keep wording clear and concise so players can answer quickly during turns.
+            </Text>
+          </LinearGradient>
 
-              <Text style={styles.formLabel}>Difficulty</Text>
-              <View style={styles.difficultyContainer}>
-                {["easy", "medium", "hard"].map((level) => (
+          <View style={styles.editFormFieldCard}>
+            <Text style={styles.editFormLabel}>Question Text *</Text>
+            <Text style={styles.editFormLabelHint}>This appears to players during battle.</Text>
+            <TextInput
+              style={[styles.editFormInput, styles.editFormInputMultiline]}
+              value={formData.text}
+              onChangeText={(text) => setFormData((prev) => ({ ...prev, text }))}
+              placeholder="Enter the question..."
+              placeholderTextColor="rgba(51, 65, 85, 0.6)"
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={styles.editFormFieldCard}>
+            <Text style={styles.editFormLabel}>Correct Answer *</Text>
+            <Text style={styles.editFormLabelHint}>Accepted answer that validates the card.</Text>
+            <TextInput
+              style={styles.editFormInput}
+              value={formData.correctAnswer}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, correctAnswer: text }))
+              }
+              placeholder="Enter the correct answer..."
+              placeholderTextColor="rgba(51, 65, 85, 0.6)"
+            />
+          </View>
+
+          <View style={styles.editFormFieldCard}>
+            <Text style={styles.editFormLabel}>Difficulty Tier</Text>
+            <View style={styles.editFormDifficultyRow}>
+              {["easy", "medium", "hard"].map((level) => {
+                const isSelected = formData.difficulty === level;
+                return (
                   <TouchableOpacity
                     key={level}
                     style={[
-                      styles.difficultyButton,
-                      formData.difficulty === level &&
-                        styles.difficultyButtonSelected,
+                      styles.editFormDifficultyButton,
+                      isSelected && styles.editFormDifficultyButtonSelected,
                     ]}
-                    onPress={() =>
-                      setFormData((prev) => ({ ...prev, difficulty: level }))
-                    }
+                    onPress={() => setFormData((prev) => ({ ...prev, difficulty: level }))}
                   >
+                    <MaterialCommunityIcons
+                      name={difficultyMeta[level].icon}
+                      size={16}
+                      color={isSelected ? "#f8fafc" : PREMIUM_ACCENT_DARK}
+                    />
                     <Text
                       style={[
-                        styles.difficultyButtonText,
-                        formData.difficulty === level &&
-                          styles.difficultyButtonTextSelected,
+                        styles.editFormDifficultyButtonText,
+                        isSelected && styles.editFormDifficultyButtonTextSelected,
                       ]}
                     >
-                      {level.charAt(0).toUpperCase() + level.slice(1)}
+                      {difficultyMeta[level].label}
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.formNote}>
-                💡 Creating this question will automatically create its
-                corresponding answer card. The wave is determined by the section
-                you&apos;re creating in.
-              </Text>
-            </>
-
-            <View style={styles.formButtonContainer}>
-              <TouchableOpacity
-                style={styles.formCancelButton}
-                onPress={() => setShowEditForm(false)}
-              >
-                <Text style={styles.formCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.formSubmitButton}
-                onPress={handleFormSubmit}
-              >
-                <Text style={styles.formSubmitButtonText}>
-                  {editingCard ? "Update" : "Create"}
-                </Text>
-              </TouchableOpacity>
+                );
+              })}
             </View>
-          </ScrollView>
-        </SafeAreaView>
-      </LinearGradient>
-    </Modal>
-  );
+          </View>
+
+          <View style={styles.editFormNoteCard}>
+            <MaterialCommunityIcons name="lightbulb-on-outline" size={18} color={PREMIUM_ACCENT_DARK} />
+            <Text style={styles.editFormNoteText}>
+              Saving this entry auto-generates the answer card pair. Wave assignment follows the active editor section.
+            </Text>
+          </View>
+
+          <View style={styles.editFormButtonContainer}>
+            <TouchableOpacity
+              style={styles.editFormCancelButton}
+              onPress={() => setShowEditForm(false)}
+            >
+              <Text style={styles.editFormCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.editFormSubmitButton} onPress={handleFormSubmit}>
+              <MaterialCommunityIcons name="content-save-outline" size={18} color="#f8fafc" />
+              <Text style={styles.editFormSubmitButtonText}>{editingCard ? "Update" : "Create"}</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+
+    return (
+      <Modal
+        visible={showEditForm}
+        animationType={Platform.OS === "web" ? "fade" : "slide"}
+        transparent={Platform.OS === "web"}
+        onRequestClose={() => setShowEditForm(false)}
+      >
+        {Platform.OS === "web" ? (
+          <View style={styles.editFormWebModalOverlay}>
+            <TouchableWithoutFeedback onPress={() => setShowEditForm(false)}>
+              <View style={styles.editFormWebModalBackdrop} />
+            </TouchableWithoutFeedback>
+            <LinearGradient colors={PREMIUM_GRADIENT} style={styles.editFormWebModalCard}>
+              {editFormBody}
+            </LinearGradient>
+          </View>
+        ) : (
+          <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
+            {editFormBody}
+          </LinearGradient>
+        )}
+      </Modal>
+    );
+  };
 
   // Cross-platform feedback modal
   const renderFeedbackModal = () => (
@@ -4617,41 +4731,152 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+  },
+  victoryContainerWeb: {
+    paddingHorizontal: 26,
+    paddingVertical: 24,
   },
   victoryContent: {
     alignItems: "center",
-    backgroundColor: PREMIUM_SURFACE,
-    borderRadius: 20,
-    padding: 40,
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 760 : 460,
+    borderRadius: 24,
+    paddingHorizontal: 22,
+    paddingVertical: 24,
     borderWidth: 1,
-    borderColor: "rgba(241, 196, 15, 0.3)",
-    width: Platform.OS === "web" ? 700 : "auto",
+    borderColor: "rgba(15, 111, 80, 0.24)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 6,
   },
-
-  // Also update the editor modal content for web
-
+  victoryContentWeb: {
+    maxWidth: 900,
+    paddingHorizontal: 34,
+    paddingVertical: 30,
+    borderRadius: 28,
+  },
+  victoryHeroBadge: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(245, 158, 11, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.34)",
+    marginBottom: 14,
+  },
+  victoryHeroBadgeWeb: {
+    width: 94,
+    height: 94,
+    borderRadius: 47,
+    marginBottom: 16,
+  },
   victoryTitle: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#f1c40f",
-    marginTop: 20,
-    marginBottom: 15,
+    fontSize: 30,
+    fontWeight: "900",
+    color: PREMIUM_TEXT,
+    marginBottom: 8,
+    textAlign: "center",
+    letterSpacing: 0.3,
   },
   victoryText: {
-    fontSize: 16,
+    fontSize: 15,
     color: PREMIUM_MUTED,
     textAlign: "center",
-    marginBottom: 20,
+    lineHeight: 22,
+    marginBottom: 14,
+    fontWeight: "600",
   },
-  victoryStats: {
+  victoryTextWeb: {
+    fontSize: 17,
+    lineHeight: 25,
+    maxWidth: 680,
+    marginBottom: 18,
+  },
+  victoryStatsRow: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 14,
+  },
+  victoryStatsRowWeb: {
+    maxWidth: 640,
+    gap: 14,
+    marginBottom: 18,
+  },
+  victoryStatCard: {
+    flex: 1,
     alignItems: "center",
-    marginBottom: 30,
+    backgroundColor: "rgba(15, 111, 80, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(15, 111, 80, 0.24)",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
   },
-  victoryStatText: {
-    fontSize: 14,
-    color: "#ffffff",
-    marginBottom: 5,
+  victoryStatLabel: {
+    marginTop: 6,
+    fontSize: 12,
+    color: PREMIUM_MUTED,
+    fontWeight: "700",
+  },
+  victoryStatValue: {
+    marginTop: 2,
+    fontSize: 20,
+    color: PREMIUM_TEXT,
+    fontWeight: "900",
+  },
+  victoryTagRow: {
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  victoryTagChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: PREMIUM_ACCENT,
+  },
+  victoryTagText: {
+    color: "#f8fafc",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  victoryRestartButton: {
+    backgroundColor: PREMIUM_ACCENT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+    paddingHorizontal: 22,
+    borderRadius: 14,
+    gap: 8,
+    minWidth: Platform.OS === "web" ? 220 : 180,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  victoryRestartButtonWeb: {
+    minWidth: 280,
+    paddingVertical: 14,
+    borderRadius: 16,
+  },
+  victoryRestartButtonText: {
+    color: "#f8fafc",
+    fontSize: 16,
+    fontWeight: "900",
   },
   restartButton: {
     backgroundColor: PREMIUM_ACCENT,
@@ -4865,6 +5090,235 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 10,
     fontWeight: "600",
+  },
+
+  editFormWebModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+  },
+  editFormWebModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(2, 6, 23, 0.6)",
+  },
+  editFormWebModalCard: {
+    width: "100%",
+    maxWidth: 820,
+    height: "90%",
+    maxHeight: "90%",
+    borderRadius: 22,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.16)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.25,
+    shadowRadius: 26,
+    elevation: 10,
+  },
+  editFormSafeArea: {
+    flex: 1,
+  },
+  editFormHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(15, 23, 42, 0.12)",
+    backgroundColor: "rgba(255,255,255,0.9)",
+  },
+  editFormCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
+  },
+  editFormHeaderBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15, 111, 80, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(15, 111, 80, 0.25)",
+  },
+  editFormTitleBlock: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 10,
+  },
+  editFormTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: PREMIUM_TEXT,
+    letterSpacing: 0.2,
+  },
+  editFormSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    color: PREMIUM_MUTED,
+    fontWeight: "600",
+  },
+  editFormScroll: {
+    flex: 1,
+  },
+  editFormScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 22,
+    gap: 12,
+  },
+  editFormHeroCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(15, 111, 80, 0.2)",
+    padding: 14,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  editFormHeroTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: PREMIUM_TEXT,
+    marginBottom: 4,
+  },
+  editFormHeroText: {
+    fontSize: 13,
+    color: PREMIUM_MUTED,
+    lineHeight: 19,
+    fontWeight: "600",
+  },
+  editFormFieldCard: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.1)",
+    padding: 14,
+  },
+  editFormLabel: {
+    fontSize: 15,
+    color: PREMIUM_TEXT,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  editFormLabelHint: {
+    fontSize: 12,
+    color: PREMIUM_MUTED,
+    marginBottom: 8,
+    fontWeight: "600",
+  },
+  editFormInput: {
+    backgroundColor: "rgba(248, 250, 252, 0.95)",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    color: PREMIUM_TEXT,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: "rgba(100, 116, 139, 0.32)",
+    minHeight: 48,
+    fontWeight: "600",
+  },
+  editFormInputMultiline: {
+    minHeight: 110,
+  },
+  editFormDifficultyRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 2,
+  },
+  editFormDifficultyButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(15, 111, 80, 0.3)",
+    backgroundColor: "rgba(15, 111, 80, 0.08)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  editFormDifficultyButtonSelected: {
+    backgroundColor: PREMIUM_ACCENT,
+    borderColor: PREMIUM_ACCENT,
+  },
+  editFormDifficultyButtonText: {
+    color: PREMIUM_ACCENT_DARK,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  editFormDifficultyButtonTextSelected: {
+    color: "#f8fafc",
+  },
+  editFormNoteCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "rgba(15, 111, 80, 0.1)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(15, 111, 80, 0.24)",
+    padding: 12,
+  },
+  editFormNoteText: {
+    flex: 1,
+    color: PREMIUM_ACCENT_DARK,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+  editFormButtonContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  editFormCancelButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.2)",
+    backgroundColor: "rgba(248, 250, 252, 0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editFormCancelButtonText: {
+    color: PREMIUM_TEXT,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  editFormSubmitButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 12,
+    backgroundColor: PREMIUM_ACCENT,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  editFormSubmitButtonText: {
+    color: "#f8fafc",
+    fontSize: 15,
+    fontWeight: "900",
   },
 
   // Form styles
