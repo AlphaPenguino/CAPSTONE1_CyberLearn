@@ -112,6 +112,8 @@ export default function Dashboard() {
   const { width: viewportWidth } = useWindowDimensions();
   const isAndroid = Platform.OS === "android";
   const isWeb = Platform.OS === "web";
+  const isWebMobilePortrait = isWeb && viewportWidth <= 768;
+  const isWebNarrow = isWeb && viewportWidth <= 480;
 
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -573,19 +575,39 @@ export default function Dashboard() {
       chartWidth - cardPadding,
       viewportWidth - viewportPadding
     );
-    return Math.max(isAndroid ? 156 : 190, maxSize);
-  }, [chartWidth, isAndroid, viewportWidth]);
+    const minSize = isAndroid ? 156 : isWebMobilePortrait ? 164 : 190;
+    return Math.max(minSize, maxSize);
+  }, [chartWidth, isAndroid, isWebMobilePortrait, viewportWidth]);
 
-  // Web needs extra canvas room; mobile keeps a square canvas for stable centering.
-  const pieChartWebInset = Platform.OS === "web" ? 100 : 0;
+  // Reserve more left canvas room on web portrait to prevent left-edge clipping.
+  const pieChartWebLeftInset = isWeb
+    ? isWebMobilePortrait
+      ? isWebNarrow
+        ? 28
+        : 22
+      : 100
+    : 0;
+  const pieChartWebRightInset = isWeb
+    ? isWebMobilePortrait
+      ? 100
+      : 100
+    : 0;
   const pieChartAndroidInset = isAndroid ? 100 : 0;
   const pieChartCanvasWidth = isWeb
-    ? pieChartSize + pieChartWebInset * 2
+    ? Math.min(chartWidth, pieChartSize + pieChartWebLeftInset + pieChartWebRightInset)
     : isAndroid
     ? pieChartSize + pieChartAndroidInset * 2
     : pieChartSize;
-  const pieChartPaddingLeft = isAndroid ? String(pieChartAndroidInset) : "0";
-  const pieChartCenter = isAndroid ? [8, 0] : [0, 0];
+  const pieChartPaddingLeft = isAndroid
+    ? String(pieChartAndroidInset)
+    : isWeb
+    ? String(pieChartWebLeftInset)
+    : "0";
+  const pieChartCenter = isAndroid
+    ? [8, 0]
+    : isWeb
+    ? [isWebMobilePortrait ? 10 : 2, 0]
+    : [2, 0];
   const showAbsolutePieLabels = !isAndroid && !isWeb;
 
   const chartConfig = {
@@ -1034,6 +1056,7 @@ export default function Dashboard() {
                   <View
                     style={[
                       styles.chartCard,
+                      isWebMobilePortrait && styles.chartCardWebCompact,
                       {
                         backgroundColor: colors.card,
                         alignItems: "center",
@@ -1041,7 +1064,12 @@ export default function Dashboard() {
                       },
                     ]}
                   >
-                    <View style={styles.pieChartContainer}>
+                    <View
+                      style={[
+                        styles.pieChartContainer,
+                        isWebMobilePortrait && styles.pieChartContainerWebCompact,
+                      ]}
+                    >
                       <PieChart
                         data={userRoleData}
                         width={pieChartCanvasWidth}
@@ -1686,6 +1714,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: Platform.OS === "android" ? 8 : 0,
   },
+  pieChartContainerWebCompact: {
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 6,
+      },
+      default: {},
+    }),
+  },
   container: {
     flex: 1,
     ...(Platform.OS === "web" && {
@@ -1881,6 +1917,15 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: Platform.OS === "web" ? 800 : "100%",
     alignSelf: "center",
+  },
+  chartCardWebCompact: {
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 10,
+        paddingVertical: 14,
+      },
+      default: {},
+    }),
   },
   loadingContainer: {
     flex: 1,

@@ -7,6 +7,7 @@ import {
   ScrollView,
   Platform,
   Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import React, { useState, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,19 +26,61 @@ const cardWidth = isWeb ? Math.min(420, width * 0.48) : width * 0.85;
 // Ensure the content is centered and has a max width on web/desktop
 const contentMaxWidth = isWeb ? Math.min(1400, width * 0.95) : "100%";
 
-const FeaturedGame = ({ onPress }) => {
+const FeaturedGame = ({ onPress, compactWeb, narrowWeb }) => {
+  const featuredContainerResponsive = compactWeb
+    ? {
+        height: narrowWeb ? 230 : 250,
+        marginHorizontal: narrowWeb ? 12 : 14,
+        borderRadius: 16,
+      }
+    : null;
+
+  const featuredContentResponsive = compactWeb
+    ? {
+        padding: narrowWeb ? 14 : 16,
+      }
+    : null;
+
+  const featuredTextResponsive = compactWeb
+    ? {
+        maxWidth: narrowWeb ? "70%" : "66%",
+        paddingRight: 6,
+      }
+    : null;
+
+  const featuredDescResponsive = compactWeb
+    ? {
+        maxWidth: "100%",
+        fontSize: narrowWeb ? 13 : 14,
+        lineHeight: narrowWeb ? 18 : 20,
+      }
+    : null;
+
+  const featuredImageResponsive = compactWeb
+    ? {
+        right: narrowWeb ? -8 : 2,
+        bottom: narrowWeb ? -14 : -12,
+        width: narrowWeb ? 120 : 145,
+        height: narrowWeb ? 140 : 165,
+      }
+    : null;
+
   return (
-    <View style={styles.featuredContainer}>
+    <View style={[styles.featuredContainer, featuredContainerResponsive]}>
       <TouchableOpacity
         onPress={onPress}
         style={styles.featuredTouchable}
         activeOpacity={0.9}
       >
-        <View style={styles.featuredContent}>
-          <View style={styles.featuredTextContainer}>
+        <View style={[styles.featuredContent, featuredContentResponsive]}>
+          <View style={[styles.featuredTextContainer, featuredTextResponsive]}>
             <Text style={styles.featuredLabel}>FEATURED</Text>
-            <Text style={styles.featuredTitle}>Quick Play</Text>
-            <Text style={styles.featuredDescription}>
+            <Text
+              style={[styles.featuredTitle, compactWeb && { fontSize: narrowWeb ? 20 : 22 }]}
+            >
+              Quick Play
+            </Text>
+            <Text style={[styles.featuredDescription, featuredDescResponsive]}>
               Solo practice with randomized questions from all levels!
             </Text>
             <View style={styles.featuredButton}>
@@ -51,8 +94,8 @@ const FeaturedGame = ({ onPress }) => {
             </View>
           </View>
 
-          {/* Adjusted image container position and size */}
-          <View style={styles.featuredImageContainer}>
+          {/* Keep robot visible while shrinking it for portrait web widths. */}
+          <View style={[styles.featuredImageContainer, featuredImageResponsive]}>
             <Image
               source={require("../../assets/images/robot1.png")}
               style={styles.featuredImage}
@@ -60,7 +103,6 @@ const FeaturedGame = ({ onPress }) => {
             />
           </View>
         </View>
-        {/* Removed fading gradient overlay to keep robot asset fully vivid */}
       </TouchableOpacity>
     </View>
   );
@@ -73,12 +115,18 @@ const MultiplayerCard = ({
   color,
   players,
   mode,
-  delay,
   onPress,
   colors,
+  compactWeb,
+  narrowWeb,
 }) => {
   return (
-    <View style={styles.multiplayerCardContainer}>
+    <View
+      style={[
+        styles.multiplayerCardContainer,
+        compactWeb && { width: "100%", marginBottom: 12 },
+      ]}
+    >
       <TouchableOpacity
         onPress={onPress}
         style={[styles.multiplayerCard, { backgroundColor: colors.card }]}
@@ -86,13 +134,22 @@ const MultiplayerCard = ({
       >
         <LinearGradient
           colors={[color + "20", color + "10", "transparent"]}
-          style={styles.multiplayerGradient}
+          style={[
+            styles.multiplayerGradient,
+            compactWeb && { padding: narrowWeb ? 12 : 14 },
+          ]}
         >
           <View style={styles.multiplayerContent}>
             <View
               style={[
                 styles.multiplayerIconContainer,
                 { backgroundColor: color },
+                compactWeb && {
+                  width: narrowWeb ? 42 : 46,
+                  height: narrowWeb ? 42 : 46,
+                  borderRadius: narrowWeb ? 21 : 23,
+                  marginRight: 10,
+                },
               ]}
             >
               <Image
@@ -103,19 +160,33 @@ const MultiplayerCard = ({
             </View>
 
             <View style={styles.multiplayerTextContainer}>
-              <Text style={[styles.multiplayerTitle, { color: colors.text }]}>
+              <Text
+                numberOfLines={2}
+                style={[
+                  styles.multiplayerTitle,
+                  { color: colors.text },
+                  compactWeb && { fontSize: narrowWeb ? 15 : 16, flexShrink: 1 },
+                ]}
+              >
                 {title}
               </Text>
               <Text
+                numberOfLines={2}
                 style={[
                   styles.multiplayerDescription,
                   { color: colors.textSecondary },
+                  compactWeb && { fontSize: narrowWeb ? 12 : 13, marginBottom: 6 },
                 ]}
               >
                 {description}
               </Text>
 
-              <View style={styles.multiplayerInfo}>
+              <View
+                style={[
+                  styles.multiplayerInfo,
+                  compactWeb && { flexWrap: "wrap", rowGap: 4, columnGap: 12 },
+                ]}
+              >
                 <View style={styles.infoItem}>
                   <MaterialCommunityIcons
                     name="account-group"
@@ -123,7 +194,11 @@ const MultiplayerCard = ({
                     color={colors.textSecondary}
                   />
                   <Text
-                    style={[styles.infoText, { color: colors.textSecondary }]}
+                    style={[
+                      styles.infoText,
+                      { color: colors.textSecondary },
+                      compactWeb && { fontSize: 11 },
+                    ]}
                   >
                     {players}
                   </Text>
@@ -135,7 +210,11 @@ const MultiplayerCard = ({
                     color={colors.textSecondary}
                   />
                   <Text
-                    style={[styles.infoText, { color: colors.textSecondary }]}
+                    style={[
+                      styles.infoText,
+                      { color: colors.textSecondary },
+                      compactWeb && { fontSize: 11 },
+                    ]}
                   >
                     {mode}
                   </Text>
@@ -143,10 +222,10 @@ const MultiplayerCard = ({
               </View>
             </View>
 
-            <View style={styles.multiplayerArrow}>
+            <View style={[styles.multiplayerArrow, compactWeb && { marginLeft: 6 }]}>
               <MaterialCommunityIcons
                 name="chevron-right"
-                size={24}
+                size={compactWeb ? 20 : 24}
                 color={color}
               />
             </View>
@@ -157,7 +236,7 @@ const MultiplayerCard = ({
   );
 };
 
-const LeaderboardCard = ({ title, onViewAll, colors }) => {
+const LeaderboardCard = ({ onViewAll, colors, compactWeb, narrowWeb }) => {
   return (
     <TouchableOpacity
       onPress={onViewAll}
@@ -166,32 +245,58 @@ const LeaderboardCard = ({ title, onViewAll, colors }) => {
     >
       <LinearGradient
         colors={["#FFD700" + "20", "#FFD700" + "10", "transparent"]}
-        style={styles.leaderboardGradient}
+        style={[
+          styles.leaderboardGradient,
+          compactWeb && { padding: narrowWeb ? 12 : 14 },
+        ]}
       >
         <View style={styles.leaderboardContent}>
           <View
             style={[
               styles.leaderboardIconContainer,
               { backgroundColor: "#FFD700" },
+              compactWeb && {
+                width: narrowWeb ? 42 : 46,
+                height: narrowWeb ? 42 : 46,
+                borderRadius: narrowWeb ? 21 : 23,
+                marginRight: 10,
+              },
             ]}
           >
-            <MaterialCommunityIcons name="trophy" size={28} color="#FFFFFF" />
+            <MaterialCommunityIcons
+              name="trophy"
+              size={compactWeb ? 22 : 28}
+              color="#FFFFFF"
+            />
           </View>
 
           <View style={styles.leaderboardTextContainer}>
-            <Text style={[styles.leaderboardTitle, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.leaderboardTitle,
+                { color: colors.text },
+                compactWeb && { fontSize: narrowWeb ? 16 : 17 },
+              ]}
+            >
               🏆 Leaderboards
             </Text>
             <Text
+              numberOfLines={2}
               style={[
                 styles.leaderboardDescription,
                 { color: colors.textSecondary },
+                compactWeb && { fontSize: narrowWeb ? 12 : 13, marginBottom: 6 },
               ]}
             >
               View top performers and rankings for each Subject in Cyberquest
             </Text>
 
-            <View style={styles.leaderboardInfo}>
+            <View
+              style={[
+                styles.leaderboardInfo,
+                compactWeb && { flexWrap: "wrap", rowGap: 4, columnGap: 12 },
+              ]}
+            >
               <View style={styles.infoItem}>
                 <MaterialCommunityIcons
                   name="account-group"
@@ -199,7 +304,11 @@ const LeaderboardCard = ({ title, onViewAll, colors }) => {
                   color={colors.textSecondary}
                 />
                 <Text
-                  style={[styles.infoText, { color: colors.textSecondary }]}
+                  style={[
+                    styles.infoText,
+                    { color: colors.textSecondary },
+                    compactWeb && { fontSize: 11 },
+                  ]}
                 >
                   Global Rankings
                 </Text>
@@ -211,7 +320,11 @@ const LeaderboardCard = ({ title, onViewAll, colors }) => {
                   color={colors.textSecondary}
                 />
                 <Text
-                  style={[styles.infoText, { color: colors.textSecondary }]}
+                  style={[
+                    styles.infoText,
+                    { color: colors.textSecondary },
+                    compactWeb && { fontSize: 11 },
+                  ]}
                 >
                   Live Scores
                 </Text>
@@ -219,10 +332,10 @@ const LeaderboardCard = ({ title, onViewAll, colors }) => {
             </View>
           </View>
 
-          <View style={styles.leaderboardArrow}>
+          <View style={[styles.leaderboardArrow, compactWeb && { marginLeft: 6 }]}>
             <MaterialCommunityIcons
               name="chevron-right"
-              size={24}
+              size={compactWeb ? 20 : 24}
               color="#FFD700"
             />
           </View>
@@ -234,11 +347,17 @@ const LeaderboardCard = ({ title, onViewAll, colors }) => {
 
 export default function GameArcade() {
   const router = useRouter();
+  const { width: viewportWidth } = useWindowDimensions();
   const { user, token } = useAuthStore();
   // Pull isDarkMode so we can adapt the points badge for proper contrast in light mode
   const { colors, isDarkMode } = useTheme();
   const highlightColor = isDarkMode ? colors.primary : colors.textPrimary;
   const screenGradient = isDarkMode ? ["#0f172a", "#111827"] : ["#caf1c8", "#5fd2cd"];
+  const compactWeb = isWeb && viewportWidth <= 900;
+  const narrowWeb = isWeb && viewportWidth <= 560;
+  const responsiveContentMaxWidth = isWeb
+    ? Math.min(1400, viewportWidth * (narrowWeb ? 0.98 : 0.95))
+    : "100%";
 
   // State for user's leaderboard points
   const [userLeaderboardData, setUserLeaderboardData] = useState(null);
@@ -335,12 +454,47 @@ export default function GameArcade() {
         <View style={styles.contentWrapper}>
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={isWeb ? styles.webScrollContent : null}
+            contentContainerStyle={
+              isWeb
+                ? [
+                    styles.webScrollContent,
+                    {
+                      maxWidth: responsiveContentMaxWidth,
+                      paddingBottom: compactWeb ? 20 : 0,
+                    },
+                  ]
+                : null
+            }
           >
-            <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <Text style={[styles.title, { color: highlightColor }]}>Arcade</Text>
-                <Text style={[styles.subtitle, { color: colors.textSecondary }]}> 
+            <View
+              style={[
+                styles.header,
+                compactWeb && {
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  paddingHorizontal: narrowWeb ? 12 : 14,
+                  paddingTop: 12,
+                  paddingBottom: 8,
+                },
+              ]}
+            >
+              <View style={[styles.headerLeft, compactWeb && { paddingRight: 0 }]}> 
+                <Text
+                  style={[
+                    styles.title,
+                    { color: highlightColor },
+                    compactWeb && { fontSize: narrowWeb ? 24 : 26 },
+                  ]}
+                >
+                  Arcade
+                </Text>
+                <Text
+                  style={[
+                    styles.subtitle,
+                    { color: colors.textSecondary },
+                    compactWeb && { fontSize: 12, lineHeight: 18, maxWidth: "100%" },
+                  ]}
+                >
                   Practice solo, challenge friends, and climb the leaderboard
                 </Text>
               </View>
@@ -348,6 +502,7 @@ export default function GameArcade() {
                 <View
                   style={[
                     styles.userPoints,
+                    compactWeb && { marginTop: 8, alignSelf: "flex-start" },
                     {
                       // In dark mode keep navy card background; in light mode use a subtle gold tint for contrast
                       backgroundColor: isDarkMode
@@ -379,13 +534,37 @@ export default function GameArcade() {
               )}
             </View>
 
-            <FeaturedGame onPress={() => handleGameSelect("quickplay")} />
+            <FeaturedGame
+              onPress={() => handleGameSelect("quickplay")}
+              compactWeb={compactWeb}
+              narrowWeb={narrowWeb}
+            />
 
-            <Text style={[styles.sectionTitle, { color: colors.text }]}> 
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text },
+                compactWeb && {
+                  fontSize: narrowWeb ? 20 : 22,
+                  marginHorizontal: narrowWeb ? 12 : 14,
+                  marginBottom: 12,
+                },
+              ]}
+            >
               Multiplayer Modes
             </Text>
 
-            <View style={styles.multiplayerGrid}>
+            <View
+              style={[
+                styles.multiplayerGrid,
+                compactWeb && {
+                  flexDirection: "column",
+                  flexWrap: "nowrap",
+                  gap: 0,
+                  paddingHorizontal: narrowWeb ? 12 : 14,
+                },
+              ]}
+            >
               {multiplayerModes.map((mode, index) => (
                 <MultiplayerCard
                   key={mode.id}
@@ -398,19 +577,38 @@ export default function GameArcade() {
                   delay={400 + index * 100}
                   onPress={() => handleGameSelect(mode.id)}
                   colors={colors}
+                  compactWeb={compactWeb}
+                  narrowWeb={narrowWeb}
                 />
               ))}
             </View>
 
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text },
+                compactWeb && {
+                  fontSize: narrowWeb ? 20 : 22,
+                  marginHorizontal: narrowWeb ? 12 : 14,
+                  marginBottom: 12,
+                },
+              ]}
+            >
               Leaderboards
             </Text>
 
-            <View style={styles.leaderboardsGrid}>
+            <View
+              style={[
+                styles.leaderboardsGrid,
+                compactWeb && { paddingHorizontal: narrowWeb ? 12 : 14 },
+              ]}
+            >
               <LeaderboardCard
                 title="🏆 Leaderboards"
                 onViewAll={() => router.push("/(tabs)/leaderboards")}
                 colors={colors}
+                compactWeb={compactWeb}
+                narrowWeb={narrowWeb}
               />
             </View>
 

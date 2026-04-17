@@ -13,7 +13,7 @@
       "bundleIdentifier": "com.cyberlearn.frontend"
     },
     "android": {
-      "versionCode": 19,
+      "versionCode": 20,
       "package": "com.cyberlearn.frontend",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo-branding/logo_only_transparent.png",

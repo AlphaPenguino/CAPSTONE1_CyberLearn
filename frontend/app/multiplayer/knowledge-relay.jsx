@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -28,6 +30,7 @@ import { useNotifications } from "@/contexts/NotificationContext";
 import { GameNotificationService } from "@/services/gameNotificationService";
 import COLORS from "@/constants/custom-colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useNavigationLock } from "@/contexts/NavigationLockContext";
 
 const WEB_UI_SCALE = 1.;
 const scaleWeb = (value) =>
@@ -125,6 +128,7 @@ const SAMPLE_KR_QUESTIONS = [
 export default function KnowledgeRelay() {
   const router = useRouter();
   const { isDarkMode } = useTheme();
+  const { setNavigationLocked } = useNavigationLock();
   const { user } = useAuthStore();
   const { settings } = useSettings();
   const { showNotification } = useNotifications();
@@ -362,6 +366,15 @@ export default function KnowledgeRelay() {
     gamePhase,
   ]);
 
+  // Lock bottom tab navigation only while the match is actively in progress.
+  useEffect(() => {
+    setNavigationLocked(gamePhase === PHASES.PLAYING);
+
+    return () => {
+      setNavigationLocked(false);
+    };
+  }, [gamePhase, setNavigationLocked]);
+
   // Load global questions on component mount for instructor mode
   useEffect(() => {
     const loadInitialGlobalQuestions = async () => {
@@ -490,6 +503,7 @@ export default function KnowledgeRelay() {
     } catch (e) {
       console.warn("Failed to emit leave-game:", e);
     } finally {
+      setNavigationLocked(false);
       // Reset local state back to setup
       setSelectedTeam(null);
       setRoomId("");

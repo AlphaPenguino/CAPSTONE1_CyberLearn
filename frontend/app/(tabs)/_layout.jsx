@@ -11,8 +11,17 @@ import CustomDrawer from "../../components/drawer/drawer";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NavigationLockProvider, useNavigationLock } from "../../contexts/NavigationLockContext";
 
 export default function TabLayout() {
+  return (
+    <NavigationLockProvider>
+      <TabLayoutContent />
+    </NavigationLockProvider>
+  );
+}
+
+function TabLayoutContent() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const { user, checkAuth } = useAuthStore();
@@ -22,7 +31,24 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
+  const { isNavigationLocked } = useNavigationLock();
   const lastNonCreateRef = useRef(null); // stores last path before entering /create
+  const isGameplayNavigationLocked =
+    isNavigationLocked &&
+    (pathname?.includes("quick-play") ||
+      pathname?.includes("knowledge-relay") ||
+      pathname?.includes("digital-defenders"));
+  const lockedTabItemStyle = isGameplayNavigationLocked
+    ? {
+        opacity: 0.45,
+        backgroundColor: "rgba(148, 163, 184, 0.24)",
+      }
+    : undefined;
+  const preventLockedTabPress = (event) => {
+    if (isGameplayNavigationLocked) {
+      event.preventDefault();
+    }
+  };
 
   // Track the last route that is NOT the creator and is allowed for the user
   useEffect(() => {
@@ -170,13 +196,15 @@ export default function TabLayout() {
               <Ionicons
                 name={focused ? "analytics" : "analytics-outline"}
                 size={size}
-                color={color}
+                color={isGameplayNavigationLocked ? "#9CA3AF" : color}
               />
             ),
             href: isAdmin ? undefined : null,
             // Remove blank header space on web
             headerShown: Platform.OS !== "web" && isAdmin,
+            tabBarItemStyle: lockedTabItemStyle,
           }}
+          listeners={{ tabPress: preventLockedTabPress }}
         />
         <Tabs.Screen
           name="index"
@@ -186,12 +214,14 @@ export default function TabLayout() {
               <Ionicons
                 name={focused ? "home" : "home-outline"}
                 size={size}
-                color={color}
+                color={isGameplayNavigationLocked ? "#9CA3AF" : color}
               />
             ),
             // Hide header on web to eliminate top gap
             headerShown: Platform.OS !== "web",
+            tabBarItemStyle: lockedTabItemStyle,
           }}
+          listeners={{ tabPress: preventLockedTabPress }}
         />
 
         <Tabs.Screen
@@ -202,11 +232,13 @@ export default function TabLayout() {
               <Ionicons
                 name={focused ? "game-controller" : "game-controller-outline"}
                 size={size}
-                color={color}
+                color={isGameplayNavigationLocked ? "#9CA3AF" : color}
               />
             ),
             headerShown: Platform.OS !== "web",
+            tabBarItemStyle: lockedTabItemStyle,
           }}
+          listeners={{ tabPress: preventLockedTabPress }}
         />
 
         {/** Hidden create route: still accessible via instructor dashboard (tools > content creator) but removed from tab bar */}
@@ -245,12 +277,14 @@ export default function TabLayout() {
               <Ionicons
                 name={focused ? "school" : "school-outline"}
                 size={size}
-                color={color}
+                color={isGameplayNavigationLocked ? "#9CA3AF" : color}
               />
             ),
             href: isInstructor || isAdmin ? undefined : null,
             headerShown: Platform.OS !== "web" && (isInstructor || isAdmin),
+            tabBarItemStyle: lockedTabItemStyle,
           }}
+          listeners={{ tabPress: preventLockedTabPress }}
         />
 
         <Tabs.Screen
@@ -348,11 +382,13 @@ export default function TabLayout() {
               <Ionicons
                 name={focused ? "settings" : "settings-outline"}
                 size={size}
-                color={color}
+                color={isGameplayNavigationLocked ? "#9CA3AF" : color}
               />
             ),
             headerShown: Platform.OS !== "web",
+            tabBarItemStyle: lockedTabItemStyle,
           }}
+          listeners={{ tabPress: preventLockedTabPress }}
         />
       </Tabs>
     </>

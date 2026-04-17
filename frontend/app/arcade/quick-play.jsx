@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -8,10 +8,13 @@ import {
   TextInput,
   Platform,
   Image,
+  Alert,
+  BackHandler,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "@/constants/custom-colors";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -19,6 +22,7 @@ import { useNotifications } from "@/contexts/NotificationContext";
 import { GameNotificationService } from "@/services/gameNotificationService";
 import AnswerFeedbackModal from "@/components/ui/AnswerFeedbackModal";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useNavigationLock } from "@/contexts/NavigationLockContext";
 
 // Local fallback data for different question types (used only if API not available)
 const FALLBACK_QUESTIONS = [
@@ -157,7 +161,10 @@ const webScale = (value) =>
 
 export default function QuickPlay() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const { width: viewportWidth } = useWindowDimensions();
   const { colors, isDarkMode } = useTheme();
+  const { setNavigationLocked } = useNavigationLock();
   const { settings } = useSettings();
   const { showNotification } = useNotifications();
   const [gameState, setGameState] = useState("menu"); // menu, playing, results
@@ -195,6 +202,60 @@ export default function QuickPlay() {
       ? "rgba(148, 163, 184, 0.24)"
       : "rgba(148, 163, 184, 0.34)",
   };
+  const allowNavigationRef = useRef(false);
+  const isExitPromptOpenRef = useRef(false);
+  const isCompactWeb = Platform.OS === "web" && viewportWidth <= 900;
+  const isNarrowWeb = Platform.OS === "web" && viewportWidth <= 560;
+
+  const confirmQuitGame = useCallback(
+    (onConfirm) => {
+      if (gameState !== "playing") {
+        onConfirm();
+        return;
+      }
+
+      if (isExitPromptOpenRef.current) {
+        return;
+      }
+
+      isExitPromptOpenRef.current = true;
+      const message = "Are you sure you want to quit the game?";
+
+      const handleNo = () => {
+        isExitPromptOpenRef.current = false;
+      };
+
+      const handleYes = () => {
+        isExitPromptOpenRef.current = false;
+        onConfirm();
+      };
+
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        if (window.confirm(message)) {
+          handleYes();
+        } else {
+          handleNo();
+        }
+        return;
+      }
+
+      Alert.alert("Quit Game", message, [
+        { text: "No", style: "cancel", onPress: handleNo },
+        { text: "Yes", style: "destructive", onPress: handleYes },
+      ], {
+        cancelable: true,
+        onDismiss: handleNo,
+      });
+    },
+    [gameState]
+  );
+
+  const handleBackPress = useCallback(() => {
+    confirmQuitGame(() => {
+      allowNavigationRef.current = true;
+      router.replace("/(tabs)/game");
+    });
+  }, [confirmQuitGame, router]);
 
   const startGame = async () => {
     setLoading(true);
@@ -272,6 +333,77 @@ export default function QuickPlay() {
     }
   }, [currentQuestionIndex, shuffledQuestions.length, endGame]);
 
+  useEffect(() => {
+    setNavigationLocked(gameState === "playing");
+    return () => setNavigationLocked(false);
+  }, [gameState, setNavigationLocked]);
+
+  useEffect(() => {
+    return navigation.addListener("beforeRemove", (event) => {
+      if (allowNavigationRef.current) {
+        allowNavigationRef.current = false;
+        return;
+      }
+
+      if (gameState !== "playing") {
+        return;
+      }
+
+      event.preventDefault();
+      confirmQuitGame(() => {
+        allowNavigationRef.current = true;
+        navigation.dispatch(event.data.action);
+      });
+    });
+  }, [navigation, gameState, confirmQuitGame]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") {
+      return undefined;
+    }
+
+    const backSubscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        if (gameState !== "playing") {
+          return false;
+        }
+
+        handleBackPress();
+        return true;
+      }
+    );
+
+    return () => backSubscription.remove();
+  }, [gameState, handleBackPress]);
+
+  useEffect(() => {
+    const navigators = [];
+    let currentNav = navigation;
+
+    while (currentNav) {
+      navigators.push(currentNav);
+      currentNav = currentNav.getParent?.();
+    }
+
+    const unsubscribers = navigators.map((navRef) =>
+      navRef.addListener("tabPress", (event) => {
+        if (gameState === "playing") {
+          // Lock tab navigation while an active quick play session is in progress.
+          event.preventDefault();
+        }
+      })
+    );
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => {
+        if (typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+      });
+    };
+  }, [navigation, gameState]);
+
   // Timer effect
   useEffect(() => {
     const handleTimeUp = () => {
@@ -317,7 +449,7 @@ export default function QuickPlay() {
       case "codeOrdering":
         const userOrder = answers.codeOrder || [];
         isCorrect = currentQuestion.codeBlocks.every(
-          (block, index) => userOrder[block.position] === block.id
+          (block) => userOrder[block.position] === block.id
         );
         break;
     }
@@ -363,44 +495,162 @@ export default function QuickPlay() {
   };
 
   const renderMenuScreen = () => (
-    <View style={styles.gameContent}>
-      <View style={[styles.gameInfo, premiumCard]}>
-        <View style={styles.textSection}>
-          <Text style={[styles.modeBadge, { color: trainingPrimaryText }]}>ARCADE TRAINING MODE</Text>
+    <View
+      style={[
+        styles.gameContent,
+        isCompactWeb && {
+          paddingHorizontal: isNarrowWeb ? 12 : 14,
+          width: "100%",
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.gameInfo,
+          premiumCard,
+          isCompactWeb && {
+            flexDirection: "column",
+            alignItems: "stretch",
+            padding: isNarrowWeb ? 12 : 14,
+            borderRadius: 14,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.textSection,
+            isCompactWeb && { width: "100%", paddingRight: 0, marginBottom: 10 },
+          ]}
+        >
+          <Text
+            style={[
+              styles.modeBadge,
+              { color: trainingPrimaryText },
+              isCompactWeb && {
+                fontSize: 10,
+                letterSpacing: 0.8,
+                marginBottom: 10,
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+              },
+            ]}
+          >
+            ARCADE TRAINING MODE
+          </Text>
           <Text
             style={[
               styles.description,
               { color: trainingSecondaryText },
+              isCompactWeb && {
+                fontSize: isNarrowWeb ? 14 : 15,
+                lineHeight: isNarrowWeb ? 20 : 22,
+                marginBottom: 16,
+              },
             ]}
           >
             Solo practice with randomized questions from all levels
           </Text>
-          <Text style={[styles.infoText, { color: trainingPrimaryText }]}> 
+          <Text
+            style={[
+              styles.infoText,
+              { color: trainingPrimaryText },
+              isCompactWeb && {
+                fontSize: 13,
+                lineHeight: 18,
+                marginBottom: 8,
+              },
+            ]}
+          >
             • Randomized questions from all available levels
           </Text>
-          <Text style={[styles.infoText, { color: trainingPrimaryText }]}> 
+          <Text
+            style={[
+              styles.infoText,
+              { color: trainingPrimaryText },
+              isCompactWeb && {
+                fontSize: 13,
+                lineHeight: 18,
+                marginBottom: 8,
+              },
+            ]}
+          >
             • Time-based challenges (30 seconds per question)
           </Text>
-          <Text style={[styles.infoText, { color: trainingPrimaryText }]}>• 3 lives system</Text>
-          <Text style={[styles.infoText, { color: trainingPrimaryText }]}>• Multiple question types</Text>
-          <Text style={[styles.infoText, { color: trainingPrimaryText }]}>• High score tracking</Text>
+          <Text
+            style={[
+              styles.infoText,
+              { color: trainingPrimaryText },
+              isCompactWeb && {
+                fontSize: 13,
+                lineHeight: 18,
+                marginBottom: 8,
+              },
+            ]}
+          >
+            • 3 lives system
+          </Text>
+          <Text
+            style={[
+              styles.infoText,
+              { color: trainingPrimaryText },
+              isCompactWeb && {
+                fontSize: 13,
+                lineHeight: 18,
+                marginBottom: 8,
+              },
+            ]}
+          >
+            • Multiple question types
+          </Text>
+          <Text
+            style={[
+              styles.infoText,
+              { color: trainingPrimaryText },
+              isCompactWeb && {
+                fontSize: 13,
+                lineHeight: 18,
+                marginBottom: 8,
+              },
+            ]}
+          >
+            • High score tracking
+          </Text>
         </View>
 
-        <View style={styles.imageSection}>
-          <View style={styles.imageContainer}>
+        <View
+          style={[
+            styles.imageSection,
+            isCompactWeb && { width: "100%", alignItems: "center", marginTop: 6 },
+          ]}
+        >
+          <View style={[styles.imageContainer, isCompactWeb && { marginBottom: 12 }]}>
             <Image
               source={require("../../assets/images/robot1.png")}
-              style={styles.menuImage}
+              style={[
+                styles.menuImage,
+                isCompactWeb && {
+                  width: isNarrowWeb ? 116 : 132,
+                  height: isNarrowWeb ? 116 : 132,
+                },
+              ]}
               resizeMode="contain"
             />
           </View>
 
           <TouchableOpacity
-            style={[styles.playButton, { backgroundColor: "#0f766e" }]}
+            style={[
+              styles.playButton,
+              { backgroundColor: "#0f766e" },
+              isCompactWeb && {
+                width: "100%",
+                paddingVertical: isNarrowWeb ? 12 : 13,
+                marginBottom: 6,
+              },
+            ]}
             onPress={startGame}
             disabled={loading}
           >
-            <Text style={styles.playButtonText}>
+            <Text style={[styles.playButtonText, isCompactWeb && { fontSize: 14 }]}>
               {loading ? "LOADING..." : "START GAME"}
             </Text>
           </TouchableOpacity>
@@ -421,20 +671,37 @@ export default function QuickPlay() {
     if (!currentQuestion) return null;
 
     return (
-      <ScrollView style={styles.gameContent}>
+      <ScrollView
+        style={[
+          styles.gameContent,
+          isCompactWeb && {
+            paddingHorizontal: isNarrowWeb ? 12 : 14,
+            width: "100%",
+          },
+        ]}
+      >
         {/* Game HUD */}
-        <View style={[styles.gameHUD, premiumCard]}>
-          <View style={styles.hudItem}>
+        <View
+          style={[
+            styles.gameHUD,
+            premiumCard,
+            isCompactWeb && {
+              padding: isNarrowWeb ? 10 : 12,
+              borderRadius: 12,
+            },
+          ]}
+        >
+          <View style={[styles.hudItem, isCompactWeb && { paddingHorizontal: 8, paddingVertical: 5 }]}>
             <Ionicons name="heart" size={iconSize(20)} color={COLORS.error} />
-            <Text style={[styles.hudText, { color: colors.text }]}>{lives}</Text>
+            <Text style={[styles.hudText, { color: colors.text }, isCompactWeb && { fontSize: 14 }]}>{lives}</Text>
           </View>
-          <View style={styles.hudItem}>
+          <View style={[styles.hudItem, isCompactWeb && { paddingHorizontal: 8, paddingVertical: 5 }]}>
             <Ionicons name="time" size={iconSize(20)} color={COLORS.primary} />
-            <Text style={[styles.hudText, { color: colors.text }]}>{timeLeft}s</Text>
+            <Text style={[styles.hudText, { color: colors.text }, isCompactWeb && { fontSize: 14 }]}>{timeLeft}s</Text>
           </View>
-          <View style={styles.hudItem}>
+          <View style={[styles.hudItem, isCompactWeb && { paddingHorizontal: 8, paddingVertical: 5 }]}>
             <Ionicons name="trophy" size={iconSize(20)} color={COLORS.primary} />
-            <Text style={[styles.hudText, { color: colors.text }]}>{score}</Text>
+            <Text style={[styles.hudText, { color: colors.text }, isCompactWeb && { fontSize: 14 }]}>{score}</Text>
           </View>
         </View>
 
@@ -460,8 +727,19 @@ export default function QuickPlay() {
         </View>
 
         {/* Question */}
-        <View style={[styles.questionContainer, premiumCard]}>
-          <View style={styles.questionHeader}>
+        <View
+          style={[
+            styles.questionContainer,
+            premiumCard,
+            isCompactWeb && { padding: isNarrowWeb ? 12 : 14, borderRadius: 12 },
+          ]}
+        >
+          <View
+            style={[
+              styles.questionHeader,
+              isCompactWeb && { flexWrap: "wrap", rowGap: 8, marginBottom: 10 },
+            ]}
+          >
             <Text style={[styles.questionType, { color: colors.textSecondary }]}> 
               {currentQuestion.type
                 .replace(/([A-Z])/g, " $1")
@@ -471,13 +749,32 @@ export default function QuickPlay() {
               {currentQuestion.difficulty.toUpperCase()}
             </Text>
           </View>
-          <Text style={[styles.questionText, { color: colors.text }]}>{currentQuestion.question}</Text>
+          <Text
+            style={[
+              styles.questionText,
+              { color: colors.text },
+              isCompactWeb && {
+                fontSize: isNarrowWeb ? 14 : 15,
+                lineHeight: isNarrowWeb ? 20 : 22,
+                marginBottom: 14,
+              },
+            ]}
+          >
+            {currentQuestion.question}
+          </Text>
 
           {renderQuestionContent(currentQuestion)}
         </View>
 
         {/* Submit Button */}
-        <TouchableOpacity style={[styles.submitButton, { backgroundColor: "#0f766e" }]} onPress={submitAnswer}>
+        <TouchableOpacity
+          style={[
+            styles.submitButton,
+            { backgroundColor: "#0f766e" },
+            isCompactWeb && { paddingVertical: 13, marginBottom: 20, marginTop: 6 },
+          ]}
+          onPress={submitAnswer}
+        >
           <Text style={styles.submitButtonText}>SUBMIT ANSWER</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -513,6 +810,7 @@ export default function QuickPlay() {
           <Text
             style={[
               styles.optionText,
+              isCompactWeb && { fontSize: 13, lineHeight: 18 },
               answers.selectedOption === index && styles.selectedOptionText,
             ]}
           >
@@ -628,11 +926,25 @@ export default function QuickPlay() {
   };
 
   const renderResultsScreen = () => (
-    <View style={styles.content}>
-      <View style={[styles.resultsContainer, premiumCard]}>
+    <View
+      style={[
+        styles.content,
+        isCompactWeb && {
+          paddingHorizontal: isNarrowWeb ? 12 : 14,
+          width: "100%",
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.resultsContainer,
+          premiumCard,
+          isCompactWeb && { paddingVertical: 24, paddingHorizontal: 14, borderRadius: 12 },
+        ]}
+      >
         <Ionicons name="trophy" size={iconSize(64)} color={COLORS.primary} />
-        <Text style={[styles.resultsTitle, { color: colors.text }]}>Game Complete!</Text>
-        <Text style={[styles.finalScore, { color: highlightColor }]}>Final Score: {score}</Text>
+        <Text style={[styles.resultsTitle, { color: colors.text }, isCompactWeb && { fontSize: isNarrowWeb ? 22 : 24 }]}>Game Complete!</Text>
+        <Text style={[styles.finalScore, { color: highlightColor }, isCompactWeb && { fontSize: isNarrowWeb ? 20 : 22 }]}>Final Score: {score}</Text>
         <Text style={[styles.resultsDetails, { color: colors.textSecondary }]}> 
           Questions Answered: {currentQuestionIndex + 1}
         </Text>
@@ -659,15 +971,31 @@ export default function QuickPlay() {
   return (
     <LinearGradient colors={screenGradient} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
+        <View
+          style={[
+            styles.header,
+            isCompactWeb && {
+              paddingHorizontal: isNarrowWeb ? 12 : 14,
+              paddingVertical: 10,
+            },
+          ]}
+        >
           <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.replace("/(tabs)/game")}
+            style={[styles.backButton, isCompactWeb && { marginRight: 10 }]}
+            onPress={handleBackPress}
           >
             <Ionicons name="arrow-back" size={iconSize(24)} color={highlightColor} />
           </TouchableOpacity>
           <View style={styles.headerTextWrap}>
-            <Text style={[styles.title, { color: highlightColor }]}>Quick Play</Text>
+            <Text
+              style={[
+                styles.title,
+                { color: highlightColor },
+                isCompactWeb && { fontSize: isNarrowWeb ? 20 : 22 },
+              ]}
+            >
+              Quick Play
+            </Text>
             <Text style={[styles.titleSubtitle, { color: colors.textSecondary }]}> 
               Solo training mode
             </Text>

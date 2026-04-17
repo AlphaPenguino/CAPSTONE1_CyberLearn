@@ -31,6 +31,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { GameNotificationService } from "@/services/gameNotificationService";
+import { useNavigationLock } from "@/contexts/NavigationLockContext";
 
 // Note: We do NOT early-return before hooks (would violate rules-of-hooks). We just track platform.
 const IS_UNSUPPORTED_PLATFORM = Platform.OS === "ios";
@@ -244,6 +245,7 @@ const SAMPLE_DD_QUESTIONS = [
 function DigitalDefenders() {
   const router = useRouter();
   const navigation = useNavigation();
+  const { setNavigationLocked } = useNavigationLock();
   const isMountedRef = useRef(true);
   const isQuittingRef = useRef(false);
   const { user, token } = useAuthStore();
@@ -294,6 +296,15 @@ function DigitalDefenders() {
 
   // Game state
   const [gameState, setGameState] = useState("lobby"); // lobby, waiting, turnOrder, playing, gameOver, victory
+      // Lock tab navigation only while a Digital Defenders match is actively running.
+      useEffect(() => {
+        setNavigationLocked(gameState === "playing");
+
+        return () => {
+          setNavigationLocked(false);
+        };
+      }, [gameState, setNavigationLocked]);
+
   const [currentWave, setCurrentWave] = useState(1);
   const [pcHealth, setPcHealth] = useState(5);
   const [countdown, setCountdown] = useState(30);
@@ -1566,6 +1577,7 @@ function DigitalDefenders() {
     setPlayerId(null);
     setIsCreator(false);
     setGameState("lobby");
+    setNavigationLocked(false);
   };
 
   useEffect(() => {
@@ -1597,6 +1609,7 @@ function DigitalDefenders() {
       setIsCreator(false);
       setIsConnected(false);
       setGameState("lobby");
+      setNavigationLocked(false);
 
       if (typeof onComplete === "function") {
         onComplete();
@@ -1606,7 +1619,7 @@ function DigitalDefenders() {
         isQuittingRef.current = false;
       }, 300);
     },
-    [roomData?.id]
+    [roomData?.id, setNavigationLocked]
   );
 
   const requestQuitConfirmation = useCallback(

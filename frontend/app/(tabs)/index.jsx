@@ -1290,8 +1290,12 @@ const handleImportCyberQuestsWeb = () => {
     !error &&
     modules.length === 0;
 
+  const shouldShowPlayerStatsToggle =
+    Platform.OS === "android" ||
+    (Platform.OS === "web" && viewportHeight >= viewportWidth && viewportWidth <= 768);
+
   const showPlayerStatsDetails =
-    Platform.OS !== "android" || isPlayerStatsExpanded;
+    !shouldShowPlayerStatsToggle || isPlayerStatsExpanded;
 
   const showPrivilegedNoSubjectsState =
     isInstructorOrAdmin &&
@@ -1313,6 +1317,11 @@ const handleImportCyberQuestsWeb = () => {
   const webMapStripWidth = Platform.OS === "web" ? Math.min(viewportWidth, 800) : viewportWidth;
   const webMapStripLeft = Platform.OS === "web" ? (viewportWidth - webMapStripWidth) / 2 : 0;
   const webMapBackgroundScale = Platform.OS === "web" ? 1.6 : 1;
+  const isWebPlatform = Platform.OS === "web";
+  const isWebPortrait = isWebPlatform && viewportHeight >= viewportWidth;
+  const isWebCompact = isWebPlatform && viewportWidth <= 900;
+  const isWebMobilePortrait = isWebPortrait && viewportWidth <= 768;
+  const isWebTight = isWebPlatform && viewportWidth <= 520;
 
   const handleOpenJoinSubject = useCallback(() => {
     if (Platform.OS === "web") {
@@ -1455,16 +1464,28 @@ const handleImportCyberQuestsWeb = () => {
         </>
       )}
       {/* Enhanced Header with Mobile-Optimized Layout */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          { borderBottomColor: colors.border },
+          isWebMobilePortrait && styles.headerCompactWeb,
+        ]}
+      >
 
 
-        <View style={styles.headerControls}>
+        <View
+          style={[
+            styles.headerControls,
+            isWebMobilePortrait && styles.headerControlsCompactWeb,
+          ]}
+        >
           {/* Subject Selector - Show if any subjects exist */}
           {userSubjects.length > 0 && (
             <TouchableOpacity
               style={[
                 styles.sectionSelector,
                 { backgroundColor: colors.card, borderColor: colors.border },
+                isWebMobilePortrait && styles.sectionSelectorCompactWeb,
               ]}
               onPress={() => setShowSubjectSelector(!showSubjectSelector)}
               activeOpacity={0.7}
@@ -1488,7 +1509,12 @@ const handleImportCyberQuestsWeb = () => {
             </TouchableOpacity>
           )}
 
-          <View style={styles.headerActions}>
+          <View
+            style={[
+              styles.headerActions,
+              isWebMobilePortrait && styles.headerActionsCompactWeb,
+            ]}
+          >
             {/* Background Selector Button - Only visible to instructors and admins */}
             
 
@@ -1501,6 +1527,7 @@ const handleImportCyberQuestsWeb = () => {
                   style={[
                     styles.backgroundSelector,
                     Platform.OS === "web" && styles.webQuestActionButton,
+                    isWebCompact && styles.webQuestActionButtonCompact,
                   ]}
                   onPress={handleExportCyberQuests}
                   disabled={exporting}
@@ -1510,7 +1537,7 @@ const handleImportCyberQuestsWeb = () => {
                     size={20}
                     color={colors.primary}
                   />
-                  {Platform.OS === "web" && (
+                  {Platform.OS === "web" && !isWebTight && (
                     <Text style={styles.webQuestActionText}>Export Quest</Text>
                   )}
                 </TouchableOpacity>
@@ -1519,6 +1546,7 @@ const handleImportCyberQuestsWeb = () => {
                   style={[
                     styles.backgroundSelector,
                     Platform.OS === "web" && styles.webQuestActionButton,
+                    isWebCompact && styles.webQuestActionButtonCompact,
                   ]}
                   onPress={handleImportCyberQuestsWeb}
                   disabled={importing}
@@ -1528,7 +1556,7 @@ const handleImportCyberQuestsWeb = () => {
                     size={20}
                     color={colors.primary}
                   />
-                  {Platform.OS === "web" && (
+                  {Platform.OS === "web" && !isWebTight && (
                     <Text style={styles.webQuestActionText}>Import Quest</Text>
                   )}
                 </TouchableOpacity>
@@ -1606,15 +1634,22 @@ const handleImportCyberQuestsWeb = () => {
               },
               Platform.OS !== "web" && styles.levelProgressContainerMobile, // Apply mobile-specific styling
               Platform.OS === "web" && styles.levelProgressContainerWeb, // Apply web-specific vertical styling
+              isWebMobilePortrait && styles.levelProgressContainerWebCompact,
             ]}
           >
             <View
               style={[
                 styles.levelProgressHeader,
                 Platform.OS === "web" && styles.levelProgressHeaderWeb,
+                isWebMobilePortrait && styles.levelProgressHeaderCompactWeb,
               ]}
             >
-              <View style={styles.levelProgressHeaderLeft}>
+              <View
+                style={[
+                  styles.levelProgressHeaderLeft,
+                  isWebMobilePortrait && styles.levelProgressHeaderLeftCompactWeb,
+                ]}
+              >
                 <MaterialCommunityIcons
                   name="crown"
                   size={Platform.OS === "web" ? 22 : 18}
@@ -1622,9 +1657,12 @@ const handleImportCyberQuestsWeb = () => {
                 />
                 <Text style={[styles.levelProgressTitle, { color: "#fff" }]}>Player Stats</Text>
               </View>
-              {Platform.OS === "android" && (
+              {shouldShowPlayerStatsToggle && (
                 <TouchableOpacity
-                  style={styles.playerStatsToggleButton}
+                  style={[
+                    styles.playerStatsToggleButton,
+                    isWebMobilePortrait && styles.playerStatsToggleButtonCompactWeb,
+                  ]}
                   onPress={() => setIsPlayerStatsExpanded((prev) => !prev)}
                   activeOpacity={0.8}
                 >
@@ -1661,12 +1699,14 @@ const handleImportCyberQuestsWeb = () => {
                     styles.levelProgressStats,
                     Platform.OS !== "web" && styles.levelProgressStatsMobile,
                     Platform.OS === "web" && styles.levelProgressStatsWeb,
+                    isWebMobilePortrait && styles.levelProgressStatsCompactWeb,
                   ]}
                 >
                   <View
                     style={[
                       styles.levelProgressStat,
                       Platform.OS === "web" && styles.levelProgressStatWeb,
+                      isWebMobilePortrait && styles.levelProgressStatCompactWeb,
                     ]}
                   >
                     <View
@@ -1734,6 +1774,7 @@ const handleImportCyberQuestsWeb = () => {
                       styles.middleStat,
                       Platform.OS === "web" && styles.middleStatWeb,
                       Platform.OS === "web" && styles.levelProgressStatWeb,
+                      isWebMobilePortrait && styles.levelProgressStatCompactWeb,
                     ]}
                   >
                     <View
@@ -1802,6 +1843,7 @@ const handleImportCyberQuestsWeb = () => {
                     style={[
                       styles.levelProgressStat,
                       Platform.OS === "web" && styles.levelProgressStatWeb,
+                      isWebMobilePortrait && styles.levelProgressStatCompactWeb,
                     ]}
                   >
                     <View
@@ -1877,6 +1919,7 @@ const handleImportCyberQuestsWeb = () => {
           style={[
             styles.sectionDropdown,
             { backgroundColor: colors.card, borderColor: colors.border },
+            isWebMobilePortrait && styles.sectionDropdownCompactWeb,
           ]}
         >
           <View style={styles.dropdownHeader}>
@@ -2019,6 +2062,7 @@ const handleImportCyberQuestsWeb = () => {
           style={[
             styles.backgroundDropdown,
             { backgroundColor: colors.card, borderColor: colors.border },
+            isWebMobilePortrait && styles.backgroundDropdownCompactWeb,
           ]}
         >
           <Text
@@ -2136,6 +2180,7 @@ const handleImportCyberQuestsWeb = () => {
               <TouchableOpacity
                 style={[
                   styles.actionButton,
+                  isWebMobilePortrait && styles.actionButtonWebCompact,
                   {
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
@@ -2178,6 +2223,7 @@ const handleImportCyberQuestsWeb = () => {
               <TouchableOpacity
                 style={[
                   styles.actionButton,
+                  isWebMobilePortrait && styles.actionButtonWebCompact,
                   {
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
@@ -2203,7 +2249,12 @@ const handleImportCyberQuestsWeb = () => {
             style={[styles.container, { backgroundColor: colors.background }]}
           >
             {/* Section List Header */}
-            <View style={styles.sectionListHeader}>
+            <View
+              style={[
+                styles.sectionListHeader,
+                isWebMobilePortrait && styles.sectionListHeaderCompactWeb,
+              ]}
+            >
               <Text style={styles.sectionListTitle}>Cyber Quest Map</Text>
               <Text style={styles.sectionListSubtitle}>
                 Choose a subject to view its quest map
@@ -2212,8 +2263,14 @@ const handleImportCyberQuestsWeb = () => {
 
             {/* Scrollable Section List */}
             <ScrollView
-              style={styles.sectionListContainer}
-              contentContainerStyle={styles.sectionListContent}
+              style={[
+                styles.sectionListContainer,
+                isWebMobilePortrait && styles.sectionListContainerCompactWeb,
+              ]}
+              contentContainerStyle={[
+                styles.sectionListContent,
+                isWebCompact && styles.sectionListContentCompactWeb,
+              ]}
               showsVerticalScrollIndicator={false}
             >
               {userSubjects.map((section, index) => (
@@ -2223,6 +2280,8 @@ const handleImportCyberQuestsWeb = () => {
                     styles.sectionListItem,
                     { borderColor: colors.border },
                     index === 0 && styles.sectionListItemFirst,
+                    isWebCompact && styles.sectionListItemTabletWeb,
+                    isWebMobilePortrait && styles.sectionListItemCompactWeb,
                   ]}
                   onPress={() => {
                     setSelectedSubject(section);
@@ -2230,10 +2289,15 @@ const handleImportCyberQuestsWeb = () => {
                   }}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.sectionListIcon}>
+                  <View
+                    style={[
+                      styles.sectionListIcon,
+                      isWebMobilePortrait && styles.sectionListIconCompactWeb,
+                    ]}
+                  >
                     <Ionicons
                       name="book"
-                      size={28}
+                      size={isWebMobilePortrait ? 24 : 28}
                       color={COLORS.primary}
                       style={styles.sectionListIconImage}
                     />
@@ -2248,11 +2312,16 @@ const handleImportCyberQuestsWeb = () => {
                     )}
                   </View>
 
-                  <View style={styles.sectionListInfo}>
+                  <View
+                    style={[
+                      styles.sectionListInfo,
+                      isWebMobilePortrait && styles.sectionListInfoCompactWeb,
+                    ]}
+                  >
                     <Text
                       style={[styles.sectionListName, { color: colors.text }]}
-                      numberOfLines={Platform.OS === "web" ? undefined : 1}
-                      ellipsizeMode={Platform.OS === "web" ? undefined : "tail"}
+                      numberOfLines={isWebMobilePortrait ? 2 : Platform.OS === "web" ? undefined : 1}
+                      ellipsizeMode={isWebMobilePortrait ? "tail" : Platform.OS === "web" ? undefined : "tail"}
                     >
                       {section.name}
                     </Text>
@@ -2306,10 +2375,15 @@ const handleImportCyberQuestsWeb = () => {
                     )}
                   </View>
 
-                  <View style={styles.sectionListArrow}>
+                  <View
+                    style={[
+                      styles.sectionListArrow,
+                      isWebMobilePortrait && styles.sectionListArrowCompactWeb,
+                    ]}
+                  >
                     <Ionicons
                       name="chevron-forward-circle"
-                      size={28}
+                      size={isWebMobilePortrait ? 24 : 28}
                       color={COLORS.primary}
                     />
                   </View>
@@ -2331,6 +2405,7 @@ const handleImportCyberQuestsWeb = () => {
                       ? "rgba(148, 163, 184, 0.28)"
                       : colors.border,
                 },
+                isWebMobilePortrait && styles.sectionListActionsCompactWeb,
               ]}
             >
               <TouchableOpacity
@@ -2343,6 +2418,15 @@ const handleImportCyberQuestsWeb = () => {
                         borderColor: colors.border,
                         borderWidth: 1,
                       },
+                  Platform.OS === "web" && {
+                    backgroundColor: isDarkMode
+                      ? "rgba(15, 23, 42, 0.92)"
+                      : "rgba(248, 250, 252, 0.96)",
+                    borderColor: isDarkMode
+                      ? "rgba(148, 163, 184, 0.42)"
+                      : "rgba(148, 163, 184, 0.58)",
+                  },
+                  isWebMobilePortrait && styles.refreshSectionButtonWebCompact,
                 ]}
                 onPress={fetchModules}
               >
@@ -2357,12 +2441,18 @@ const handleImportCyberQuestsWeb = () => {
                   style={[
                     styles.refreshSectionButtonText,
                     Platform.OS === "web" && styles.refreshSectionButtonTextWeb,
+                    isWebMobilePortrait && styles.refreshSectionButtonTextCompactWeb,
                     {
-                      color: colors.text,
+                      color:
+                        Platform.OS === "web"
+                          ? isDarkMode
+                            ? "#f8fafc"
+                            : "#0f172a"
+                          : colors.text,
                     },
                   ]}
-                  numberOfLines={1}
-                  ellipsizeMode="clip"
+                  numberOfLines={Platform.OS === "web" ? undefined : 1}
+                  ellipsizeMode={Platform.OS === "web" ? "tail" : "clip"}
                 >
                   Refresh
                 </Text>
@@ -2936,6 +3026,7 @@ const handleImportCyberQuestsWeb = () => {
         <Animated.View
           style={[
             styles.enhancedInfoPanel,
+            isWebMobilePortrait && styles.enhancedInfoPanelCompactWeb,
             {
               transform: [
                 {
@@ -2950,7 +3041,12 @@ const handleImportCyberQuestsWeb = () => {
           ]}
         >
           {/* Profile Section */}
-          <View style={styles.profileSection}>
+          <View
+            style={[
+              styles.profileSection,
+              isWebMobilePortrait && styles.profileSectionCompactWeb,
+            ]}
+          >
             {/* Profile Header with Title and Close Button */}
             <View style={styles.profileHeader}>
               <Text style={styles.profileTitle}>Your Profile</Text>
@@ -2971,9 +3067,19 @@ const handleImportCyberQuestsWeb = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.profileContent}>
+            <View
+              style={[
+                styles.profileContent,
+                isWebMobilePortrait && styles.profileContentCompactWeb,
+              ]}
+            >
               {/* User Avatar */}
-              <View style={styles.profileAvatar}>
+              <View
+                style={[
+                  styles.profileAvatar,
+                  isWebMobilePortrait && styles.profileAvatarCompactWeb,
+                ]}
+              >
                 {user?.profileImage && !profileImageError ? (
                   <Image
                     source={{
@@ -2991,7 +3097,12 @@ const handleImportCyberQuestsWeb = () => {
                 )}
               </View>
 
-              <View style={styles.profileInfo}>
+              <View
+                style={[
+                  styles.profileInfo,
+                  isWebMobilePortrait && styles.profileInfoCompactWeb,
+                ]}
+              >
                 <Text style={styles.profileName}>
                   {user?.username || "Unknown Hero"}
                 </Text>
@@ -3006,7 +3117,12 @@ const handleImportCyberQuestsWeb = () => {
 
               {/* Current Level Counter */}
               {!isAdmin && (
-                <View style={styles.currentLevelBadge}>
+                <View
+                  style={[
+                    styles.currentLevelBadge,
+                    isWebMobilePortrait && styles.currentLevelBadgeCompactWeb,
+                  ]}
+                >
                   <Text style={styles.currentLevelText}>
                     Level{" "}
                     {(modules?.findIndex((m) => m._id === selectedModule._id) ||
@@ -3018,10 +3134,22 @@ const handleImportCyberQuestsWeb = () => {
           </View>
 
           {/* Stats Section */}
-          <View style={styles.statsSection}>
-            <View style={styles.statRow}>
+          <View
+            style={[
+              styles.statsSection,
+              isWebMobilePortrait && styles.statsSectionCompactWeb,
+            ]}
+          >
+            <View
+              style={[styles.statRow, isWebMobilePortrait && styles.statRowCompactWeb]}
+            >
               {!isInstructorOrAdmin && (
-                <View style={styles.enhancedStatItem}>
+                <View
+                  style={[
+                    styles.enhancedStatItem,
+                    isWebMobilePortrait && styles.enhancedStatItemCompactWeb,
+                  ]}
+                >
                 {!isInstructorOrAdmin && (
                   <View style={styles.enhancedStatIcon}>
                     <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
@@ -3037,7 +3165,12 @@ const handleImportCyberQuestsWeb = () => {
                 </View>
               )}
 
-              <View style={styles.enhancedStatItem}>
+              <View
+                style={[
+                  styles.enhancedStatItem,
+                  isWebMobilePortrait && styles.enhancedStatItemCompactWeb,
+                ]}
+              >
                 <View style={styles.enhancedStatIcon}>
                   <Ionicons name="play-circle" size={16} color="#FF9800" />
                 </View>
@@ -3050,7 +3183,12 @@ const handleImportCyberQuestsWeb = () => {
               </View>
 
               {!isInstructorOrAdmin && (
-                <View style={styles.enhancedStatItem}>
+                  <View
+                    style={[
+                      styles.enhancedStatItem,
+                      isWebMobilePortrait && styles.enhancedStatItemCompactWeb,
+                    ]}
+                  >
                 {!isInstructorOrAdmin && (
                   <View style={styles.enhancedStatIcon}>
                     <Ionicons name="lock-closed" size={16} color="#757575" />
@@ -3233,6 +3371,7 @@ const handleImportCyberQuestsWeb = () => {
               style={[
                 styles.joinSubjectModalCard,
                 { backgroundColor: colors.card, borderColor: colors.border },
+                isWebMobilePortrait && styles.joinSubjectModalCardCompactWeb,
               ]}
             >
               <View style={styles.joinSubjectModalHeader}>
@@ -3306,6 +3445,7 @@ const handleImportCyberQuestsWeb = () => {
               style={[
                 styles.historyModalCard,
                 { backgroundColor: colors.card, borderColor: colors.border },
+                isWebMobilePortrait && styles.historyModalCardCompactWeb,
               ]}
             >
               <View style={styles.historyModalHeader}>
@@ -3431,6 +3571,18 @@ const styles = StyleSheet.create({
     padding: 16,
     display: "flex", // Explicitly set display to flex
   },
+  levelProgressContainerWebCompact: {
+    position: "relative",
+    top: "auto",
+    left: "auto",
+    transform: "none",
+    width: "100%",
+    maxWidth: "100%",
+    maxHeight: "none",
+    marginTop: 8,
+    padding: 12,
+    zIndex: 2,
+  },
 
   levelProgressHeaderWeb: {
     justifyContent: "center",
@@ -3454,6 +3606,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     justifyContent: "flex-start",
     gap: 10,
+  },
+  levelProgressStatsCompactWeb: {
+    gap: 10,
+  },
+  levelProgressStatCompactWeb: {
+    borderWidth: 1,
+    borderRadius: 10,
+    borderColor: "rgba(148, 163, 184, 0.2)",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
   },
 
   levelProgressContentWeb: {
@@ -3587,6 +3749,14 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  sectionListContainerCompactWeb: {
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 8,
+      },
+      default: {},
+    }),
+  },
   sectionListContent: {
     paddingVertical: 8,
     paddingBottom: 80, // Extra padding for action buttons
@@ -3597,6 +3767,16 @@ const styles = StyleSheet.create({
         alignItems: "stretch",
         justifyContent: "flex-start",
         gap: 12,
+      },
+      default: {},
+    }),
+  },
+  sectionListContentCompactWeb: {
+    ...Platform.select({
+      web: {
+        justifyContent: "center",
+        gap: 10,
+        paddingBottom: 96,
       },
       default: {},
     }),
@@ -3632,6 +3812,32 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  sectionListItemTabletWeb: {
+    ...Platform.select({
+      web: {
+        width: "calc(50% - 12px)",
+        minWidth: 280,
+        maxWidth: "none",
+        minHeight: 170,
+        maxHeight: "none",
+      },
+      default: {},
+    }),
+  },
+  sectionListItemCompactWeb: {
+    ...Platform.select({
+      web: {
+        width: "100%",
+        minWidth: 0,
+        maxWidth: "100%",
+        minHeight: 0,
+        maxHeight: "none",
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+      },
+      default: {},
+    }),
+  },
   sectionListItemFirst: {
     marginTop: 4, // Add more space for first item
     backgroundColor: "rgba(255, 255, 255, 0.98)",
@@ -3653,6 +3859,17 @@ const styles = StyleSheet.create({
         width: 64,
         height: 64,
         borderRadius: 32,
+      },
+      default: {},
+    }),
+  },
+  sectionListIconCompactWeb: {
+    ...Platform.select({
+      web: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        marginRight: 10,
       },
       default: {},
     }),
@@ -3691,6 +3908,17 @@ const styles = StyleSheet.create({
         justifyContent: "flex-start",
         overflow: "hidden",
         overflowY: "auto",
+      },
+      default: {},
+    }),
+  },
+  sectionListInfoCompactWeb: {
+    ...Platform.select({
+      web: {
+        minHeight: 0,
+        maxHeight: "none",
+        overflow: "visible",
+        overflowY: "visible",
       },
       default: {},
     }),
@@ -3775,6 +4003,17 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  sectionListArrowCompactWeb: {
+    ...Platform.select({
+      web: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        marginLeft: 6,
+      },
+      default: {},
+    }),
+  },
   sectionListHeader: {
     padding: 16,
     paddingVertical: 20,
@@ -3796,6 +4035,18 @@ const styles = StyleSheet.create({
         maxWidth: "700px",
         marginLeft: "auto",
         marginRight: "auto",
+      },
+      default: {},
+    }),
+  },
+  sectionListHeaderCompactWeb: {
+    ...Platform.select({
+      web: {
+        marginHorizontal: 8,
+        marginTop: 6,
+        marginBottom: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 14,
       },
       default: {},
     }),
@@ -3829,6 +4080,16 @@ const styles = StyleSheet.create({
     elevation: 3,
     gap: 10,
   },
+  headerCompactWeb: {
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 10,
+        paddingTop: 10,
+        paddingBottom: 10,
+      },
+      default: {},
+    }),
+  },
   headerTitle: {
     fontSize: 22,
     fontWeight: "800",
@@ -3843,10 +4104,30 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
+  headerControlsCompactWeb: {
+    ...Platform.select({
+      web: {
+        flexDirection: "column",
+        alignItems: "stretch",
+        gap: 10,
+      },
+      default: {},
+    }),
+  },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  headerActionsCompactWeb: {
+    ...Platform.select({
+      web: {
+        width: "100%",
+        flexWrap: "wrap",
+        justifyContent: "flex-start",
+      },
+      default: {},
+    }),
   },
   sectionSelector: {
     flexDirection: "row",
@@ -3866,6 +4147,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
+  },
+  sectionSelectorCompactWeb: {
+    ...Platform.select({
+      web: {
+        minWidth: 0,
+        maxWidth: "100%",
+        width: "100%",
+      },
+      default: {},
+    }),
   },
   sectionSelectorText: {
     flex: 1,
@@ -3942,6 +4233,18 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  sectionDropdownCompactWeb: {
+    ...Platform.select({
+      web: {
+        top: 98,
+        left: 8,
+        right: 8,
+        maxWidth: "none",
+        transform: "none",
+      },
+      default: {},
+    }),
+  },
   dropdownHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -4005,6 +4308,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
+  levelProgressHeaderCompactWeb: {
+    ...Platform.select({
+      web: {
+        alignItems: "flex-start",
+      },
+      default: {},
+    }),
+  },
+  levelProgressHeaderLeftCompactWeb: {
+    ...Platform.select({
+      web: {
+        flex: 1,
+        minWidth: 0,
+      },
+      default: {},
+    }),
+  },
   playerStatsToggleButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -4013,6 +4333,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     backgroundColor: "rgba(148, 163, 184, 0.2)",
+  },
+  playerStatsToggleButtonCompactWeb: {
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        alignSelf: "flex-start",
+      },
+      default: {},
+    }),
   },
   playerStatsToggleText: {
     color: "#E2E8F0",
@@ -4111,6 +4441,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     flexDirection: "row",
     gap: 6,
+  },
+  webQuestActionButtonCompact: {
+    ...Platform.select({
+      web: {
+        minWidth: 0,
+        paddingHorizontal: 8,
+      },
+      default: {},
+    }),
   },
   webQuestActionText: {
     fontSize: 13,
@@ -4399,8 +4738,26 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  enhancedInfoPanelCompactWeb: {
+    ...Platform.select({
+      web: {
+        width: "calc(100% - 16px)",
+        maxWidth: "100%",
+        right: 8,
+        left: 8,
+        bottom: 8,
+        paddingTop: 14,
+        paddingHorizontal: 12,
+        paddingBottom: 14,
+      },
+      default: {},
+    }),
+  },
   profileSection: {
     marginBottom: 20,
+  },
+  profileSectionCompactWeb: {
+    marginBottom: 12,
   },
   profileHeader: {
     flexDirection: "row",
@@ -4429,8 +4786,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 10,
   },
+  profileContentCompactWeb: {
+    ...Platform.select({
+      web: {
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 10,
+        paddingHorizontal: 4,
+      },
+      default: {},
+    }),
+  },
   profileAvatar: {
     marginRight: 15,
+  },
+  profileAvatarCompactWeb: {
+    ...Platform.select({
+      web: {
+        marginRight: 0,
+      },
+      default: {},
+    }),
   },
   profileImage: {
     width: 50,
@@ -4457,6 +4833,14 @@ const styles = StyleSheet.create({
   profileInfo: {
     flex: 1,
   },
+  profileInfoCompactWeb: {
+    ...Platform.select({
+      web: {
+        width: "100%",
+      },
+      default: {},
+    }),
+  },
   profileName: {
     fontSize: 16,
     fontWeight: "bold",
@@ -4475,6 +4859,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.3)",
   },
+  currentLevelBadgeCompactWeb: {
+    ...Platform.select({
+      web: {
+        alignSelf: "flex-start",
+      },
+      default: {},
+    }),
+  },
   currentLevelText: {
     color: "#ffffff",
     fontSize: 12,
@@ -4488,14 +4880,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
+  statsSectionCompactWeb: {
+    ...Platform.select({
+      web: {
+        padding: 10,
+        marginBottom: 12,
+      },
+      default: {},
+    }),
+  },
   statRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  statRowCompactWeb: {
+    ...Platform.select({
+      web: {
+        flexDirection: "column",
+        gap: 8,
+      },
+      default: {},
+    }),
   },
   enhancedStatItem: {
     flex: 1,
     alignItems: "center",
     paddingHorizontal: 5,
+  },
+  enhancedStatItemCompactWeb: {
+    ...Platform.select({
+      web: {
+        width: "100%",
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: "rgba(255, 255, 255, 0.04)",
+      },
+      default: {},
+    }),
   },
   enhancedStatIcon: {
     marginBottom: 5,
@@ -5083,6 +5508,20 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  sectionListActionsCompactWeb: {
+    ...Platform.select({
+      web: {
+        width: "calc(100% - 16px)",
+        minWidth: 0,
+        paddingHorizontal: 8,
+        paddingVertical: 8,
+        borderRadius: 10,
+        justifyContent: "center",
+        alignItems: "center",
+      },
+      default: {},
+    }),
+  },
   refreshSectionButton: {
     flex: 1,
     flexDirection: "row",
@@ -5120,6 +5559,23 @@ const styles = StyleSheet.create({
     boxShadow: "0 3px 10px rgba(15, 23, 42, 0.1)",
     cursor: "pointer",
   },
+  refreshSectionButtonWebCompact: {
+    ...Platform.select({
+      web: {
+        width: "auto",
+        minWidth: 120,
+        maxWidth: "none",
+        alignSelf: "center",
+        minHeight: 46,
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 12,
+        justifyContent: "center",
+        alignItems: "center",
+      },
+      default: {},
+    }),
+  },
   refreshSectionButtonText: {
     fontSize: 15,
     fontWeight: "700",
@@ -5127,9 +5583,24 @@ const styles = StyleSheet.create({
   refreshSectionButtonTextWeb: {
     fontSize: 14,
     letterSpacing: 0.2,
-    lineHeight: 18,
+    lineHeight: 20,
     textAlign: "center",
     includeFontPadding: false,
+    ...Platform.select({
+      web: {
+        whiteSpace: "nowrap",
+      },
+      default: {},
+    }),
+  },
+  refreshSectionButtonTextCompactWeb: {
+    ...Platform.select({
+      web: {
+        fontSize: 14,
+        lineHeight: 20,
+      },
+      default: {},
+    }),
   },
   createSectionButton: {
     flex: 1,
@@ -5174,6 +5645,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 20,
+  },
+  joinSubjectModalCardCompactWeb: {
+    ...Platform.select({
+      web: {
+        maxWidth: "96%",
+        marginHorizontal: 8,
+        padding: 14,
+      },
+      default: {},
+    }),
   },
   joinSubjectModalHeader: {
     flexDirection: "row",
@@ -5257,6 +5738,16 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     overflow: "hidden",
     display: "flex",
+  },
+  historyModalCardCompactWeb: {
+    ...Platform.select({
+      web: {
+        maxWidth: "96%",
+        height: "90%",
+        maxHeight: "90%",
+      },
+      default: {},
+    }),
   },
   historyModalHeader: {
     flexDirection: "row",
@@ -5366,6 +5857,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
   },
+  backgroundDropdownCompactWeb: {
+    ...Platform.select({
+      web: {
+        top: 96,
+        right: 8,
+        width: "calc(100% - 16px)",
+        maxHeight: 360,
+      },
+      default: {},
+    }),
+  },
 
   backgroundScrollView: {
     maxHeight: 330, // Allow scrolling for many options
@@ -5422,12 +5924,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 12,
     paddingHorizontal: 20,
+    minHeight: 46,
     borderRadius: 8,
     marginBottom: 8,
+  },
+  actionButtonWebCompact: {
+    ...Platform.select({
+      web: {
+        width: "auto",
+        minWidth: 120,
+        alignSelf: "center",
+        paddingHorizontal: 18,
+        borderRadius: 10,
+      },
+      default: {},
+    }),
   },
   actionButtonText: {
     fontSize: 16,
     fontWeight: "600",
+    lineHeight: 20,
     marginLeft: 8,
   },
 
