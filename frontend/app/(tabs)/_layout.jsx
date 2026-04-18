@@ -37,7 +37,8 @@ function TabLayoutContent() {
     isNavigationLocked &&
     (pathname?.includes("quick-play") ||
       pathname?.includes("knowledge-relay") ||
-      pathname?.includes("digital-defenders"));
+      pathname?.includes("digital-defenders") ||
+      pathname?.includes("quiz-showdown"));
   const lockedTabItemStyle = isGameplayNavigationLocked
     ? {
         opacity: 0.45,

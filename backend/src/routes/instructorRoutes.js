@@ -761,7 +761,9 @@ router.get(
     try {
       // Fetch all students
       const students = await User.find({ privilege: "student" })
-        .select("_id fullName email section analytics")
+        .select(
+          "_id username fullName email section profileImage profilePicture privilege gamification analytics"
+        )
         .lean();
 
       const totalStudents = students.length;
@@ -831,9 +833,19 @@ router.get(
         .slice(0, 10)
         .map((s) => ({
           id: s._id.toString(),
+          _id: s._id.toString(),
+          username: s.username || null,
+          fullName: s.fullName || null,
           studentName: s.fullName,
           email: s.email,
           section: s.section,
+          privilege: s.privilege || "student",
+          profileImage: s.profileImage || s.profilePicture || null,
+          profilePicture: s.profilePicture || null,
+          gamification: {
+            level: s.gamification?.level || 1,
+            totalXP: s.gamification?.totalXP || 0,
+          },
           lastActivity: s.analytics?.lastActivity
             ? new Date(s.analytics.lastActivity).toISOString()
             : null,
