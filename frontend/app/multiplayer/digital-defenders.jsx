@@ -13,7 +13,6 @@ import {
   Platform,
   TextInput,
   ImageBackground,
-  useWindowDimensions,
 } from "react-native";
 // Removed unused AsyncStorage import
 // import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -247,26 +246,6 @@ function DigitalDefenders() {
   const router = useRouter();
   const navigation = useNavigation();
   const { setNavigationLocked } = useNavigationLock();
-  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
-  const isWebPortraitGameplay =
-    Platform.OS === "web" && viewportHeight >= viewportWidth && viewportWidth <= 620;
-  const isWebMobileViewport = Platform.OS === "web" && viewportWidth <= 900;
-  const portraitFitScale = Math.min(viewportWidth / 480, viewportHeight / 760);
-  const shouldScaleGameplay = isWebPortraitGameplay && viewportWidth <= 430;
-  const gameplayScale = shouldScaleGameplay
-    ? Math.max(0.9, Math.min(0.97, portraitFitScale))
-    : 1;
-  const gameplayScaledShellStyle =
-    shouldScaleGameplay && gameplayScale < 1
-      ? {
-          width: `${100 / gameplayScale}%`,
-          transform: [{ scale: gameplayScale }],
-          alignSelf: "center",
-          marginHorizontal: "auto",
-          ...(Platform.OS === "web" ? { transformOrigin: "top center" } : {}),
-        }
-      : null;
-  const isCompactGameplayLayout = isWebMobileViewport;
   const isMountedRef = useRef(true);
   const isQuittingRef = useRef(false);
   const { user, token } = useAuthStore();
@@ -2764,20 +2743,12 @@ function DigitalDefenders() {
     );
   };
 
-  const renderGameplay = () => {
-    const gameplayContent = (
-      <View
-        style={[
-          styles.gameplayContainer,
-          isCompactGameplayLayout && styles.gameplayContainerCompact,
-        ]}
-      >
+  const renderGameplay = () => (
+    <View style={styles.gameplayContainer}>
       {/* Game Header */}
-      <View style={[styles.gameHeader, isCompactGameplayLayout && styles.gameHeaderCompact]}>
+      <View style={styles.gameHeader}>
         <View style={styles.gameStats}>
-          <Text style={[styles.waveText, isCompactGameplayLayout && styles.waveTextCompact]}>
-            Wave {currentWave}/10
-          </Text>
+          <Text style={styles.waveText}>Wave {currentWave}/10</Text>
           <View style={styles.healthContainer}>
             {Array.from({ length: 5 }, (_, i) => (
               <MaterialCommunityIcons
@@ -2788,19 +2759,12 @@ function DigitalDefenders() {
               />
             ))}
           </View>
-          <Text style={[styles.actionsText, isCompactGameplayLayout && styles.actionsTextCompact]}>
-            Actions: {actionsLeft}/2
-          </Text>
+          <Text style={styles.actionsText}>Actions: {actionsLeft}/2</Text>
         </View>
 
         {/* Turn Indicator - Only show in multiplayer */}
         {roomData && (
-          <View
-            style={[
-              styles.turnIndicatorContainer,
-              isCompactGameplayLayout && styles.turnIndicatorContainerCompact,
-            ]}
-          >
+          <View style={styles.turnIndicatorContainer}>
             <View
               style={[
                 styles.turnIndicator,
@@ -2827,16 +2791,10 @@ function DigitalDefenders() {
           </View>
         )}
 
-        <View
-          style={[
-            styles.countdownContainer,
-            isCompactGameplayLayout && styles.countdownContainerCompact,
-          ]}
-        >
+        <View style={styles.countdownContainer}>
           <Text
             style={[
               styles.countdownText,
-              isCompactGameplayLayout && styles.countdownTextCompact,
               countdown <= 3 && styles.countdownCritical,
               freezeCountdown > 0 && styles.countdownFrozen,
             ]}
@@ -2850,12 +2808,10 @@ function DigitalDefenders() {
       </View>
 
       {/* Question Card Area */}
-      <View style={[styles.questionArea, isCompactGameplayLayout && styles.questionAreaCompact]}>
+      <View style={styles.questionArea}>
         {currentQuestion && (
-          <View style={[styles.questionCard, isCompactGameplayLayout && styles.questionCardCompact]}>
-            <Text style={[styles.questionText, isCompactGameplayLayout && styles.questionTextCompact]}>
-              {currentQuestion.text}
-            </Text>
+          <View style={styles.questionCard}>
+            <Text style={styles.questionText}>{currentQuestion.text}</Text>
             {selectedCard && (
               <View style={styles.instructionIndicator}>
                 <MaterialCommunityIcons
@@ -2885,11 +2841,11 @@ function DigitalDefenders() {
       </View>
 
       {/* Player Hand */}
-      <View style={[styles.handContainer, isCompactGameplayLayout && styles.handContainerCompact]}>
-        <View style={[styles.handHeader, isCompactGameplayLayout && styles.handHeaderCompact]}>
-          <Text style={[styles.handTitle, isCompactGameplayLayout && styles.handTitleCompact]}>Your Hand</Text>
+      <View style={styles.handContainer}>
+        <View style={styles.handHeader}>
+          <Text style={styles.handTitle}>Your Hand</Text>
           <View style={styles.deckStatus}>
-            <Text style={[styles.deckCount, isCompactGameplayLayout && styles.deckCountCompact, { opacity: 1 }]}>
+            <Text style={[styles.deckCount, { opacity: 1 }]}>
               Deck: {deck.length} | Used: {usedCards.length}
             </Text>
             {deck.length === 0 && playerHand.length > 0 && (
@@ -2924,12 +2880,11 @@ function DigitalDefenders() {
           showsHorizontalScrollIndicator={false}
           style={[
             styles.handScroll,
-            isCompactGameplayLayout && styles.handScrollCompact,
             roomData && !isMyTurn && styles.handScrollDisabled,
           ]}
         >
           {playerHand.length === 0 ? (
-            <View style={[styles.emptyHandIndicator, isCompactGameplayLayout && styles.emptyHandIndicatorCompact]}>
+            <View style={styles.emptyHandIndicator}>
               <MaterialCommunityIcons
                 name="cards-outline"
                 size={40}
@@ -2952,7 +2907,6 @@ function DigitalDefenders() {
                   key={`hand-${card.id}-${index}`}
                   style={[
                     styles.card,
-                    isCompactGameplayLayout && styles.cardCompact,
                     card.type === "tool" && styles.toolCard,
                     isSelected && styles.cardSelected, // Green highlight when selected
                     isDisabled && styles.cardDisabled, // Disabled when not player's turn
@@ -3022,11 +2976,10 @@ function DigitalDefenders() {
       </View>
 
       {/* Action Buttons */}
-      <View style={[styles.actionButtons, isCompactGameplayLayout && styles.actionButtonsCompact]}>
+      <View style={styles.actionButtons}>
         <TouchableOpacity
           style={[
             styles.actionButton,
-            isCompactGameplayLayout && styles.actionButtonCompact,
             (actionsLeft === 0 || (roomData && !isMyTurn)) &&
               styles.actionButtonDisabled,
           ]}
@@ -3034,7 +2987,7 @@ function DigitalDefenders() {
           disabled={actionsLeft === 0 || (roomData && !isMyTurn)}
         >
           <MaterialCommunityIcons name="skip-next" size={20} color="#3b82f6" />
-          <Text style={[styles.actionButtonText, isCompactGameplayLayout && styles.actionButtonTextCompact]}>
+          <Text style={styles.actionButtonText}>
             {roomData && !isMyTurn ? "Not Your Turn" : "Skip Turn"}
           </Text>
         </TouchableOpacity>
@@ -3042,7 +2995,6 @@ function DigitalDefenders() {
         <TouchableOpacity
           style={[
             styles.actionButton,
-            isCompactGameplayLayout && styles.actionButtonCompact,
             styles.reshuffleButton,
             (actionsLeft === 0 ||
               playerHand.length === 0 ||
@@ -3057,7 +3009,7 @@ function DigitalDefenders() {
           }
         >
           <MaterialCommunityIcons name="shuffle" size={20} color="#3b82f6" />
-          <Text style={[styles.actionButtonText, isCompactGameplayLayout && styles.actionButtonTextCompact]}>
+          <Text style={styles.actionButtonText}>
             {roomData && !isMyTurn
               ? "Not Your Turn"
               : playerHand.length === 0
@@ -3066,23 +3018,8 @@ function DigitalDefenders() {
           </Text>
         </TouchableOpacity>
       </View>
-      </View>
-    );
-
-    if (isCompactGameplayLayout) {
-      return (
-        <ScrollView
-          style={styles.gameplayScrollCompact}
-          contentContainerStyle={styles.gameplayScrollContentCompact}
-          showsVerticalScrollIndicator={true}
-        >
-          {gameplayContent}
-        </ScrollView>
-      );
-    }
-
-    return gameplayContent;
-  };
+    </View>
+  );
 
   const renderGameOver = () => {
     const getGameOverMessage = () => {
@@ -3909,11 +3846,7 @@ function DigitalDefenders() {
             {gameState === "lobby" && renderLobby()}
             {gameState === "waiting" && renderWaitingRoom()}
             {gameState === "turnOrder" && renderTurnOrderSelection()}
-            {gameState === "playing" && (
-              <View style={[styles.gameplayScaleShell, gameplayScaledShellStyle]}>
-                {renderGameplay()}
-              </View>
-            )}
+            {gameState === "playing" && renderGameplay()}
             {gameState === "gameOver" && renderGameOver()}
             {gameState === "victory" && renderVictory()}
           </>
@@ -3936,26 +3869,6 @@ function DigitalDefenders() {
 export default memo(DigitalDefenders);
 
 const styles = StyleSheet.create({
-  gameplayScaleShell: {
-    flex: 1,
-    width: "100%",
-    alignSelf: "center",
-    marginHorizontal: "auto",
-    ...Platform.select({
-      web: {
-        transformOrigin: "top center",
-      },
-      default: {},
-    }),
-  },
-  gameplayScrollCompact: {
-    flex: 1,
-    width: "100%",
-  },
-  gameplayScrollContentCompact: {
-    flexGrow: 1,
-    paddingBottom: 12,
-  },
   container: {
     flex: 1,
   },
@@ -4063,8 +3976,8 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
     alignSelf: Platform.OS === "web" ? "center" : undefined,
-    width: "100%",
-    maxWidth: Platform.OS === "web" ? 800 : "100%",
+    width: Platform.OS === "web" ? 800 : "100%",
+    maxWidth: "100%",
   },
   logoContainer: {
     alignItems: "center",
@@ -4362,14 +4275,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 15,
     alignSelf: Platform.OS === "web" ? "center" : undefined,
-    width: "100%",
-    maxWidth: Platform.OS === "web" ? 800 : "100%",
-  },
-  gameplayContainerCompact: {
-    width: "100%",
-    maxWidth: 560,
-    padding: 10,
-    alignSelf: "stretch",
+    width: Platform.OS === "web" ? 800 : "100%",
   },
   gameHeader: {
     flexDirection: "row",
@@ -4378,15 +4284,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 10,
   },
-  gameHeaderCompact: {
-    flexWrap: "wrap",
-    rowGap: 8,
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
   gameStats: {
     alignItems: "flex-start",
-    minWidth: 0,
   },
   waveText: {
     fontSize: 18,
@@ -4397,9 +4296,6 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  waveTextCompact: {
-    fontSize: 15,
-  },
   healthContainer: {
     flexDirection: "row",
     marginBottom: 5,
@@ -4408,23 +4304,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#dbeafe",
   },
-  actionsTextCompact: {
-    fontSize: 12,
-  },
   countdownContainer: {
     alignItems: "center",
-  },
-  countdownContainerCompact: {
-    alignItems: "flex-end",
   },
   countdownText: {
     fontSize: 36,
     fontWeight: "bold",
     color: "#2ecc71",
     textAlign: "center",
-  },
-  countdownTextCompact: {
-    fontSize: 28,
   },
   countdownCritical: {
     color: "#e74c3c",
@@ -4444,13 +4331,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flex: 1,
     paddingHorizontal: 10,
-  },
-  turnIndicatorContainerCompact: {
-    flexBasis: "100%",
-    alignItems: "flex-start",
-    justifyContent: "flex-start",
-    paddingHorizontal: 0,
-    marginTop: 2,
   },
   turnIndicator: {
     flexDirection: "row",
@@ -4496,16 +4376,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  questionAreaCompact: {
-    marginBottom: 12,
-  },
   questionCard: {
     backgroundColor: PREMIUM_SURFACE,
     borderRadius: 20,
     padding: 25,
     minHeight: 150,
-    width: Platform.OS === "web" ? "100%" : screenWidth - 60,
-    maxWidth: 700,
+    width: Platform.OS === "web" ? 700 : screenWidth - 60,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
@@ -4516,20 +4392,11 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 4,
   },
-  questionCardCompact: {
-    width: "100%",
-    maxWidth: 520,
-    minHeight: 120,
-    padding: 16,
-  },
   questionText: {
     fontSize: 18,
     color: PREMIUM_TEXT,
     textAlign: "center",
     fontWeight: "700",
-  },
-  questionTextCompact: {
-    fontSize: 16,
   },
   instructionIndicator: {
     position: "absolute",
@@ -4572,18 +4439,11 @@ const styles = StyleSheet.create({
   handContainer: {
     marginBottom: 20,
   },
-  handContainerCompact: {
-    marginBottom: 12,
-  },
   handHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 10,
-  },
-  handHeaderCompact: {
-    marginBottom: 8,
-    rowGap: 4,
   },
   handTitle: {
     fontSize: 16,
@@ -4592,9 +4452,6 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  handTitleCompact: {
-    fontSize: 14,
   },
   deckStatus: {
     alignItems: "flex-end",
@@ -4605,9 +4462,6 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  deckCountCompact: {
-    fontSize: 11,
   },
   deckWarning: {
     fontSize: 10,
@@ -4623,9 +4477,6 @@ const styles = StyleSheet.create({
   },
   handScroll: {
     maxHeight: 200, // Increased from 120px to 200px to accommodate taller cards
-  },
-  handScrollCompact: {
-    maxHeight: 170,
   },
   handScrollDisabled: {
     opacity: 0.6,
@@ -4656,18 +4507,11 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: Platform.OS === "web" ? 0 : screenWidth - 60,
-    width: Platform.OS === "web" ? "100%" : undefined,
-    maxWidth: Platform.OS === "web" ? 700 : undefined,
+    minWidth: screenWidth - 60,
     minHeight: 100,
     borderWidth: 1,
     borderColor: "rgba(74, 124, 89, 0.2)",
     borderStyle: "dashed",
-  },
-  emptyHandIndicatorCompact: {
-    minWidth: 0,
-    width: "100%",
-    padding: 14,
   },
   emptyHandText: {
     fontSize: 16,
@@ -4697,12 +4541,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.23,
     shadowRadius: 2.62,
     elevation: 4,
-  },
-  cardCompact: {
-    width: 120,
-    minHeight: 150,
-    padding: 10,
-    marginRight: 8,
   },
   cardGradient: {
     flex: 1,
@@ -4801,10 +4639,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     gap: 15,
   },
-  actionButtonsCompact: {
-    flexDirection: "column",
-    gap: 10,
-  },
   actionButton: {
     backgroundColor: "#34495e",
     flexDirection: "row",
@@ -4815,10 +4649,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
     flex: 1,
-  },
-  actionButtonCompact: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
   },
   actionButtonDisabled: {
     backgroundColor: "#2c3e50",
@@ -4831,9 +4661,6 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "bold",
     fontSize: 14,
-  },
-  actionButtonTextCompact: {
-    fontSize: 13,
   },
 
   // Game Over/Victory Styles
@@ -5085,7 +4912,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingVertical: 18,
   },
   editorWebModalBackdrop: {
@@ -5748,9 +5575,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
     elevation: 8,
   },
   turnOrderProgressChip: {
@@ -5909,7 +5736,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 15,
     backgroundColor: "rgba(10, 49, 62, 0.72)",
     borderRadius: 10,

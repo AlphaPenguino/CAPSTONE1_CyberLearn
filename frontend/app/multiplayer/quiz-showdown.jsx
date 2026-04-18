@@ -10,7 +10,6 @@ import {
   Modal,
   Platform,
   ImageBackground,
-  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -25,7 +24,6 @@ import quizShowdownApi from "@/services/quizShowdownApi";
 import { useAuthStore } from "@/store/authStore";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useNotifications } from "@/contexts/NotificationContext";
-import { useNavigationLock } from "@/contexts/NavigationLockContext";
 import { GameNotificationService } from "@/services/gameNotificationService";
 
 // Mock questions with multiple choice format - Updated with comprehensive cybersecurity and ICT questions
@@ -272,25 +270,6 @@ const QUIZ_BG_GRADIENT = ["rgba(0,0,0,0.62)", "rgba(0,0,0,0.44)"];
 
 export default function QuizShowdown() {
   const router = useRouter();
-  const { setNavigationLocked } = useNavigationLock();
-  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
-  const isWebPortraitGameplay =
-    Platform.OS === "web" && viewportHeight >= viewportWidth && viewportWidth <= 620;
-  const shouldScaleGameplay = isWebPortraitGameplay && viewportWidth <= 430;
-  const gameplayScale = shouldScaleGameplay
-    ? Math.max(0.92, Math.min(0.98, viewportWidth / 460))
-    : 1;
-  const gameplayScaledShellStyle =
-    shouldScaleGameplay && gameplayScale < 1
-      ? {
-          width: `${100 / gameplayScale}%`,
-          transform: [{ scale: gameplayScale }],
-          alignSelf: "center",
-          marginHorizontal: "auto",
-          ...(Platform.OS === "web" ? { transformOrigin: "top center" } : {}),
-        }
-      : null;
-  const isCompactGameplayLayout = isWebPortraitGameplay && viewportWidth <= 620;
   const isMountedRef = useRef(true);
   // Properly manage mounted state so interval-based timers (countdown, buzzer, question) aren't blocked.
   // Previously, isMountedRef was set to false inside an effect cleanup that re-ran whenever dependencies changed,
@@ -488,20 +467,6 @@ export default function QuizShowdown() {
   // File upload states for instructor mode
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
-
-  useEffect(() => {
-    const isInActiveGameplay =
-      gamePhase === "countdown" ||
-      gamePhase === "buzzer" ||
-      gamePhase === "question" ||
-      gamePhase === "answered";
-
-    setNavigationLocked(isInActiveGameplay);
-
-    return () => {
-      setNavigationLocked(false);
-    };
-  }, [gamePhase, setNavigationLocked]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccessModalVisible, setUploadSuccessModalVisible] =
     useState(false);
@@ -2377,8 +2342,7 @@ export default function QuizShowdown() {
       imageStyle={Platform.OS === "web" ? styles.relayBackgroundImageWeb : undefined}
     >
       <LinearGradient colors={QUIZ_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
-        <View style={[styles.gameplayScaleShell, gameplayScaledShellStyle]}>
-          <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea}>
         {/* Header - Fixed */}
         <View style={styles.gameHeader}>
           <TouchableOpacity style={styles.backButton} onPress={leaveGame}>
@@ -2414,31 +2378,19 @@ export default function QuizShowdown() {
           showsVerticalScrollIndicator={false}
         >
           {/* Team Scores */}
-          <View
-            style={[
-              styles.scoresContainer,
-              isCompactGameplayLayout && styles.scoresContainerCompact,
-            ]}
-          >
+          <View style={styles.scoresContainer}>
             <TeamScoreCard
               team={teams.teamA}
               isMyTeam={selectedTeam?.trim() === "Team A"}
               buzzedTeam={buzzedTeam?.trim() === "Team A"}
-              compact={isCompactGameplayLayout}
             />
-            <View
-              style={[
-                styles.vsContainer,
-                isCompactGameplayLayout && styles.vsContainerCompact,
-              ]}
-            >
+            <View style={styles.vsContainer}>
               <Text style={styles.vsText}>VS</Text>
             </View>
             <TeamScoreCard
               team={teams.teamB}
               isMyTeam={selectedTeam?.trim() === "Team B"}
               buzzedTeam={buzzedTeam?.trim() === "Team B"}
-              compact={isCompactGameplayLayout}
             />
           </View>
 
@@ -2458,12 +2410,7 @@ export default function QuizShowdown() {
                 </Text>
 
                 {/* Multiple Choice Options */}
-                <View
-                  style={[
-                    styles.choicesContainer,
-                    isCompactGameplayLayout && styles.choicesContainerCompact,
-                  ]}
-                >
+                <View style={styles.choicesContainer}>
                   {(currentQuestion.choices || []).map((choice, index) => {
                     // Define color scheme based on index
                     const colorScheme = {
@@ -2482,7 +2429,6 @@ export default function QuizShowdown() {
                         key={index}
                         style={[
                           styles.choiceButton,
-                          isCompactGameplayLayout && styles.choiceButtonCompact,
                           {
                             backgroundColor: colorScheme.bg,
                             borderColor: colorScheme.border,
@@ -2510,7 +2456,6 @@ export default function QuizShowdown() {
                         <Text
                           style={[
                             styles.choiceLabel,
-                            isCompactGameplayLayout && styles.choiceLabelCompact,
                             { color: colorScheme.text },
                           ]}
                         >
@@ -2519,7 +2464,6 @@ export default function QuizShowdown() {
                         <Text
                           style={[
                             styles.choiceText,
-                            isCompactGameplayLayout && styles.choiceTextCompact,
                             { color: colorScheme.text },
                             selectedAnswer === index &&
                               gamePhase === "question" &&
@@ -2710,8 +2654,7 @@ export default function QuizShowdown() {
           </View>
         </View>
       </Modal>
-          </SafeAreaView>
-        </View>
+        </SafeAreaView>
       </LinearGradient>
     </ImageBackground>
   );
@@ -2913,7 +2856,7 @@ const TeamSelectScreen = ({
         <TouchableOpacity style={styles.backButton} onPress={leaveGame}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{currentRoom?.name}</Text>
+        <Text style={styles.headerTitle}>Room: {currentRoom?.name}</Text>
         <Text style={styles.headerSubtitle}>#{currentRoom?.id}</Text>
         {!isConnected && (
           <Text style={styles.disconnectedText}>⚠️ Disconnected</Text>
@@ -3245,12 +3188,11 @@ const ResultsScreen = ({
   );
 };
 
-const TeamScoreCard = ({ team, isMyTeam, buzzedTeam, compact = false }) => {
+const TeamScoreCard = ({ team, isMyTeam, buzzedTeam }) => {
   return (
     <View
       style={[
         styles.teamCard,
-        compact && styles.teamCardCompact,
         { opacity: 0.9 }, // Added 90% opacity
         isMyTeam && styles.myTeamCard,
         buzzedTeam && styles.buzzedTeamCard,
@@ -3262,11 +3204,11 @@ const TeamScoreCard = ({ team, isMyTeam, buzzedTeam, compact = false }) => {
           size={20}
           color="#ffffff"
         />
-        <Text style={[styles.teamName, compact && styles.teamNameCompact]}>{team.name}</Text>
+        <Text style={styles.teamName}>{team.name}</Text>
       </View>
 
       <View style={styles.scoreContainer}>
-        <Text style={[styles.scoreText, compact && styles.scoreTextCompact]}>{team.score}</Text>
+        <Text style={styles.scoreText}>{team.score}</Text>
       </View>
 
       <View style={styles.playersContainer}>
@@ -3275,15 +3217,12 @@ const TeamScoreCard = ({ team, isMyTeam, buzzedTeam, compact = false }) => {
           {(team.players || []).length !== 1 ? "s" : ""}
         </Text>
         {(team.players || []).slice(0, 3).map((player, index) => (
-          <Text
-            key={`player-${player}-${index}`}
-            style={[styles.playerText, compact && styles.playerTextCompact]}
-          >
+          <Text key={`player-${player}-${index}`} style={styles.playerText}>
             {player}
           </Text>
         ))}
         {(team.players || []).length > 3 && (
-          <Text style={[styles.playerText, compact && styles.playerTextCompact]}>
+          <Text style={styles.playerText}>
             +{(team.players || []).length - 3} more
           </Text>
         )}
@@ -3293,18 +3232,6 @@ const TeamScoreCard = ({ team, isMyTeam, buzzedTeam, compact = false }) => {
 };
 
 const styles = StyleSheet.create({
-  gameplayScaleShell: {
-    flex: 1,
-    width: "100%",
-    alignSelf: "center",
-    marginHorizontal: "auto",
-    ...Platform.select({
-      web: {
-        transformOrigin: "top center",
-      },
-      default: {},
-    }),
-  },
   playerNameDisplay: {
     backgroundColor: "rgba(248, 250, 252, 0.95)",
     borderRadius: 12,
@@ -3495,19 +3422,438 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  title: {
-    color: "#0f172a",
+  lobbyHeroIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(13, 148, 136, 0.12)",
+    marginBottom: 8,
+  },
+  pageTitle: {
     fontSize: 28,
     fontWeight: "800",
-    marginBottom: 8,
+    color: "#0f172a",
+    color: "#f8fafc",
     textAlign: "center",
+    marginBottom: 16,
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  subtitle: {
+  connectionStatusRow: {
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  instructorSection: {
+    marginTop: 12,
+    gap: 10,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: "100%",
+        alignSelf: "center",
+      },
+      default: {},
+    }),
+  },
+  quickActions: {
+    paddingHorizontal: 20,
+    marginBottom: 30,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 600,
+        alignSelf: "center",
+      },
+      default: {},
+    }),
+  },
+
+  // Team select screen styles
+  teamSelectContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 900,
+        marginHorizontal: "auto",
+        alignSelf: "center",
+      },
+      default: {},
+    }),
+  },
+  teamsContainer: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 30,
+    ...Platform.select({
+      web: {
+        maxWidth: 900, // Increased from 800px
+        marginHorizontal: "auto",
+        justifyContent: "center",
+      },
+      default: {},
+    }),
+  },
+  teamSelectCard: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    minHeight: 200,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    ...Platform.select({
+      web: {
+        minWidth: 400, // Increased from 300px
+        maxWidth: "45%",
+      },
+      default: {},
+    }),
+  },
+  selectedTeamCard: {
+    borderColor: "#0f766e",
+    shadowOpacity: 0.2,
+  },
+
+  // Question container styles
+  questionContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 900,
+        marginHorizontal: "auto",
+      },
+      default: {},
+    }),
+  },
+  questionDisplayContainer: {
+    backgroundColor: "rgba(74, 124, 89, 0.15)",
+    borderRadius: 16,
+    padding: 20,
+    marginVertical: 20,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(74, 124, 89, 0.2)",
+    ...Platform.select({
+      web: {
+        maxWidth: 800,
+        marginHorizontal: "auto",
+      },
+      default: {},
+    }),
+  },
+  choicesContainer: {
+    gap: 8,
+    marginBottom: 16,
+    ...Platform.select({
+      web: {
+        maxWidth: 900, // Increased from 700px
+        marginHorizontal: "auto",
+      },
+      default: {},
+    }),
+  },
+
+  // Buzzer styles
+  buzzerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    minHeight: 180,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 600,
+        marginHorizontal: "auto",
+      },
+      default: {},
+    }),
+  },
+
+  // Team scores section
+  scoresContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    alignItems: "center",
+    ...Platform.select({
+      web: {
+        maxWidth: 900, // Wider container
+        marginHorizontal: "auto",
+        paddingHorizontal: 0, // Remove padding on web to maximize width
+      },
+      default: {},
+    }),
+  },
+
+  // Modal styles
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 24,
+    width: "90%",
+    maxWidth: 400,
+    ...Platform.select({
+      web: {
+        maxWidth: 550, // Wider modal on web
+      },
+      default: {},
+    }),
+  },
+
+  // Question Editor Styles
+  editorContainer: {
+    flex: 1,
+    paddingTop: 16,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 1100,
+        marginHorizontal: "auto",
+        alignSelf: "center",
+      },
+      default: {},
+    }),
+  },
+  questionsList: {
+    flex: 1,
+    paddingHorizontal: 20,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 1000,
+        overflowY: "scroll",
+        scrollbarWidth: "thin",
+      },
+      default: {},
+    }),
+  },
+  questionItem: {
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 14,
+    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.28)",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
+    ...Platform.select({
+      web: {
+        marginHorizontal: 0,
+      },
+      default: {},
+    }),
+  },
+  editForm: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    ...Platform.select({
+      web: {
+        maxWidth: 800,
+        marginHorizontal: "auto",
+        width: "100%",
+      },
+      default: {},
+    }),
+  },
+
+  // Results screen
+  resultsContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 900,
+        marginHorizontal: "auto",
+        alignSelf: "center",
+      },
+      default: {},
+    }),
+  },
+  finalScoresContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 40,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 700,
+      },
+      default: {},
+    }),
+  },
+  resultsButtons: {
+    width: "100%",
+    gap: 16,
+    ...Platform.select({
+      web: {
+        maxWidth: 500,
+      },
+      default: {},
+    }),
+  },
+
+  // Countdown Screen
+  countdownContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 1000,
+        marginHorizontal: "auto",
+        alignSelf: "center",
+      },
+      default: {},
+    }),
+  },
+
+  // Upload related styles
+  uploadModalContainer: {
+    backgroundColor: "#92eacc",
+    borderRadius: 16,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    maxHeight: "80%",
+    ...Platform.select({
+      web: {
+        maxWidth: 600, // Wider on web
+      },
+      default: {},
+    }),
+  },
+  uploadResultContainer: {
+    backgroundColor: "#92eacc",
+    borderRadius: 16,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    alignItems: "center",
+    ...Platform.select({
+      web: {
+        maxWidth: 600, // Wider on web
+      },
+      default: {},
+    }),
+  },
+
+  // Docs styles
+  docsContainer: {
+    backgroundColor: "#92eacc",
+    borderRadius: 16,
+    padding: 20,
+    width: "100%",
+    maxWidth: 520,
+    maxHeight: "85%",
+    ...Platform.select({
+      web: {
+        maxWidth: 700, // Wider on web
+      },
+      default: {},
+    }),
+  },
+
+  actionsMenuContainer: {
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.34)",
+    ...Platform.select({
+      web: {
+        maxWidth: 600,
+        marginHorizontal: "auto",
+      },
+      default: {},
+    }),
+  },
+
+  // Header styles
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 900,
+        marginHorizontal: "auto",
+        alignSelf: "center",
+      },
+      default: {},
+    }),
+  },
+  gameHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    ...Platform.select({
+      web: {
+        width: "100%",
+        maxWidth: 900,
+        marginHorizontal: "auto",
+      },
+      default: {},
+    }),
+  },
+
+  lobbyBackButton: {
+    position: "absolute",
+    top: 20,
+    left: 20,
+    padding: 8,
+    zIndex: 1,
+  },
+
+  lobbyTitle: {
+    color: "#0f172a",
+    color: "#f8fafc",
+    fontSize: 28,
+    fontWeight: "800",
+    marginTop: 4,
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  lobbySubtitle: {
     color: "#475569",
+    color: "#dbeafe",
     fontSize: 15,
     marginTop: 4,
-    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
+
   inputLabel: {
     color: "#0f766e",
     fontSize: 15,
@@ -3523,6 +3869,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
   },
+
   playerNameText: {
     color: COLORS.textPrimary,
     fontSize: 16,
@@ -3748,7 +4095,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  // Team Select Screen
+  // Team Select Screen Styles
   nameInputContainer: {
     paddingHorizontal: 20,
     marginBottom: 16,
@@ -3857,7 +4204,7 @@ const styles = StyleSheet.create({
     shadowColor: "#2acde6",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
-    shadowRadius: 15,
+    shadowRadius: 20,
     elevation: 10,
   },
   countdownNumber: {
@@ -4034,12 +4381,6 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  teamCardCompact: {
-    width: "100%",
-    minWidth: 0,
-    maxWidth: "100%",
-    padding: 10,
-  },
   myTeamCard: {
     borderColor: "#10b981",
   },
@@ -4060,9 +4401,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     marginLeft: 4,
-  },
-  teamNameCompact: {
-    fontSize: 14,
   },
   scoreContainer: {
     alignItems: "center",
@@ -4085,9 +4423,6 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  scoreTextCompact: {
-    fontSize: 20,
-  },
   playersContainer: {
     alignItems: "center",
   },
@@ -4102,9 +4437,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
   },
-  playerTextCompact: {
-    fontSize: 13,
-  },
   vsContainer: {
     marginHorizontal: 12,
     alignItems: "center",
@@ -4114,10 +4446,6 @@ const styles = StyleSheet.create({
       },
       default: {},
     }),
-  },
-  vsContainerCompact: {
-    marginHorizontal: 0,
-    marginVertical: 6,
   },
   vsText: {
     color: "#ffffff",
@@ -4195,14 +4523,6 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  choiceButtonCompact: {
-    width: "100%",
-    maxWidth: "100%",
-    minHeight: 0,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    marginHorizontal: 0,
-  },
   selectedChoice: {
     backgroundColor: "rgba(103, 221, 152, 1)",
     borderColor: "#10b981",
@@ -4226,21 +4546,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginRight: 12,
   },
-  choiceLabelCompact: {
-    width: 24,
-    marginRight: 8,
-    fontSize: 14,
-  },
   choiceText: {
     color: COLORS.textPrimary,
     fontSize: 14,
     fontWeight: "500",
     flex: 1,
     lineHeight: 18,
-  },
-  choiceTextCompact: {
-    fontSize: 13,
-    lineHeight: 16,
   },
   selectedChoiceText: {
     color: COLORS.textPrimary,
@@ -4556,11 +4867,11 @@ const styles = StyleSheet.create({
     minWidth: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "rgba(15, 118, 110, 0.14)",
+    backgroundColor: "rgba(15,118,110,0.14)",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(15, 118, 110, 0.35)",
+    borderColor: "rgba(15,118,110,0.35)",
   },
   questionCountText: {
     color: "#0f766e",
