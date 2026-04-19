@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   TouchableOpacity,
+  Image,
   RefreshControl,
   Platform,
   Modal,
@@ -18,10 +19,10 @@ import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BarChart, PieChart, LineChart } from "react-native-chart-kit";
+import { useRouter } from "expo-router";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
-import { API_URL } from "../../constants/api";
-import COLORS from "../../constants/custom-colors";
+import { API_URL, constructProfileImageUrl } from "../../constants/api";
 import UsersScreen from "./users";
 import LogsScreen from "./logs";
 
@@ -88,16 +89,16 @@ const getCalendarWindow = (period, page) => {
 
   const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const endMonth = new Date(
-    currentMonthStart.getFullYear(),
-    currentMonthStart.getMonth() - page,
-    1
+      currentMonthStart.getFullYear(),
+      currentMonthStart.getMonth() - page,
+      1
   );
   const startDate = new Date(endMonth.getFullYear(), endMonth.getMonth() - 5, 1);
   const endDate = new Date(endMonth.getFullYear(), endMonth.getMonth() + 1, 0);
 
   // Keep current month window aligned with current day to avoid future dates.
   const boundedEndDate =
-    page === 0 && endDate > today ? new Date(today) : endDate;
+      page === 0 && endDate > today ? new Date(today) : endDate;
 
   return {
     startDate,
@@ -109,6 +110,7 @@ const getCalendarWindow = (period, page) => {
 export default function Dashboard() {
   const { user, token } = useAuthStore();
   const { colors } = useTheme();
+  const router = useRouter();
   const { width: viewportWidth } = useWindowDimensions();
   const isAndroid = Platform.OS === "android";
   const isWeb = Platform.OS === "web";
@@ -124,6 +126,13 @@ export default function Dashboard() {
     activeSessions: 0,
   });
   const [topPerformers, setTopPerformers] = useState([]);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [profileModalLoading, setProfileModalLoading] = useState(false);
+  const [profileModalError, setProfileModalError] = useState(null);
+  const [selectedProfileData, setSelectedProfileData] = useState(null);
+  const [profileDataCache, setProfileDataCache] = useState({});
+  const [sectionsCatalog, setSectionsCatalog] = useState(null);
+  const [imageErrors, setImageErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [section, setSection] = useState("overview"); // overview | users | logs
@@ -161,8 +170,8 @@ export default function Dashboard() {
   const chartFadeAnim = useRef(new Animated.Value(1)).current;
 
   const calendarWindow = useMemo(
-    () => getCalendarWindow(analyticsPeriod, calendarPage),
-    [analyticsPeriod, calendarPage]
+      () => getCalendarWindow(analyticsPeriod, calendarPage),
+      [analyticsPeriod, calendarPage]
   );
   const calendarLabel = calendarWindow.label;
   const isLatestCalendarWindow = calendarPage === 0;
@@ -181,31 +190,31 @@ export default function Dashboard() {
       const today = startOfDay(new Date());
       const { startDate, endDate } = calendarWindow;
       const daysWindow =
-        Math.floor((today - startOfDay(startDate)) / DAY_MS) + 1;
+          Math.floor((today - startOfDay(startDate)) / DAY_MS) + 1;
 
       const [completionResponse, activeUsersResponse] = await Promise.all([
         // Fetch completion statistics
         fetch(
-          `${API_URL}/admin/analytics/completion-stats?period=${analyticsPeriod}&days=${daysWindow}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+            `${API_URL}/admin/analytics/completion-stats?period=${analyticsPeriod}&days=${daysWindow}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
         ).catch(() => null),
         // Fetch active users by role
         fetch(
-          `${API_URL}/admin/analytics/active-users?period=${analyticsPeriod}&days=${daysWindow}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+            `${API_URL}/admin/analytics/active-users?period=${analyticsPeriod}&days=${daysWindow}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
         ).catch(() => null),
       ]);
 
       // Build timeline for the selected calendar window.
       const dateKeys = []; // raw day keys (YYYY-MM-DD)
       for (
-        let d = startOfDay(startDate);
-        d <= endOfDay(endDate);
-        d = new Date(d.getTime() + DAY_MS)
+          let d = startOfDay(startDate);
+          d <= endOfDay(endDate);
+          d = new Date(d.getTime() + DAY_MS)
       ) {
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -240,13 +249,13 @@ export default function Dashboard() {
         // Build months in the active six-month calendar window.
         const monthsSeq = [];
         for (
-          let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-          m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-          m = new Date(m.getFullYear(), m.getMonth() + 1, 1)
+            let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+            m <= new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+            m = new Date(m.getFullYear(), m.getMonth() + 1, 1)
         ) {
           const mKey = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(
-            2,
-            "0"
+              2,
+              "0"
           )}`;
           monthsSeq.push(mKey);
         }
@@ -263,8 +272,8 @@ export default function Dashboard() {
           const completionJson = await completionResponse.json();
           if (completionJson.success && completionJson.data) {
             const series = Array.isArray(completionJson.data)
-              ? completionJson.data
-              : completionJson.completions || [];
+                ? completionJson.data
+                : completionJson.completions || [];
 
             // Create maps for each role
             const studentsMap = new Map();
@@ -278,8 +287,8 @@ export default function Dashboard() {
               instructorsMap.set(date, pt.instructors ?? 0);
               adminsMap.set(date, pt.admins ?? 0);
               totalMap.set(
-                date,
-                pt.total ??
+                  date,
+                  pt.total ??
                   (pt.students || 0) + (pt.instructors || 0) + (pt.admins || 0)
               );
             });
@@ -292,7 +301,7 @@ export default function Dashboard() {
             if (analyticsPeriod === "daily") {
               studentsSeries = dateKeys.map((k) => studentsMap.get(k) || 0);
               instructorsSeries = dateKeys.map(
-                (k) => instructorsMap.get(k) || 0
+                  (k) => instructorsMap.get(k) || 0
               );
               adminsSeries = dateKeys.map((k) => adminsMap.get(k) || 0);
               totalSeries = dateKeys.map((k) => totalMap.get(k) || 0);
@@ -301,19 +310,19 @@ export default function Dashboard() {
               for (let start = 0; start < dateKeys.length; start += 7) {
                 const slice = dateKeys.slice(start, start + 7);
                 studentsSeries.push(
-                  slice.reduce((acc, d) => acc + (studentsMap.get(d) || 0), 0)
+                    slice.reduce((acc, d) => acc + (studentsMap.get(d) || 0), 0)
                 );
                 instructorsSeries.push(
-                  slice.reduce(
-                    (acc, d) => acc + (instructorsMap.get(d) || 0),
-                    0
-                  )
+                    slice.reduce(
+                        (acc, d) => acc + (instructorsMap.get(d) || 0),
+                        0
+                    )
                 );
                 adminsSeries.push(
-                  slice.reduce((acc, d) => acc + (adminsMap.get(d) || 0), 0)
+                    slice.reduce((acc, d) => acc + (adminsMap.get(d) || 0), 0)
                 );
                 totalSeries.push(
-                  slice.reduce((acc, d) => acc + (totalMap.get(d) || 0), 0)
+                    slice.reduce((acc, d) => acc + (totalMap.get(d) || 0), 0)
                 );
               }
             } else if (analyticsPeriod === "monthly") {
@@ -365,8 +374,8 @@ export default function Dashboard() {
           const activeUsersJson = await activeUsersResponse.json();
           if (activeUsersJson.success && activeUsersJson.data) {
             const series = Array.isArray(activeUsersJson.data)
-              ? activeUsersJson.data
-              : activeUsersJson.activeUsers || [];
+                ? activeUsersJson.data
+                : activeUsersJson.activeUsers || [];
 
             const studentsMap = new Map();
             const instructorsMap = new Map();
@@ -385,20 +394,20 @@ export default function Dashboard() {
             if (analyticsPeriod === "daily") {
               studentsSeries = dateKeys.map((k) => studentsMap.get(k) || 0);
               instructorsSeries = dateKeys.map(
-                (k) => instructorsMap.get(k) || 0
+                  (k) => instructorsMap.get(k) || 0
               );
               adminsSeries = dateKeys.map((k) => adminsMap.get(k) || 0);
             } else if (analyticsPeriod === "weekly") {
               for (let start = 0; start < dateKeys.length; start += 7) {
                 const slice = dateKeys.slice(start, start + 7);
                 studentsSeries.push(
-                  slice.reduce((a, d) => a + (studentsMap.get(d) || 0), 0)
+                    slice.reduce((a, d) => a + (studentsMap.get(d) || 0), 0)
                 );
                 instructorsSeries.push(
-                  slice.reduce((a, d) => a + (instructorsMap.get(d) || 0), 0)
+                    slice.reduce((a, d) => a + (instructorsMap.get(d) || 0), 0)
                 );
                 adminsSeries.push(
-                  slice.reduce((a, d) => a + (adminsMap.get(d) || 0), 0)
+                    slice.reduce((a, d) => a + (adminsMap.get(d) || 0), 0)
                 );
               }
             } else if (analyticsPeriod === "monthly") {
@@ -450,14 +459,14 @@ export default function Dashboard() {
         setLoading(true);
       }
       const [statsResponse, leaderboardResponse] =
-        await Promise.all([
-          fetch(`${API_URL}/admin/dashboard/stats`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_URL}/users/leaderboard?limit=3`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
+          await Promise.all([
+            fetch(`${API_URL}/admin/dashboard/stats`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch(`${API_URL}/users/leaderboard?limit=3`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+          ]);
 
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
@@ -470,7 +479,7 @@ export default function Dashboard() {
             totalModules: data.modules.total,
             totalQuizzes: data.quizzes.total,
             activeSessions:
-              data.recent?.newUsers || Math.floor(Math.random() * 50) + 10,
+                data.recent?.newUsers || Math.floor(Math.random() * 50) + 10,
           });
         }
       }
@@ -479,8 +488,8 @@ export default function Dashboard() {
         const leaderboardData = await leaderboardResponse.json();
         if (leaderboardData.success) {
           const rankings = Array.isArray(leaderboardData?.data?.rankings)
-            ? leaderboardData.data.rankings.slice(0, 3)
-            : [];
+              ? leaderboardData.data.rankings.slice(0, 3)
+              : [];
           setTopPerformers(rankings);
         }
       }
@@ -495,11 +504,11 @@ export default function Dashboard() {
   }, [token]);
 
   const handlePeriodChange = useCallback(
-    (newPeriod) => {
-      setAnalyticsPeriod(newPeriod);
-      setCalendarPage(0);
-    },
-    []
+      (newPeriod) => {
+        setAnalyticsPeriod(newPeriod);
+        setCalendarPage(0);
+      },
+      []
   );
 
   const handleCalendarPageChange = useCallback((direction) => {
@@ -510,6 +519,233 @@ export default function Dashboard() {
       return Math.max(0, current - 1);
     });
   }, []);
+
+  const getNormalizedRole = (account) =>
+      (account?.privilege || account?.role || "student").toLowerCase();
+
+  const getSubjectCode = (subject) =>
+      subject?.subjectCode || subject?.sectionCode || "N/A";
+
+  const getCompatibleImageUrl = (url) => {
+    if (!url) return null;
+
+    const fullUrl = constructProfileImageUrl(url);
+    if (fullUrl && fullUrl.includes("dicebear") && fullUrl.includes("/svg")) {
+      if (Platform.OS === "android") {
+        return fullUrl.replace("/svg", "/png");
+      }
+    }
+
+    return fullUrl;
+  };
+
+  const fetchSectionsCatalog = useCallback(async () => {
+    if (Array.isArray(sectionsCatalog)) {
+      return sectionsCatalog;
+    }
+
+    try {
+      const response = await fetch(
+          `${API_URL}/sections?page=1&limit=500&sort=createdAt&direction=desc`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+      );
+
+      if (!response.ok) {
+        setSectionsCatalog([]);
+        return [];
+      }
+
+      const payload = await response.json();
+      const sections = Array.isArray(payload?.sections) ? payload.sections : [];
+      setSectionsCatalog(sections);
+      return sections;
+    } catch (err) {
+      console.warn("Unable to fetch sections for profile modal:", err);
+      setSectionsCatalog([]);
+      return [];
+    }
+  }, [sectionsCatalog, token]);
+
+  const openUserProfileModal = useCallback(
+      async (userItem) => {
+        const userId = String(userItem?._id || userItem?.id || userItem?.userId || "");
+        if (!userId) {
+          Alert.alert("User Profile", "Unable to open profile for this student.");
+          return;
+        }
+
+        const baseRole = getNormalizedRole(userItem);
+        const fallbackProfile = {
+          basic: {
+            _id: userId,
+            username: userItem?.username || "N/A",
+            fullName: userItem?.fullName || userItem?.username || "N/A",
+            email: userItem?.email || "N/A",
+            profileImage: userItem?.profileImage || userItem?.profilePicture || null,
+            role: baseRole,
+          },
+          student:
+              baseRole === "student"
+                  ? {
+                    level: userItem?.gamification?.level || userItem?.level || 1,
+                    totalXP: userItem?.gamification?.totalXP || userItem?.totalXP || 0,
+                    totalGamesPlayed: userItem?.analytics?.totalGamesPlayed || 0,
+                    cyberQuestGamesPlayed:
+                        userItem?.analytics?.gamesByType?.cyberQuest || 0,
+                    progress: {
+                      unlockedModules: 0,
+                      completedModules: 0,
+                    },
+                    enrolledSubjects: [],
+                  }
+                  : null,
+          instructor:
+              baseRole === "instructor"
+                  ? {
+                    handledSubjects: [],
+                    availableSubjects: [],
+                  }
+                  : null,
+        };
+
+        setProfileModalVisible(true);
+        setProfileModalError(null);
+        setSelectedProfileData(fallbackProfile);
+
+        if (profileDataCache[userId]) {
+          setSelectedProfileData(profileDataCache[userId]);
+          return;
+        }
+
+        try {
+          setProfileModalLoading(true);
+
+          const userResponse = await fetch(`${API_URL}/users/${encodeURIComponent(userId)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          let fetchedUser = userItem;
+          if (userResponse.ok) {
+            const payload = await userResponse.json();
+            if (payload?.success && payload?.user) {
+              fetchedUser = payload.user;
+            }
+          }
+
+          const role = getNormalizedRole(fetchedUser);
+          const normalizedUserId = String(fetchedUser?._id || userId);
+          const allSections = await fetchSectionsCatalog();
+
+          const enrolledSubjects = allSections.filter((section) => {
+            const studentIds = Array.isArray(section?.students)
+                ? section.students.map((studentId) => String(studentId))
+                : [];
+            const isInStudentsArray = studentIds.includes(normalizedUserId);
+
+            const sectionCodes = Array.isArray(fetchedUser?.sections)
+                ? fetchedUser.sections
+                : [];
+            const matchesSectionCode =
+                String(fetchedUser?.section || "") ===
+                String(section?.sectionCode || "") ||
+                sectionCodes.includes(section?.sectionCode);
+
+            return isInStudentsArray || matchesSectionCode;
+          });
+
+          const handledSubjects = allSections.filter((section) => {
+            const primaryInstructor = String(
+                section?.instructor?._id || section?.instructor || ""
+            );
+            const additionalInstructors = Array.isArray(section?.instructors)
+                ? section.instructors.map((inst) => String(inst?._id || inst))
+                : [];
+            const createdBy = String(section?.createdBy?._id || section?.createdBy || "");
+
+            return (
+                primaryInstructor === normalizedUserId ||
+                additionalInstructors.includes(normalizedUserId) ||
+                createdBy === normalizedUserId
+            );
+          });
+
+          const availableSubjects = allSections.filter((section) => {
+            const isHandled = handledSubjects.some(
+                (handled) => String(handled?._id) === String(section?._id)
+            );
+            return !isHandled && section?.archived !== true && section?.isActive !== false;
+          });
+
+          let studentProgress = null;
+          if (role === "student") {
+            try {
+              const progressResponse = await fetch(
+                  `${API_URL}/progress/debug/${encodeURIComponent(normalizedUserId)}`,
+                  { headers: { Authorization: `Bearer ${token}` } }
+              );
+
+              if (progressResponse.ok) {
+                studentProgress = await progressResponse.json();
+              }
+            } catch (progressErr) {
+              console.warn("Unable to fetch student progress:", progressErr);
+            }
+          }
+
+          const compiledProfile = {
+            basic: {
+              _id: normalizedUserId,
+              username: fetchedUser?.username || "N/A",
+              fullName: fetchedUser?.fullName || fetchedUser?.username || "N/A",
+              email: fetchedUser?.email || "N/A",
+              profileImage: fetchedUser?.profileImage || fetchedUser?.profilePicture || null,
+              role,
+            },
+            student:
+                role === "student"
+                    ? {
+                      level: fetchedUser?.gamification?.level || fetchedUser?.level || 1,
+                      totalXP: fetchedUser?.gamification?.totalXP || fetchedUser?.totalXP || 0,
+                      totalGamesPlayed: fetchedUser?.analytics?.totalGamesPlayed || 0,
+                      cyberQuestGamesPlayed:
+                          fetchedUser?.analytics?.gamesByType?.cyberQuest || 0,
+                      progress: {
+                        unlockedModules:
+                            studentProgress?.globalProgress?.unlockedModules || 0,
+                        completedModules:
+                            studentProgress?.globalProgress?.completedModules || 0,
+                      },
+                      enrolledSubjects,
+                    }
+                    : null,
+            instructor:
+                role === "instructor"
+                    ? {
+                      handledSubjects,
+                      availableSubjects,
+                    }
+                    : null,
+          };
+
+          setSelectedProfileData(compiledProfile);
+          setProfileDataCache((prev) => ({ ...prev, [normalizedUserId]: compiledProfile }));
+        } catch (err) {
+          setProfileModalError(err.message || "Some profile details could not be loaded");
+        } finally {
+          setProfileModalLoading(false);
+        }
+      },
+      [token, profileDataCache, fetchSectionsCatalog]
+  );
+
+  const handleImageError = (userId) => {
+    setImageErrors((prev) => ({
+      ...prev,
+      [userId]: true,
+    }));
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -571,9 +807,9 @@ export default function Dashboard() {
     const cardPadding = isAndroid ? 36 : 40;
     const viewportPadding = isAndroid ? 52 : 56;
     const maxSize = Math.min(
-      320,
-      chartWidth - cardPadding,
-      viewportWidth - viewportPadding
+        320,
+        chartWidth - cardPadding,
+        viewportWidth - viewportPadding
     );
     const minSize = isAndroid ? 156 : isWebMobilePortrait ? 164 : 190;
     return Math.max(minSize, maxSize);
@@ -581,33 +817,33 @@ export default function Dashboard() {
 
   // Reserve more left canvas room on web portrait to prevent left-edge clipping.
   const pieChartWebLeftInset = isWeb
-    ? isWebMobilePortrait
-      ? isWebNarrow
-        ? 28
-        : 22
-      : 100
-    : 0;
+      ? isWebMobilePortrait
+          ? isWebNarrow
+              ? 28
+              : 22
+          : 100
+      : 0;
   const pieChartWebRightInset = isWeb
-    ? isWebMobilePortrait
-      ? 100
-      : 100
-    : 0;
+      ? isWebMobilePortrait
+          ? 100
+          : 100
+      : 0;
   const pieChartAndroidInset = isAndroid ? 100 : 0;
   const pieChartCanvasWidth = isWeb
-    ? Math.min(chartWidth, pieChartSize + pieChartWebLeftInset + pieChartWebRightInset)
-    : isAndroid
-    ? pieChartSize + pieChartAndroidInset * 2
-    : pieChartSize;
+      ? Math.min(chartWidth, pieChartSize + pieChartWebLeftInset + pieChartWebRightInset)
+      : isAndroid
+          ? pieChartSize + pieChartAndroidInset * 2
+          : pieChartSize;
   const pieChartPaddingLeft = isAndroid
-    ? String(pieChartAndroidInset)
-    : isWeb
-    ? String(pieChartWebLeftInset)
-    : "0";
+      ? String(pieChartAndroidInset)
+      : isWeb
+          ? String(pieChartWebLeftInset)
+          : "0";
   const pieChartCenter = isAndroid
-    ? [8, 0]
-    : isWeb
-    ? [isWebMobilePortrait ? 10 : 2, 0]
-    : [2, 0];
+      ? [8, 0]
+      : isWeb
+          ? [isWebMobilePortrait ? 10 : 2, 0]
+          : [2, 0];
   const showAbsolutePieLabels = !isAndroid && !isWeb;
 
   const chartConfig = {
@@ -637,45 +873,45 @@ export default function Dashboard() {
   };
 
   const pieRoles = useMemo(
-    () => [
-      {
-        key: "students",
-        name: "Students",
-        population: stats.totalStudents,
-        color: "#6366F1",
-        colorRgb: "99, 102, 241",
-      },
-      {
-        key: "instructors",
-        name: "Instructors",
-        population: stats.totalInstructors,
-        color: "#10B981",
-        colorRgb: "16, 185, 129",
-      },
-      {
-        key: "admins",
-        name: "Admins",
-        population:
-          stats.totalUsers - stats.totalStudents - stats.totalInstructors,
-        color: "#F59E0B",
-        colorRgb: "245, 158, 11",
-      },
-    ],
-    [stats.totalInstructors, stats.totalStudents, stats.totalUsers]
+      () => [
+        {
+          key: "students",
+          name: "Students",
+          population: stats.totalStudents,
+          color: "#6366F1",
+          colorRgb: "99, 102, 241",
+        },
+        {
+          key: "instructors",
+          name: "Instructors",
+          population: stats.totalInstructors,
+          color: "#10B981",
+          colorRgb: "16, 185, 129",
+        },
+        {
+          key: "admins",
+          name: "Admins",
+          population:
+              stats.totalUsers - stats.totalStudents - stats.totalInstructors,
+          color: "#F59E0B",
+          colorRgb: "245, 158, 11",
+        },
+      ],
+      [stats.totalInstructors, stats.totalStudents, stats.totalUsers]
   );
 
   const userRoleData = useMemo(
-    () =>
-      pieRoles.map((role) => ({
-        ...role,
-        color:
-          selectedRole && selectedRole !== role.name
-            ? `rgba(${role.colorRgb}, 0.3)`
-            : role.color,
-        legendFontColor: colors.text,
-        legendFontSize: 14,
-      })),
-    [colors.text, pieRoles, selectedRole]
+      () =>
+          pieRoles.map((role) => ({
+            ...role,
+            color:
+                selectedRole && selectedRole !== role.name
+                    ? `rgba(${role.colorRgb}, 0.3)`
+                    : role.color,
+            legendFontColor: colors.text,
+            legendFontSize: 14,
+          })),
+      [colors.text, pieRoles, selectedRole]
   );
 
   const activeRoleSeries = useMemo(() => {
@@ -707,77 +943,77 @@ export default function Dashboard() {
   }, [activeUsersStats.admins, activeUsersStats.instructors, activeUsersStats.students, visibleActiveRoleSeries]);
 
   const handleActiveUsersDataPointClick = useCallback(
-    (data) => {
-      const pointIndex = data?.index;
-      if (pointIndex === undefined || pointIndex === null) {
-        return;
-      }
-
-      const clickedValue = Number(data?.value ?? 0);
-      let selectedSeries = null;
-
-      if (data?.dataset?.roleKey) {
-        selectedSeries = activeRoleSeries.find(
-          (series) => series.key === data.dataset.roleKey
-        );
-      }
-
-      if (!selectedSeries && data?.dataset?.label) {
-        selectedSeries = activeRoleSeries.find(
-          (series) => series.label === data.dataset.label
-        );
-      }
-
-      if (!selectedSeries && Number.isInteger(data?.datasetIndex)) {
-        selectedSeries = activeRoleSeries[data.datasetIndex];
-      }
-
-      if (!selectedSeries) {
-        const matchedByValue = activeRoleSeries.filter(
-          (series) => (series.values[pointIndex] || 0) === clickedValue
-        );
-        if (matchedByValue.length === 1) {
-          selectedSeries = matchedByValue[0];
+      (data) => {
+        const pointIndex = data?.index;
+        if (pointIndex === undefined || pointIndex === null) {
+          return;
         }
-      }
 
-      if (!selectedSeries) {
-        selectedSeries = activeRoleSeries[0];
-      }
+        const clickedValue = Number(data?.value ?? 0);
+        let selectedSeries = null;
 
-      const dataValues = activeRoleSeries.map(
-        (series) => series.values[pointIndex] || 0
-      );
-      const overlappingDatasets = activeRoleSeries
-        .map((series) => series.label)
-        .filter(
-          (_, idx) => dataValues[idx] === clickedValue && dataValues[idx] !== 0
+        if (data?.dataset?.roleKey) {
+          selectedSeries = activeRoleSeries.find(
+              (series) => series.key === data.dataset.roleKey
+          );
+        }
+
+        if (!selectedSeries && data?.dataset?.label) {
+          selectedSeries = activeRoleSeries.find(
+              (series) => series.label === data.dataset.label
+          );
+        }
+
+        if (!selectedSeries && Number.isInteger(data?.datasetIndex)) {
+          selectedSeries = activeRoleSeries[data.datasetIndex];
+        }
+
+        if (!selectedSeries) {
+          const matchedByValue = activeRoleSeries.filter(
+              (series) => (series.values[pointIndex] || 0) === clickedValue
+          );
+          if (matchedByValue.length === 1) {
+            selectedSeries = matchedByValue[0];
+          }
+        }
+
+        if (!selectedSeries) {
+          selectedSeries = activeRoleSeries[0];
+        }
+
+        const dataValues = activeRoleSeries.map(
+            (series) => series.values[pointIndex] || 0
         );
-      const periodLabel =
-        analyticsPeriod === "daily"
-          ? "Day"
-          : analyticsPeriod === "weekly"
-          ? "Week"
-          : "Month";
+        const overlappingDatasets = activeRoleSeries
+            .map((series) => series.label)
+            .filter(
+                (_, idx) => dataValues[idx] === clickedValue && dataValues[idx] !== 0
+            );
+        const periodLabel =
+            analyticsPeriod === "daily"
+                ? "Day"
+                : analyticsPeriod === "weekly"
+                    ? "Week"
+                    : "Month";
 
-      handleDataPointClick({
-        x: activeUsersStats.labels[pointIndex],
-        value: clickedValue,
-        index: pointIndex,
-        dataset: {
-          label:
-            overlappingDatasets.length > 1
-              ? overlappingDatasets.join(", ")
-              : selectedSeries?.label || "Users",
-          data: selectedSeries?.values || [],
-        },
-        overlappingDatasets:
-          overlappingDatasets.length > 1 ? overlappingDatasets : null,
-        xLabel: periodLabel,
-        yLabel: "Active Users",
-      });
-    },
-    [activeRoleSeries, activeUsersStats.labels, analyticsPeriod, handleDataPointClick]
+        handleDataPointClick({
+          x: activeUsersStats.labels[pointIndex],
+          value: clickedValue,
+          index: pointIndex,
+          dataset: {
+            label:
+                overlappingDatasets.length > 1
+                    ? overlappingDatasets.join(", ")
+                    : selectedSeries?.label || "Users",
+            data: selectedSeries?.values || [],
+          },
+          overlappingDatasets:
+              overlappingDatasets.length > 1 ? overlappingDatasets : null,
+          xLabel: periodLabel,
+          yLabel: "Active Users",
+        });
+      },
+      [activeRoleSeries, activeUsersStats.labels, analyticsPeriod, handleDataPointClick]
   );
 
   const contentData = {
@@ -791,919 +1027,1163 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
-      >
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading admin dashboard...
-          </Text>
-        </View>
-      </SafeAreaView>
+        <SafeAreaView
+            style={[styles.container, { backgroundColor: colors.background }]}
+        >
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Loading admin dashboard...
+            </Text>
+          </View>
+        </SafeAreaView>
     );
   }
 
   return (
-    <LinearGradient colors={DASHBOARD_GRADIENT_COLORS} style={styles.container}>
-      {/* Make status bar transparent so header sits flush at the very top */}
-      <StatusBar style="dark" translucent backgroundColor="transparent" />
-      {/* Exclude top edge so there is no extra space above the header */}
-      <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
-        {/* Header */}
-        <LinearGradient
-          colors={DASHBOARD_GRADIENT_COLORS}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.header}
-        >
-          <View style={styles.headerContent}>
-            <MaterialCommunityIcons
-              name="view-dashboard"
-              size={28}
-              color={colors.text}
-            />
-            <View style={styles.headerText}>
-              <Text style={[styles.headerTitle, { color: colors.text }]}>
-                {isAdmin ? "Admin Dashboard" : "Dashboard"}
-              </Text>
-              <Text
-                style={[styles.headerSubtitle, { color: colors.textSecondary }]}
-              >
-                {isAdmin
-                  ? "System Overview & Analytics"
-                  : "Your Learning Dashboard"}
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity onPress={handleRefresh} disabled={refreshing}>
-            <MaterialCommunityIcons
-              name={refreshing ? "loading" : "refresh"}
-              size={24}
-              color={colors.text}
-              style={{
-                transform: [{ rotateZ: refreshing ? "45deg" : "0deg" }],
-              }}
-            />
-          </TouchableOpacity>
-        </LinearGradient>
-
-        {/* Internal Admin Sections */}
-        {isAdmin && (
-          <View
-            style={[
-              styles.sectionTabs,
-              { borderBottomColor: colors.textSecondary + "20" },
-            ]}
+      <LinearGradient colors={DASHBOARD_GRADIENT_COLORS} style={styles.container}>
+        {/* Make status bar transparent so header sits flush at the very top */}
+        <StatusBar style="dark" translucent backgroundColor="transparent" />
+        {/* Exclude top edge so there is no extra space above the header */}
+        <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
+          {/* Header */}
+          <LinearGradient
+              colors={DASHBOARD_GRADIENT_COLORS}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.header}
           >
-            {[
-              {
-                key: "overview",
-                label: "Overview",
-                icon: "view-dashboard-outline",
-              },
-              {
-                key: "users",
-                label: "Manage Users",
-                icon: "account-multiple-outline",
-              },
-              {
-                key: "logs",
-                label: "Audit Logs",
-                icon: "file-document-outline",
-              },
-            ].map((t) => {
-              const active = section === t.key;
-              return (
-                <TouchableOpacity
-                  key={t.key}
-                  onPress={() => setSection(t.key)}
-                  style={[
-                    styles.sectionTab,
-                    active && { backgroundColor: colors.primary },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name={t.icon}
-                    size={16}
-                    color={active ? "#FFF" : colors.primary}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={[
-                      styles.sectionTabText,
-                      { color: active ? "#ECFDF5" : colors.text },
-                    ]}
-                  >
-                    {t.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        {section === "overview" || !isAdmin ? (
-          <ScrollView
-            style={[styles.scrollView, isWeb && styles.overviewWebScroll]}
-            showsVerticalScrollIndicator={isWeb}
-            persistentScrollbar={isWeb}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                colors={[colors.primary]}
-                tintColor={colors.primary}
+            <View style={styles.headerContent}>
+              <MaterialCommunityIcons
+                  name="view-dashboard"
+                  size={28}
+                  color={colors.text}
               />
-            }
-          >
-            {/* Add a container to limit width on web */}
-            <View style={styles.contentWrapper}>
-              {/* Key Statistics Cards */}
-              <View style={styles.statsContainer}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  📊 {isAdmin ? "System Statistics" : "Quick Stats"}
+              <View style={styles.headerText}>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>
+                  {isAdmin ? "Admin Dashboard" : "Dashboard"}
                 </Text>
-                <View style={styles.statsGrid}>
-                  <View
-                    style={[styles.statCard, { backgroundColor: colors.card }]}
-                  >
-                    <MaterialCommunityIcons
-                      name="account-group"
-                      size={24}
-                      color="#6366F1"
-                    />
-                    <Text style={[styles.statValue, { color: colors.text }]}>
-                      {isAdmin ? stats.totalStudents : "Welcome"}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.statLabel,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {isAdmin ? "Students" : "Students"}
-                    </Text>
-                  </View>
-
-                  <View
-                    style={[styles.statCard, { backgroundColor: colors.card }]}
-                  >
-                    <MaterialCommunityIcons
-                      name={isAdmin ? "school" : "book-open-variant"}
-                      size={24}
-                      color="#10B981"
-                    />
-                    <Text style={[styles.statValue, { color: colors.text }]}>
-                      {isAdmin
-                        ? stats.totalInstructors
-                        : stats.totalModules || 0}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.statLabel,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {isAdmin ? "Instructors" : "Modules"}
-                    </Text>
-                  </View>
-                </View>
+                <Text
+                    style={[styles.headerSubtitle, { color: colors.textSecondary }]}
+                >
+                  {isAdmin
+                      ? "System Overview & Analytics"
+                      : "Your Learning Dashboard"}
+                </Text>
               </View>
-
-              {/* Top Performer - Admin Only */}
-              {isAdmin && (
-                <View style={styles.topPerformerContainer}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}> 
-                    🏆 Top Performing Students
-                  </Text>
-                  {topPerformers.length > 0 ? (
-                    <View style={styles.topPerformerList}>
-                      {topPerformers.map((performer, idx) => {
-                        const medalColor =
-                          idx === 0 ? "#FFD700" : idx === 1 ? "#C0C0C0" : "#CD7F32";
-                        return (
-                          <View
-                            key={performer._id || `${performer.username}-${idx}`}
-                            style={[
-                              styles.topPerformerCard,
-                              { backgroundColor: colors.card },
-                            ]}
-                          >
-                            <View style={styles.crownContainer}>
-                              <MaterialCommunityIcons
-                                name={idx === 0 ? "crown" : "medal"}
-                                size={28}
-                                color={medalColor}
-                              />
-                            </View>
-                            <View style={styles.performerInfo}>
-                              <Text
-                                style={[styles.performerName, { color: colors.text }]}
-                                numberOfLines={1}
-                              >
-                                {idx + 1}. {performer.username}
-                              </Text>
-                              <Text
-                                style={[styles.performerScore, { color: "#6366F1" }]}
-                              >
-                                {performer.totalXP || 0} XP
-                              </Text>
-                              <Text
-                                style={[
-                                  styles.performerLevel,
-                                  { color: colors.textSecondary },
-                                ]}
-                              >
-                                Level {performer.level || 1}
-                              </Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    <View
-                      style={[
-                        styles.emptyPerformerCard,
-                        { backgroundColor: colors.card },
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name="trophy-broken"
-                        size={32}
-                        color={colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.emptyPerformerText,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        No student activity yet
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* User Distribution Chart - Admin Only */}
-              {isAdmin && stats.totalUsers > 0 && (
-                <View style={styles.chartContainer}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    📈 User Distribution
-                  </Text>
-                  <View
-                    style={[
-                      styles.chartCard,
-                      isWebMobilePortrait && styles.chartCardWebCompact,
-                      {
-                        backgroundColor: colors.card,
-                        alignItems: "center",
-                        overflow: "visible",
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.pieChartContainer,
-                        isWebMobilePortrait && styles.pieChartContainerWebCompact,
-                      ]}
-                    >
-                      <PieChart
-                        data={userRoleData}
-                        width={pieChartCanvasWidth}
-                        height={pieChartSize}
-                        chartConfig={{
-                          ...chartConfig,
-                          color: (opacity = 1) => `rgba(0,0,0,${opacity})`,
-                          propsForLabels: {
-                            fontSize: isAndroid ? 10 : 11,
-                            fontWeight: "700",
-                          },
-                        }}
-                        accessor="population"
-                        backgroundColor="transparent"
-                        paddingLeft={pieChartPaddingLeft}
-                        center={pieChartCenter}
-                        absolute={showAbsolutePieLabels}
-                        hasLegend={false}
-                        style={{
-                          marginVertical: 4,
-                          borderRadius: 16,
-                          alignSelf: "center",
-                        }}
-                        onDataPointClick={(slice) => {
-                          togglePieRole(slice.name);
-                          handleDataPointClick({
-                            x: slice.name,
-                            value: slice.population,
-                            index: slice.index,
-                            dataset: {
-                              label: slice.name,
-                              data: userRoleData.map((item) => item.population),
-                            },
-                            xLabel: "Role",
-                            yLabel: "Users",
-                          });
-                        }}
-                      />
-                    </View>
-                    <Text
-                      style={{
-                        marginTop: 4,
-                        fontSize: 12,
-                        color: colors.textSecondary,
-                      }}
-                    >
-                      Total Users: {stats.totalUsers}
-                    </Text>
-                    <View style={{ marginTop: 12, width: "100%" }}>
-                      {userRoleData.map((d) => {
-                        const pct = stats.totalUsers
-                          ? ((d.population / stats.totalUsers) * 100).toFixed(1)
-                          : "0.0";
-                        const isSelected = selectedRole === d.name;
-                        return (
-                          <TouchableOpacity
-                            key={d.name}
-                            onPress={() => togglePieRole(d.name)}
-                            activeOpacity={0.85}
-                            accessibilityRole="button"
-                            accessibilityLabel={`${d.name} role filter`}
-                            accessibilityHint="Tap to highlight this pie chart role"
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              marginBottom: 6,
-                              borderRadius: 10,
-                              paddingHorizontal: 8,
-                              paddingVertical: 6,
-                              backgroundColor: isSelected
-                                ? colors.primary + "22"
-                                : "transparent",
-                            }}
-                          >
-                            <View
-                              style={{
-                                width: 14,
-                                height: 14,
-                                borderRadius: 7,
-                                backgroundColor: pieRoles.find((r) => r.name === d.name)
-                                  ?.color,
-                                marginRight: 8,
-                              }}
-                            />
-                            <Text
-                              style={{
-                                flex: 1,
-                                color: colors.text,
-                                fontSize: 13,
-                                fontWeight: "600",
-                              }}
-                            >
-                              {d.name}
-                            </Text>
-                            <Text
-                              style={{
-                                color: colors.textSecondary,
-                                fontSize: 12,
-                              }}
-                            >
-                              {d.population} ({pct}%)
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                    <View style={styles.interactionHintRow}>
-                      <MaterialCommunityIcons
-                        name="gesture-tap"
-                        size={14}
-                        color={colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.interactionHintText,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        Tap a slice or role row to highlight distribution.
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {/* Analytics Period Selector - Admin Only */}
-              {isAdmin && (
-                <View style={styles.periodSelectorContainer}>
-
-                  <View style={styles.periodSelectorRow}>
-                    {["daily", "weekly", "monthly"].map((period) => (
-                      <TouchableOpacity
-                        key={period}
-                        style={[
-                          styles.periodButton,
-                          analyticsPeriod === period && {
-                            backgroundColor: colors.primary,
-                          },
-                        ]}
-                        onPress={() => handlePeriodChange(period)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${period} period`}
-                        accessibilityHint="Switches chart grouping window"
-                      >
-                        <Text
-                          style={[
-                            styles.periodButtonText,
-                            {
-                              color:
-                                analyticsPeriod === period
-                                  ? "#FFFFFF"
-                                  : colors.text,
-                            },
-                          ]}
-                        >
-                          {period.charAt(0).toUpperCase() + period.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <View style={styles.interactionHintRow}>
-                    <MaterialCommunityIcons
-                      name="information-outline"
-                      size={14}
-                      color={colors.textSecondary}
-                    />
-                    <Text
-                      style={[
-                        styles.interactionHintText,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      Tap Daily, Weekly, or Monthly to change how points are grouped.
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Quiz Completion Statistics - Admin Only */}
-              {/* Quiz Completion Statistics by Role graph removed per request */}
-
-              {/* Active Users by Role - Admin Only */}
-              {isAdmin && (
-                <View style={styles.chartContainer}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    👥 Active Users
-                  </Text>
-                  <View
-                    style={[styles.chartCard, { backgroundColor: colors.card }]}
-                  >
-                    <View style={styles.calendarControlsRow}>
-                      <TouchableOpacity
-                        style={styles.calendarButton}
-                        onPress={() => handleCalendarPageChange(1)}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Previous active users range"
-                        accessibilityHint="Shows an older active users date window"
-                      >
-                        <MaterialCommunityIcons
-                          name="chevron-left"
-                          size={18}
-                          color={colors.primary}
-                        />
-                      </TouchableOpacity>
-                      <Text
-                        style={[styles.calendarLabel, { color: colors.textSecondary }]}
-                      >
-                        {calendarLabel}
-                      </Text>
-                      <TouchableOpacity
-                        style={[
-                          styles.calendarButton,
-                          isLatestCalendarWindow && styles.calendarButtonDisabled,
-                        ]}
-                        onPress={() => handleCalendarPageChange(-1)}
-                        disabled={isLatestCalendarWindow}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Next active users range"
-                        accessibilityHint="Shows a newer active users date window"
-                      >
-                        <MaterialCommunityIcons
-                          name="chevron-right"
-                          size={18}
-                          color={
-                            isLatestCalendarWindow
-                              ? colors.textSecondary
-                              : colors.primary
-                          }
-                        />
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.interactionHintRow}>
-                      <MaterialCommunityIcons
-                        name="gesture-tap"
-                        size={14}
-                        color={colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.interactionHintText,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        Tap legend items to show or hide role lines.
-                      </Text>
-                    </View>
-                    <Animated.View
-                      style={[
-                        styles.animatedChart,
-                        {
-                          opacity: chartFadeAnim,
-                          transform: [
-                            {
-                              translateY: chartFadeAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [10, 0],
-                              }),
-                            },
-                          ],
-                        },
-                      ]}
-                    >
-                    {analyticsPeriod === "monthly" ? (
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                      >
-                        {(() => {
-                          const dynamicWidth = Math.max(
-                            chartWidth,
-                            activeUsersStats.labels.length * monthlyLabelSpacing
-                          );
-                          return (
-                            <LineChart
-                              data={{
-                                labels: activeUsersStats.labels.length
-                                  ? activeUsersStats.labels
-                                  : [""],
-                                datasets: [
-                                  ...(activeRoleSeries.length
-                                    ? activeRoleSeries
-                                    : [
-                                        {
-                                          key: "students",
-                                          label: "Students",
-                                          values: [0],
-                                          colorRgba: "rgba(59,130,246,",
-                                        },
-                                      ]
-                                  ).map((series) => ({
-                                    data: series.values.length
-                                      ? series.values
-                                      : [0],
-                                    color: (o = 1) => `${series.colorRgba}${o})`,
-                                    strokeWidth: 3,
-                                    roleKey: series.key,
-                                    label: series.label,
-                                  })),
-                                ],
-                                legend: activeRoleSeries.map((d) => d.label),
-                              }}
-                              width={dynamicWidth}
-                              height={activeUsersChartHeight}
-                              yAxisInterval={1}
-                              chartConfig={{
-                                ...chartConfig,
-                                labelColor: (o = 1) => `rgba(156,163,175,${o})`,
-                                propsForBackgroundLines: {
-                                  stroke: colors.textSecondary + "30",
-                                },
-                                propsForDots: { r: "3", strokeWidth: "2" },
-                              }}
-                              bezier
-                              style={{ marginVertical: 8, borderRadius: 16 }}
-                              fromZero
-                              segments={4}
-                              verticalLabelRotation={
-                                isAndroid && analyticsPeriod !== "daily" ? 18 : 0
-                              }
-                              onDataPointClick={handleActiveUsersDataPointClick}
-                            />
-                          );
-                        })()}
-                      </ScrollView>
-                    ) : (
-                      <LineChart
-                        data={{
-                          labels: activeUsersStats.labels.length
-                            ? activeUsersStats.labels
-                            : [""],
-                          datasets: [
-                            ...(activeRoleSeries.length
-                              ? activeRoleSeries
-                              : [
-                                  {
-                                    key: "students",
-                                    label: "Students",
-                                    values: [0],
-                                    colorRgba: "rgba(59,130,246,",
-                                  },
-                                ]
-                            ).map((series) => ({
-                              data: series.values.length ? series.values : [0],
-                              color: (o = 1) => `${series.colorRgba}${o})`,
-                              strokeWidth: 3,
-                              roleKey: series.key,
-                              label: series.label,
-                            })),
-                          ],
-                          legend: activeRoleSeries.map((d) => d.label),
-                        }}
-                        width={chartWidth}
-                        height={activeUsersChartHeight}
-                        yAxisInterval={1}
-                        chartConfig={{
-                          ...chartConfig,
-                          labelColor: (o = 1) => `rgba(156,163,175,${o})`,
-                          propsForBackgroundLines: {
-                            stroke: colors.textSecondary + "30",
-                          },
-                          propsForDots: { r: "3", strokeWidth: "2" },
-                        }}
-                        bezier
-                        style={{ marginVertical: 8, borderRadius: 16 }}
-                        fromZero
-                        segments={4}
-                        verticalLabelRotation={
-                          isAndroid && analyticsPeriod !== "daily" ? 18 : 0
-                        }
-                        onDataPointClick={handleActiveUsersDataPointClick}
-                      />
-                    )}
-                    </Animated.View>
-                    <View style={styles.legendContainer}>
-                      <TouchableOpacity
-                        style={[
-                          styles.legendItem,
-                          !visibleActiveRoleSeries.students &&
-                            styles.legendItemInactive,
-                        ]}
-                        onPress={() => toggleActiveRoleSeries("students")}
-                        accessibilityRole="button"
-                        accessibilityLabel="Toggle students line"
-                      >
-                        <View
-                          style={[
-                            styles.legendColor,
-                            { backgroundColor: "#3B82F6" },
-                          ]}
-                        />
-                        <Text
-                          style={[styles.legendText, { color: colors.text }]}
-                        >
-                          Students
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.legendItem,
-                          !visibleActiveRoleSeries.instructors &&
-                            styles.legendItemInactive,
-                        ]}
-                        onPress={() => toggleActiveRoleSeries("instructors")}
-                        accessibilityRole="button"
-                        accessibilityLabel="Toggle instructors line"
-                      >
-                        <View
-                          style={[
-                            styles.legendColor,
-                            { backgroundColor: "#10B981" },
-                          ]}
-                        />
-                        <Text
-                          style={[styles.legendText, { color: colors.text }]}
-                        >
-                          Instructors
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.legendItem,
-                          !visibleActiveRoleSeries.admins &&
-                            styles.legendItemInactive,
-                        ]}
-                        onPress={() => toggleActiveRoleSeries("admins")}
-                        accessibilityRole="button"
-                        accessibilityLabel="Toggle admins line"
-                      >
-                        <View
-                          style={[
-                            styles.legendColor,
-                            { backgroundColor: "#EF4444" },
-                          ]}
-                        />
-                        <Text
-                          style={[styles.legendText, { color: colors.text }]}
-                        >
-                          Admins
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    {activeUsersStats.students.reduce((a, b) => a + b, 0) +
-                      activeUsersStats.instructors.reduce((a, b) => a + b, 0) +
-                      activeUsersStats.admins.reduce((a, b) => a + b, 0) ===
-                      0 && (
-                      <Text
-                        style={{ marginTop: 8, color: colors.textSecondary }}
-                      >
-                        No active users in selected period.
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              )}
-              {/* Content Statistics Chart */}
-              {(stats.totalModules > 0 || stats.totalQuizzes > 0) && (
-                <View style={styles.chartContainer}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    📚 Platform Content
-                  </Text>
-                  <View
-                    style={[styles.chartCard, { backgroundColor: colors.card }]}
-                  >
-                    <BarChart
-                      data={contentData}
-                      width={chartWidth}
-                      height={contentChartHeight}
-                      yAxisLabel=""
-                      chartConfig={chartConfig}
-                      verticalLabelRotation={30}
-                      showValuesOnTopOfBars={true}
-                      fromZero
-                      onDataPointClick={(data) => {
-                        handleDataPointClick({
-                          x: contentData.labels[data.index],
-                          value: data.value,
-                          index: data.index,
-                          dataset: {
-                            label: "Platform Content",
-                            data: contentData.datasets[0].data,
-                          },
-                          xLabel: "Metric",
-                          yLabel: "Count",
-                        });
-                      }}
-                    />
-                  </View>
-                </View>
-              )}
-              {/* Bottom Padding */}
-              <View style={styles.bottomPadding} />
             </View>
-          </ScrollView>
-        ) : isAdmin && section === "users" ? (
-          <View style={{ flex: 1 }}>
-            <UsersScreen hideHeader={true} />
-          </View>
-        ) : isAdmin && section === "logs" ? (
-          <View style={{ flex: 1 }}>
-            <LogsScreen useDashboardGradient={true} />
-          </View>
-        ) : null}
+            <TouchableOpacity onPress={handleRefresh} disabled={refreshing}>
+              <MaterialCommunityIcons
+                  name={refreshing ? "loading" : "refresh"}
+                  size={24}
+                  color={colors.text}
+                  style={{
+                    transform: [{ rotateZ: refreshing ? "45deg" : "0deg" }],
+                  }}
+              />
+            </TouchableOpacity>
+          </LinearGradient>
 
-        {/* Interactive Tooltip Modal */}
-        <Modal
-          visible={showTooltip}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={closeTooltip}
-        >
-          <TouchableOpacity
-            style={styles.tooltipOverlay}
-            activeOpacity={1}
-            onPress={closeTooltip}
-          >
-            <View
-              style={[
-                styles.tooltipContainer,
-                { backgroundColor: colors.card },
-              ]}
-            >
-              <View style={styles.tooltipHeader}>
-                <Text style={[styles.tooltipTitle, { color: colors.text }]}>
-                  Data Point Details
-                </Text>
-                <TouchableOpacity onPress={closeTooltip}>
-                  <MaterialCommunityIcons
-                    name="close"
-                    size={24}
-                    color={colors.text}
-                  />
-                </TouchableOpacity>
-              </View>
-              {tooltipData && (
-                <View style={styles.tooltipContent}>
-                  <View style={styles.tooltipRow}>
-                    <Text
-                      style={[
-                        styles.tooltipLabel,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {tooltipData.xLabel || "Period"}:
-                    </Text>
-                    <Text style={[styles.tooltipValue, { color: colors.text }]}>
-                      {tooltipData.x ?? "N/A"}
-                    </Text>
-                  </View>
-                  <View style={styles.tooltipRow}>
-                    <Text
-                      style={[
-                        styles.tooltipLabel,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {tooltipData.yLabel || "Value"}:
-                    </Text>
-                    <Text style={[styles.tooltipValue, { color: colors.text }]}>
-                      {tooltipData.value ?? "N/A"}
-                    </Text>
-                  </View>
-                  {tooltipData.overlappingDatasets &&
-                  tooltipData.overlappingDatasets.length > 1 ? (
-                    <View style={styles.tooltipRow}>
-                      <Text
-                        style={[
-                          styles.tooltipLabel,
-                          { color: colors.textSecondary },
-                        ]}
+          {/* Internal Admin Sections */}
+          {isAdmin && (
+              <View
+                  style={[
+                    styles.sectionTabs,
+                    { borderBottomColor: colors.textSecondary + "20" },
+                  ]}
+              >
+                {[
+                  {
+                    key: "overview",
+                    label: "Overview",
+                    icon: "view-dashboard-outline",
+                  },
+                  {
+                    key: "users",
+                    label: "Manage Users",
+                    icon: "account-multiple-outline",
+                  },
+                  {
+                    key: "logs",
+                    label: "Audit Logs",
+                    icon: "file-document-outline",
+                  },
+                ].map((t) => {
+                  const active = section === t.key;
+                  return (
+                      <TouchableOpacity
+                          key={t.key}
+                          onPress={() => setSection(t.key)}
+                          style={[
+                            styles.sectionTab,
+                            active && { backgroundColor: colors.primary },
+                          ]}
                       >
-                        Roles:
-                      </Text>
-                      <View style={{ flex: 1, alignItems: "flex-end" }}>
-                        {tooltipData.overlappingDatasets.map((role, idx) => (
-                          <Text
-                            key={idx}
+                        <MaterialCommunityIcons
+                            name={t.icon}
+                            size={16}
+                            color={active ? "#FFF" : colors.primary}
+                            style={{ marginRight: 6 }}
+                        />
+                        <Text
                             style={[
-                              styles.tooltipValue,
+                              styles.sectionTabText,
+                              { color: active ? "#ECFDF5" : colors.text },
+                            ]}
+                        >
+                          {t.label}
+                        </Text>
+                      </TouchableOpacity>
+                  );
+                })}
+              </View>
+          )}
+
+          {section === "overview" || !isAdmin ? (
+              <ScrollView
+                  style={[styles.scrollView, isWeb && styles.overviewWebScroll]}
+                  showsVerticalScrollIndicator={isWeb}
+                  persistentScrollbar={isWeb}
+                  refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                        colors={[colors.primary]}
+                        tintColor={colors.primary}
+                    />
+                  }
+              >
+                {/* Add a container to limit width on web */}
+                <View style={styles.contentWrapper}>
+                  {/* Key Statistics Cards */}
+                  <View style={styles.statsContainer}>
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                      📊 {isAdmin ? "System Statistics" : "Quick Stats"}
+                    </Text>
+                    <View style={styles.statsGrid}>
+                      <TouchableOpacity
+                          style={[styles.statCard, { backgroundColor: colors.card }]}
+                          onPress={() => {
+                            if (isAdmin) {
+                              router.push({
+                                pathname: "/(tabs)/instructor",
+                                params: { tab: "tools", open: "analytics" },
+                              });
+                            }
+                          }}
+                          activeOpacity={isAdmin ? 0.86 : 1}
+                          disabled={!isAdmin}
+                      >
+                        <MaterialCommunityIcons
+                            name="account-group"
+                            size={24}
+                            color="#6366F1"
+                        />
+                        <Text style={[styles.statValue, { color: colors.text }]}>
+                          {isAdmin ? stats.totalStudents : "Welcome"}
+                        </Text>
+                        <Text
+                            style={[
+                              styles.statLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                        >
+                          {isAdmin ? "Students" : "Students"}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <View
+                          style={[styles.statCard, { backgroundColor: colors.card }]}
+                      >
+                        <MaterialCommunityIcons
+                            name={isAdmin ? "school" : "book-open-variant"}
+                            size={24}
+                            color="#10B981"
+                        />
+                        <Text style={[styles.statValue, { color: colors.text }]}>
+                          {isAdmin
+                              ? stats.totalInstructors
+                              : stats.totalModules || 0}
+                        </Text>
+                        <Text
+                            style={[
+                              styles.statLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                        >
+                          {isAdmin ? "Instructors" : "Modules"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Top Performer - Admin Only */}
+                  {isAdmin && (
+                      <View style={styles.topPerformerContainer}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                          🏆 Top Performing Students
+                        </Text>
+                        {topPerformers.length > 0 ? (
+                            <View style={styles.topPerformerList}>
+                              {topPerformers.map((performer, idx) => {
+                                const medalColor =
+                                    idx === 0 ? "#FFD700" : idx === 1 ? "#C0C0C0" : "#CD7F32";
+                                return (
+                                    <TouchableOpacity
+                                        key={performer._id || `${performer.username}-${idx}`}
+                                        style={[
+                                          styles.topPerformerCard,
+                                          { backgroundColor: colors.card },
+                                        ]}
+                                        onPress={() => openUserProfileModal(performer)}
+                                        activeOpacity={0.86}
+                                    >
+                                      <View style={styles.crownContainer}>
+                                        <MaterialCommunityIcons
+                                            name={idx === 0 ? "crown" : "medal"}
+                                            size={28}
+                                            color={medalColor}
+                                        />
+                                      </View>
+                                      <View style={styles.performerInfo}>
+                                        <Text
+                                            style={[styles.performerName, { color: colors.text }]}
+                                            numberOfLines={1}
+                                        >
+                                          {idx + 1}. {performer.username}
+                                        </Text>
+                                        <Text
+                                            style={[styles.performerScore, { color: "#6366F1" }]}
+                                        >
+                                          {performer.totalXP || 0} XP
+                                        </Text>
+                                        <Text
+                                            style={[
+                                              styles.performerLevel,
+                                              { color: colors.textSecondary },
+                                            ]}
+                                        >
+                                          Level {performer.level || 1}
+                                        </Text>
+                                      </View>
+                                    </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                        ) : (
+                            <View
+                                style={[
+                                  styles.emptyPerformerCard,
+                                  { backgroundColor: colors.card },
+                                ]}
+                            >
+                              <MaterialCommunityIcons
+                                  name="trophy-broken"
+                                  size={32}
+                                  color={colors.textSecondary}
+                              />
+                              <Text
+                                  style={[
+                                    styles.emptyPerformerText,
+                                    { color: colors.textSecondary },
+                                  ]}
+                              >
+                                No student activity yet
+                              </Text>
+                            </View>
+                        )}
+                      </View>
+                  )}
+
+                  {/* User Distribution Chart - Admin Only */}
+                  {isAdmin && stats.totalUsers > 0 && (
+                      <View style={styles.chartContainer}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                          📈 User Distribution
+                        </Text>
+                        <View
+                            style={[
+                              styles.chartCard,
+                              isWebMobilePortrait && styles.chartCardWebCompact,
                               {
-                                color:
-                                  role === "Students"
-                                    ? "#3B82F6"
-                                    : role === "Instructors"
-                                    ? "#10B981"
-                                    : "#EF4444",
-                                fontSize: 14,
-                                marginTop: idx > 0 ? 4 : 0,
+                                backgroundColor: colors.card,
+                                alignItems: "center",
+                                overflow: "visible",
                               },
                             ]}
+                        >
+                          <View
+                              style={[
+                                styles.pieChartContainer,
+                                isWebMobilePortrait && styles.pieChartContainerWebCompact,
+                              ]}
                           >
-                            • {role}
+                            <PieChart
+                                data={userRoleData}
+                                width={pieChartCanvasWidth}
+                                height={pieChartSize}
+                                chartConfig={{
+                                  ...chartConfig,
+                                  color: (opacity = 1) => `rgba(0,0,0,${opacity})`,
+                                  propsForLabels: {
+                                    fontSize: isAndroid ? 10 : 11,
+                                    fontWeight: "700",
+                                  },
+                                }}
+                                accessor="population"
+                                backgroundColor="transparent"
+                                paddingLeft={pieChartPaddingLeft}
+                                center={pieChartCenter}
+                                absolute={showAbsolutePieLabels}
+                                hasLegend={false}
+                                style={{
+                                  marginVertical: 4,
+                                  borderRadius: 16,
+                                  alignSelf: "center",
+                                }}
+                                onDataPointClick={(slice) => {
+                                  togglePieRole(slice.name);
+                                  handleDataPointClick({
+                                    x: slice.name,
+                                    value: slice.population,
+                                    index: slice.index,
+                                    dataset: {
+                                      label: slice.name,
+                                      data: userRoleData.map((item) => item.population),
+                                    },
+                                    xLabel: "Role",
+                                    yLabel: "Users",
+                                  });
+                                }}
+                            />
+                          </View>
+                          <Text
+                              style={{
+                                marginTop: 4,
+                                fontSize: 12,
+                                color: colors.textSecondary,
+                              }}
+                          >
+                            Total Users: {stats.totalUsers}
                           </Text>
-                        ))}
+                          <View style={{ marginTop: 12, width: "100%" }}>
+                            {userRoleData.map((d) => {
+                              const pct = stats.totalUsers
+                                  ? ((d.population / stats.totalUsers) * 100).toFixed(1)
+                                  : "0.0";
+                              const isSelected = selectedRole === d.name;
+                              return (
+                                  <TouchableOpacity
+                                      key={d.name}
+                                      onPress={() => togglePieRole(d.name)}
+                                      activeOpacity={0.85}
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`${d.name} role filter`}
+                                      accessibilityHint="Tap to highlight this pie chart role"
+                                      style={{
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        marginBottom: 6,
+                                        borderRadius: 10,
+                                        paddingHorizontal: 8,
+                                        paddingVertical: 6,
+                                        backgroundColor: isSelected
+                                            ? colors.primary + "22"
+                                            : "transparent",
+                                      }}
+                                  >
+                                    <View
+                                        style={{
+                                          width: 14,
+                                          height: 14,
+                                          borderRadius: 7,
+                                          backgroundColor: pieRoles.find((r) => r.name === d.name)
+                                              ?.color,
+                                          marginRight: 8,
+                                        }}
+                                    />
+                                    <Text
+                                        style={{
+                                          flex: 1,
+                                          color: colors.text,
+                                          fontSize: 13,
+                                          fontWeight: "600",
+                                        }}
+                                    >
+                                      {d.name}
+                                    </Text>
+                                    <Text
+                                        style={{
+                                          color: colors.textSecondary,
+                                          fontSize: 12,
+                                        }}
+                                    >
+                                      {d.population} ({pct}%)
+                                    </Text>
+                                  </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                          <View style={styles.interactionHintRow}>
+                            <MaterialCommunityIcons
+                                name="gesture-tap"
+                                size={14}
+                                color={colors.textSecondary}
+                            />
+                            <Text
+                                style={[
+                                  styles.interactionHintText,
+                                  { color: colors.textSecondary },
+                                ]}
+                            >
+                              Tap a slice or role row to highlight distribution.
+                            </Text>
+                          </View>
+                        </View>
                       </View>
+                  )}
+
+                  {/* Analytics Period Selector - Admin Only */}
+                  {isAdmin && (
+                      <View style={styles.periodSelectorContainer}>
+
+                        <View style={styles.periodSelectorRow}>
+                          {["daily", "weekly", "monthly"].map((period) => (
+                              <TouchableOpacity
+                                  key={period}
+                                  style={[
+                                    styles.periodButton,
+                                    analyticsPeriod === period && {
+                                      backgroundColor: colors.primary,
+                                    },
+                                  ]}
+                                  onPress={() => handlePeriodChange(period)}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`${period} period`}
+                                  accessibilityHint="Switches chart grouping window"
+                              >
+                                <Text
+                                    style={[
+                                      styles.periodButtonText,
+                                      {
+                                        color:
+                                            analyticsPeriod === period
+                                                ? "#FFFFFF"
+                                                : colors.text,
+                                      },
+                                    ]}
+                                >
+                                  {period.charAt(0).toUpperCase() + period.slice(1)}
+                                </Text>
+                              </TouchableOpacity>
+                          ))}
+                        </View>
+                        <View style={styles.interactionHintRow}>
+                          <MaterialCommunityIcons
+                              name="information-outline"
+                              size={14}
+                              color={colors.textSecondary}
+                          />
+                          <Text
+                              style={[
+                                styles.interactionHintText,
+                                { color: colors.textSecondary },
+                              ]}
+                          >
+                            Tap Daily, Weekly, or Monthly to change how points are grouped.
+                          </Text>
+                        </View>
+                      </View>
+                  )}
+
+                  {/* Quiz Completion Statistics - Admin Only */}
+                  {/* Quiz Completion Statistics by Role graph removed per request */}
+
+                  {/* Active Users by Role - Admin Only */}
+                  {isAdmin && (
+                      <View style={styles.chartContainer}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                          👥 Active Users
+                        </Text>
+                        <View
+                            style={[styles.chartCard, { backgroundColor: colors.card }]}
+                        >
+                          <View style={styles.calendarControlsRow}>
+                            <TouchableOpacity
+                                style={styles.calendarButton}
+                                onPress={() => handleCalendarPageChange(1)}
+                                activeOpacity={0.8}
+                                accessibilityRole="button"
+                                accessibilityLabel="Previous active users range"
+                                accessibilityHint="Shows an older active users date window"
+                            >
+                              <MaterialCommunityIcons
+                                  name="chevron-left"
+                                  size={18}
+                                  color={colors.primary}
+                              />
+                            </TouchableOpacity>
+                            <Text
+                                style={[styles.calendarLabel, { color: colors.textSecondary }]}
+                            >
+                              {calendarLabel}
+                            </Text>
+                            <TouchableOpacity
+                                style={[
+                                  styles.calendarButton,
+                                  isLatestCalendarWindow && styles.calendarButtonDisabled,
+                                ]}
+                                onPress={() => handleCalendarPageChange(-1)}
+                                disabled={isLatestCalendarWindow}
+                                activeOpacity={0.8}
+                                accessibilityRole="button"
+                                accessibilityLabel="Next active users range"
+                                accessibilityHint="Shows a newer active users date window"
+                            >
+                              <MaterialCommunityIcons
+                                  name="chevron-right"
+                                  size={18}
+                                  color={
+                                    isLatestCalendarWindow
+                                        ? colors.textSecondary
+                                        : colors.primary
+                                  }
+                              />
+                            </TouchableOpacity>
+                          </View>
+                          <View style={styles.interactionHintRow}>
+                            <MaterialCommunityIcons
+                                name="gesture-tap"
+                                size={14}
+                                color={colors.textSecondary}
+                            />
+                            <Text
+                                style={[
+                                  styles.interactionHintText,
+                                  { color: colors.textSecondary },
+                                ]}
+                            >
+                              Tap legend items to show or hide role lines.
+                            </Text>
+                          </View>
+                          <Animated.View
+                              style={[
+                                styles.animatedChart,
+                                {
+                                  opacity: chartFadeAnim,
+                                  transform: [
+                                    {
+                                      translateY: chartFadeAnim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [10, 0],
+                                      }),
+                                    },
+                                  ],
+                                },
+                              ]}
+                          >
+                            {analyticsPeriod === "monthly" ? (
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                >
+                                  {(() => {
+                                    const dynamicWidth = Math.max(
+                                        chartWidth,
+                                        activeUsersStats.labels.length * monthlyLabelSpacing
+                                    );
+                                    return (
+                                        <LineChart
+                                            data={{
+                                              labels: activeUsersStats.labels.length
+                                                  ? activeUsersStats.labels
+                                                  : [""],
+                                              datasets: [
+                                                ...(activeRoleSeries.length
+                                                        ? activeRoleSeries
+                                                        : [
+                                                          {
+                                                            key: "students",
+                                                            label: "Students",
+                                                            values: [0],
+                                                            colorRgba: "rgba(59,130,246,",
+                                                          },
+                                                        ]
+                                                ).map((series) => ({
+                                                  data: series.values.length
+                                                      ? series.values
+                                                      : [0],
+                                                  color: (o = 1) => `${series.colorRgba}${o})`,
+                                                  strokeWidth: 3,
+                                                  roleKey: series.key,
+                                                  label: series.label,
+                                                })),
+                                              ],
+                                              legend: activeRoleSeries.map((d) => d.label),
+                                            }}
+                                            width={dynamicWidth}
+                                            height={activeUsersChartHeight}
+                                            yAxisInterval={1}
+                                            chartConfig={{
+                                              ...chartConfig,
+                                              labelColor: (o = 1) => `rgba(156,163,175,${o})`,
+                                              propsForBackgroundLines: {
+                                                stroke: colors.textSecondary + "30",
+                                              },
+                                              propsForDots: { r: "3", strokeWidth: "2" },
+                                            }}
+                                            bezier
+                                            style={{ marginVertical: 8, borderRadius: 16 }}
+                                            fromZero
+                                            segments={4}
+                                            verticalLabelRotation={
+                                              isAndroid && analyticsPeriod !== "daily" ? 18 : 0
+                                            }
+                                            onDataPointClick={handleActiveUsersDataPointClick}
+                                        />
+                                    );
+                                  })()}
+                                </ScrollView>
+                            ) : (
+                                <LineChart
+                                    data={{
+                                      labels: activeUsersStats.labels.length
+                                          ? activeUsersStats.labels
+                                          : [""],
+                                      datasets: [
+                                        ...(activeRoleSeries.length
+                                                ? activeRoleSeries
+                                                : [
+                                                  {
+                                                    key: "students",
+                                                    label: "Students",
+                                                    values: [0],
+                                                    colorRgba: "rgba(59,130,246,",
+                                                  },
+                                                ]
+                                        ).map((series) => ({
+                                          data: series.values.length ? series.values : [0],
+                                          color: (o = 1) => `${series.colorRgba}${o})`,
+                                          strokeWidth: 3,
+                                          roleKey: series.key,
+                                          label: series.label,
+                                        })),
+                                      ],
+                                      legend: activeRoleSeries.map((d) => d.label),
+                                    }}
+                                    width={chartWidth}
+                                    height={activeUsersChartHeight}
+                                    yAxisInterval={1}
+                                    chartConfig={{
+                                      ...chartConfig,
+                                      labelColor: (o = 1) => `rgba(156,163,175,${o})`,
+                                      propsForBackgroundLines: {
+                                        stroke: colors.textSecondary + "30",
+                                      },
+                                      propsForDots: { r: "3", strokeWidth: "2" },
+                                    }}
+                                    bezier
+                                    style={{ marginVertical: 8, borderRadius: 16 }}
+                                    fromZero
+                                    segments={4}
+                                    verticalLabelRotation={
+                                      isAndroid && analyticsPeriod !== "daily" ? 18 : 0
+                                    }
+                                    onDataPointClick={handleActiveUsersDataPointClick}
+                                />
+                            )}
+                          </Animated.View>
+                          <View style={styles.legendContainer}>
+                            <TouchableOpacity
+                                style={[
+                                  styles.legendItem,
+                                  !visibleActiveRoleSeries.students &&
+                                  styles.legendItemInactive,
+                                ]}
+                                onPress={() => toggleActiveRoleSeries("students")}
+                                accessibilityRole="button"
+                                accessibilityLabel="Toggle students line"
+                            >
+                              <View
+                                  style={[
+                                    styles.legendColor,
+                                    { backgroundColor: "#3B82F6" },
+                                  ]}
+                              />
+                              <Text
+                                  style={[styles.legendText, { color: colors.text }]}
+                              >
+                                Students
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                  styles.legendItem,
+                                  !visibleActiveRoleSeries.instructors &&
+                                  styles.legendItemInactive,
+                                ]}
+                                onPress={() => toggleActiveRoleSeries("instructors")}
+                                accessibilityRole="button"
+                                accessibilityLabel="Toggle instructors line"
+                            >
+                              <View
+                                  style={[
+                                    styles.legendColor,
+                                    { backgroundColor: "#10B981" },
+                                  ]}
+                              />
+                              <Text
+                                  style={[styles.legendText, { color: colors.text }]}
+                              >
+                                Instructors
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                  styles.legendItem,
+                                  !visibleActiveRoleSeries.admins &&
+                                  styles.legendItemInactive,
+                                ]}
+                                onPress={() => toggleActiveRoleSeries("admins")}
+                                accessibilityRole="button"
+                                accessibilityLabel="Toggle admins line"
+                            >
+                              <View
+                                  style={[
+                                    styles.legendColor,
+                                    { backgroundColor: "#EF4444" },
+                                  ]}
+                              />
+                              <Text
+                                  style={[styles.legendText, { color: colors.text }]}
+                              >
+                                Admins
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                          {activeUsersStats.students.reduce((a, b) => a + b, 0) +
+                              activeUsersStats.instructors.reduce((a, b) => a + b, 0) +
+                              activeUsersStats.admins.reduce((a, b) => a + b, 0) ===
+                              0 && (
+                                  <Text
+                                      style={{ marginTop: 8, color: colors.textSecondary }}
+                                  >
+                                    No active users in selected period.
+                                  </Text>
+                              )}
+                        </View>
+                      </View>
+                  )}
+                  {/* Content Statistics Chart */}
+                  {(stats.totalModules > 0 || stats.totalQuizzes > 0) && (
+                      <View style={styles.chartContainer}>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                          📚 Platform Content
+                        </Text>
+                        <View
+                            style={[styles.chartCard, { backgroundColor: colors.card }]}
+                        >
+                          <BarChart
+                              data={contentData}
+                              width={chartWidth}
+                              height={contentChartHeight}
+                              yAxisLabel=""
+                              chartConfig={chartConfig}
+                              verticalLabelRotation={30}
+                              showValuesOnTopOfBars={true}
+                              fromZero
+                              onDataPointClick={(data) => {
+                                handleDataPointClick({
+                                  x: contentData.labels[data.index],
+                                  value: data.value,
+                                  index: data.index,
+                                  dataset: {
+                                    label: "Platform Content",
+                                    data: contentData.datasets[0].data,
+                                  },
+                                  xLabel: "Metric",
+                                  yLabel: "Count",
+                                });
+                              }}
+                          />
+                        </View>
+                      </View>
+                  )}
+                  {/* Bottom Padding */}
+                  <View style={styles.bottomPadding} />
+                </View>
+              </ScrollView>
+          ) : isAdmin && section === "users" ? (
+              <View style={{ flex: 1 }}>
+                <UsersScreen hideHeader={true} />
+              </View>
+          ) : isAdmin && section === "logs" ? (
+              <View style={{ flex: 1 }}>
+                <LogsScreen useDashboardGradient={true} />
+              </View>
+          ) : null}
+
+          <Modal
+              animationType="fade"
+              transparent={true}
+              visible={profileModalVisible}
+              onRequestClose={() => {
+                setProfileModalVisible(false);
+                setProfileModalError(null);
+              }}
+          >
+            <View style={styles.profileModalOverlay}>
+              <View
+                  style={[
+                    styles.profileModalContent,
+                    { backgroundColor: colors.card, borderColor: "rgba(148, 163, 184, 0.25)" },
+                  ]}
+              >
+                <View style={styles.profileModalHeader}>
+                  <Text style={[styles.profileModalTitle, { color: colors.text }]}>User Profile</Text>
+                  <TouchableOpacity
+                      style={styles.profileCloseButton}
+                      onPress={() => {
+                        setProfileModalVisible(false);
+                        setProfileModalError(null);
+                      }}
+                  >
+                    <MaterialCommunityIcons name="close" size={22} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                {profileModalLoading && !selectedProfileData ? (
+                    <View style={styles.profileCenteredMini}>
+                      <ActivityIndicator size="large" color={colors.primary} />
+                      <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading user profile...</Text>
                     </View>
-                  ) : (
-                    tooltipData.dataset &&
-                    tooltipData.dataset.label && (
+                ) : selectedProfileData ? (
+                    <ScrollView
+                        style={styles.profileScrollArea}
+                        contentContainerStyle={styles.profileScrollContent}
+                        showsVerticalScrollIndicator={isWeb}
+                    >
+                      {profileModalError ? (
+                          <View style={styles.profileInlineWarning}>
+                            <MaterialCommunityIcons
+                                name="alert-circle-outline"
+                                size={16}
+                                color={colors.warning || "#FF9800"}
+                            />
+                            <Text style={[styles.profileInlineWarningText, { color: colors.textSecondary }]}>
+                              {profileModalError}
+                            </Text>
+                          </View>
+                      ) : null}
+
+                      <LinearGradient
+                          colors={["rgba(95, 210, 205, 0.28)", "rgba(202, 241, 200, 0.18)"]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.profileHero}
+                      >
+                        <View style={styles.profileHeroTop}>
+                          <View style={styles.profileAvatarBadge}>
+                            {selectedProfileData.basic.profileImage &&
+                            !imageErrors[selectedProfileData.basic._id] ? (
+                                <Image
+                                    source={{
+                                      uri: getCompatibleImageUrl(selectedProfileData.basic.profileImage),
+                                    }}
+                                    style={styles.profileAvatarImage}
+                                    onError={() => handleImageError(selectedProfileData.basic._id)}
+                                />
+                            ) : (
+                                <MaterialCommunityIcons
+                                    name="account-circle-outline"
+                                    size={40}
+                                    color={colors.primary}
+                                />
+                            )}
+                          </View>
+                          <View style={styles.profileHeroTextWrap}>
+                            <Text style={[styles.profileHeroName, { color: colors.text }]}>
+                              {selectedProfileData.basic.fullName}
+                            </Text>
+                            <Text style={[styles.profileHeroUsername, { color: colors.textSecondary }]}>
+                              @{selectedProfileData.basic.username}
+                            </Text>
+                          </View>
+                          <View style={styles.profileRoleBadgePill}>
+                            <Text style={styles.profileRoleBadgeText}>
+                              {selectedProfileData.basic.role}
+                            </Text>
+                          </View>
+                        </View>
+                      </LinearGradient>
+
+                      <View style={styles.profileCard}>
+                        <Text style={[styles.profileCardTitle, { color: colors.text }]}>Account Details</Text>
+                        <View style={styles.profileInfoRow}>
+                          <Text style={[styles.profileInfoLabel, { color: colors.textSecondary }]}>Username</Text>
+                          <Text style={[styles.profileInfoValue, { color: colors.text }]}>
+                            {selectedProfileData.basic.username}
+                          </Text>
+                        </View>
+                        <View style={styles.profileInfoDivider} />
+                        <View style={styles.profileInfoRow}>
+                          <Text style={[styles.profileInfoLabel, { color: colors.textSecondary }]}>Name</Text>
+                          <Text style={[styles.profileInfoValue, { color: colors.text }]}>
+                            {selectedProfileData.basic.fullName}
+                          </Text>
+                        </View>
+                        <View style={styles.profileInfoDivider} />
+                        <View style={styles.profileInfoRow}>
+                          <Text style={[styles.profileInfoLabel, { color: colors.textSecondary }]}>Email</Text>
+                          <Text style={[styles.profileInfoValue, { color: colors.text }]}>
+                            {selectedProfileData.basic.email}
+                          </Text>
+                        </View>
+                        <View style={styles.profileInfoDivider} />
+                        <View style={styles.profileInfoRow}>
+                          <Text style={[styles.profileInfoLabel, { color: colors.textSecondary }]}>Role</Text>
+                          <Text style={[styles.profileInfoValue, { color: colors.text }]}>
+                            {selectedProfileData.basic.role}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {selectedProfileData.student ? (
+                          <>
+                            <View style={styles.profileCard}>
+                              <Text style={[styles.profileCardTitle, { color: colors.text }]}>Student CyberQuest Progress</Text>
+                              <View style={styles.profileStatsWrap}>
+                                <View style={styles.profileStatChip}>
+                                  <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>Level</Text>
+                                  <Text style={[styles.profileStatValue, { color: colors.text }]}>
+                                    {selectedProfileData.student.level}
+                                  </Text>
+                                </View>
+                                <View style={styles.profileStatChip}>
+                                  <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>XP</Text>
+                                  <Text style={[styles.profileStatValue, { color: colors.text }]}>
+                                    {selectedProfileData.student.totalXP}
+                                  </Text>
+                                </View>
+                                <View style={styles.profileStatChip}>
+                                  <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>All Games</Text>
+                                  <Text style={[styles.profileStatValue, { color: colors.text }]}>
+                                    {selectedProfileData.student.totalGamesPlayed}
+                                  </Text>
+                                </View>
+                                <View style={styles.profileStatChip}>
+                                  <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>CyberQuest</Text>
+                                  <Text style={[styles.profileStatValue, { color: colors.text }]}>
+                                    {selectedProfileData.student.cyberQuestGamesPlayed}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+
+                            <View style={styles.profileCard}>
+                              <View style={styles.profileSectionHeaderRow}>
+                                <Text style={[styles.profileCardTitle, { color: colors.text }]}>Enrolled Subjects</Text>
+                                <Text style={[styles.profileSectionCount, { color: colors.textSecondary }]}>
+                                  {selectedProfileData.student.enrolledSubjects.length}
+                                </Text>
+                              </View>
+                              {selectedProfileData.student.enrolledSubjects.length > 0 ? (
+                                  selectedProfileData.student.enrolledSubjects.map((subject) => (
+                                      <View key={String(subject._id)} style={styles.profileSubjectItem}>
+                                        <View style={styles.profileSubjectRow}>
+                                          <MaterialCommunityIcons
+                                              name="book-open-page-variant"
+                                              size={16}
+                                              color={colors.primary}
+                                          />
+                                          <Text style={[styles.profileSubjectName, { color: colors.text }]}>
+                                            {subject.name}
+                                          </Text>
+                                        </View>
+                                        <Text style={[styles.profileSubjectMeta, { color: colors.textSecondary }]}>
+                                          Code: {getSubjectCode(subject)}
+                                        </Text>
+                                      </View>
+                                  ))
+                              ) : (
+                                  <Text style={[styles.profileEmptyText, { color: colors.textSecondary }]}>No enrolled subjects found.</Text>
+                              )}
+                            </View>
+                          </>
+                      ) : null}
+
+                      {selectedProfileData.instructor ? (
+                          <>
+                            <View style={styles.profileCard}>
+                              <View style={styles.profileSectionHeaderRow}>
+                                <Text style={[styles.profileCardTitle, { color: colors.text }]}>Handled Subjects</Text>
+                                <Text style={[styles.profileSectionCount, { color: colors.textSecondary }]}>
+                                  {selectedProfileData.instructor.handledSubjects.length}
+                                </Text>
+                              </View>
+                              {selectedProfileData.instructor.handledSubjects.length > 0 ? (
+                                  selectedProfileData.instructor.handledSubjects.map((subject) => (
+                                      <View key={String(subject._id)} style={styles.profileSubjectItem}>
+                                        <View style={styles.profileSubjectRow}>
+                                          <MaterialCommunityIcons
+                                              name="school-outline"
+                                              size={16}
+                                              color={colors.primary}
+                                          />
+                                          <Text style={[styles.profileSubjectName, { color: colors.text }]}>
+                                            {subject.name}
+                                          </Text>
+                                        </View>
+                                        <Text style={[styles.profileSubjectMeta, { color: colors.textSecondary }]}>
+                                          Code: {getSubjectCode(subject)}
+                                        </Text>
+                                      </View>
+                                  ))
+                              ) : (
+                                  <Text style={[styles.profileEmptyText, { color: colors.textSecondary }]}>No handled subjects found.</Text>
+                              )}
+                            </View>
+                          </>
+                      ) : null}
+                    </ScrollView>
+                ) : (
+                    <View style={styles.profileCenteredMini}>
+                      <Text style={[styles.profileEmptyText, { color: colors.textSecondary }]}>No profile data available.</Text>
+                    </View>
+                )}
+              </View>
+            </View>
+          </Modal>
+
+          {/* Interactive Tooltip Modal */}
+          <Modal
+              visible={showTooltip}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={closeTooltip}
+          >
+            <TouchableOpacity
+                style={styles.tooltipOverlay}
+                activeOpacity={1}
+                onPress={closeTooltip}
+            >
+              <View
+                  style={[
+                    styles.tooltipContainer,
+                    { backgroundColor: colors.card },
+                  ]}
+              >
+                <View style={styles.tooltipHeader}>
+                  <Text style={[styles.tooltipTitle, { color: colors.text }]}>
+                    Data Point Details
+                  </Text>
+                  <TouchableOpacity onPress={closeTooltip}>
+                    <MaterialCommunityIcons
+                        name="close"
+                        size={24}
+                        color={colors.text}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {tooltipData && (
+                    <View style={styles.tooltipContent}>
                       <View style={styles.tooltipRow}>
                         <Text
-                          style={[
-                            styles.tooltipLabel,
-                            { color: colors.textSecondary },
-                          ]}
+                            style={[
+                              styles.tooltipLabel,
+                              { color: colors.textSecondary },
+                            ]}
                         >
-                          Role:
+                          {tooltipData.xLabel || "Period"}:
                         </Text>
-                        <Text
-                          style={[
-                            styles.tooltipValue,
-                            {
-                              color:
-                                tooltipData.dataset.label === "Students"
-                                  ? "#3B82F6"
-                                  : tooltipData.dataset.label === "Instructors"
-                                  ? "#10B981"
-                                  : "#EF4444",
-                            },
-                          ]}
-                        >
-                          {tooltipData.dataset.label}
+                        <Text style={[styles.tooltipValue, { color: colors.text }]}>
+                          {tooltipData.x ?? "N/A"}
                         </Text>
                       </View>
-                    )
-                  )}
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
-        </Modal>
-      </SafeAreaView>
-    </LinearGradient>
+                      <View style={styles.tooltipRow}>
+                        <Text
+                            style={[
+                              styles.tooltipLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                        >
+                          {tooltipData.yLabel || "Value"}:
+                        </Text>
+                        <Text style={[styles.tooltipValue, { color: colors.text }]}>
+                          {tooltipData.value ?? "N/A"}
+                        </Text>
+                      </View>
+                      {tooltipData.overlappingDatasets &&
+                      tooltipData.overlappingDatasets.length > 1 ? (
+                          <View style={styles.tooltipRow}>
+                            <Text
+                                style={[
+                                  styles.tooltipLabel,
+                                  { color: colors.textSecondary },
+                                ]}
+                            >
+                              Roles:
+                            </Text>
+                            <View style={{ flex: 1, alignItems: "flex-end" }}>
+                              {tooltipData.overlappingDatasets.map((role, idx) => (
+                                  <Text
+                                      key={idx}
+                                      style={[
+                                        styles.tooltipValue,
+                                        {
+                                          color:
+                                              role === "Students"
+                                                  ? "#3B82F6"
+                                                  : role === "Instructors"
+                                                      ? "#10B981"
+                                                      : "#EF4444",
+                                          fontSize: 14,
+                                          marginTop: idx > 0 ? 4 : 0,
+                                        },
+                                      ]}
+                                  >
+                                    • {role}
+                                  </Text>
+                              ))}
+                            </View>
+                          </View>
+                      ) : (
+                          tooltipData.dataset &&
+                          tooltipData.dataset.label && (
+                              <View style={styles.tooltipRow}>
+                                <Text
+                                    style={[
+                                      styles.tooltipLabel,
+                                      { color: colors.textSecondary },
+                                    ]}
+                                >
+                                  Role:
+                                </Text>
+                                <Text
+                                    style={[
+                                      styles.tooltipValue,
+                                      {
+                                        color:
+                                            tooltipData.dataset.label === "Students"
+                                                ? "#3B82F6"
+                                                : tooltipData.dataset.label === "Instructors"
+                                                    ? "#10B981"
+                                                    : "#EF4444",
+                                      },
+                                    ]}
+                                >
+                                  {tooltipData.dataset.label}
+                                </Text>
+                              </View>
+                          )
+                      )}
+                    </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        </SafeAreaView>
+      </LinearGradient>
   );
 }
 
@@ -2113,5 +2593,205 @@ const styles = StyleSheet.create({
   tooltipValue: {
     fontSize: 16,
     fontWeight: "bold",
+  },
+  profileModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  profileModalContent: {
+    width: "100%",
+    maxWidth: 680,
+    maxHeight: "92%",
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  profileModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148, 163, 184, 0.2)",
+  },
+  profileModalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  profileCloseButton: {
+    padding: 4,
+  },
+  profileCenteredMini: {
+    paddingVertical: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileScrollArea: {
+    flex: 1,
+  },
+  profileScrollContent: {
+    padding: 16,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  profileInlineWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+  },
+  profileInlineWarningText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  profileHero: {
+    borderRadius: 14,
+    padding: 14,
+  },
+  profileHeroTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  profileAvatarBadge: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.72)",
+    overflow: "hidden",
+  },
+  profileAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  profileHeroTextWrap: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  profileHeroName: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  profileHeroUsername: {
+    marginTop: 2,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  profileRoleBadgePill: {
+    borderRadius: 999,
+    backgroundColor: "rgba(37, 99, 235, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(37, 99, 235, 0.3)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  profileRoleBadgeText: {
+    color: "#1D4ED8",
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  profileCard: {
+    borderRadius: 14,
+    backgroundColor: "rgba(148, 163, 184, 0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.2)",
+    padding: 14,
+  },
+  profileCardTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 10,
+  },
+  profileInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 6,
+  },
+  profileInfoLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  profileInfoValue: {
+    flex: 1,
+    textAlign: "right",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  profileInfoDivider: {
+    height: 1,
+    backgroundColor: "rgba(148, 163, 184, 0.2)",
+  },
+  profileStatsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  profileStatChip: {
+    minWidth: 90,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.22)",
+    backgroundColor: "rgba(255,255,255,0.55)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  profileStatLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  profileStatValue: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  profileSectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  profileSectionCount: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  profileSubjectItem: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.2)",
+    backgroundColor: "rgba(148, 163, 184, 0.05)",
+    padding: 10,
+    marginBottom: 8,
+  },
+  profileSubjectRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  profileSubjectName: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  profileSubjectMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  profileEmptyText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

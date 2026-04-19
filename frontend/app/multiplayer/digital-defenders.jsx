@@ -13,6 +13,7 @@ import {
   Platform,
   TextInput,
   ImageBackground,
+  useWindowDimensions,
 } from "react-native";
 // Removed unused AsyncStorage import
 // import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -37,7 +38,7 @@ import { useNavigationLock } from "@/contexts/NavigationLockContext";
 const IS_UNSUPPORTED_PLATFORM = Platform.OS === "ios";
 if (IS_UNSUPPORTED_PLATFORM) {
   console.warn(
-    "Digital Defenders is only supported on Android and Web platforms"
+      "Digital Defenders is only supported on Android and Web platforms"
   );
 }
 
@@ -246,6 +247,26 @@ function DigitalDefenders() {
   const router = useRouter();
   const navigation = useNavigation();
   const { setNavigationLocked } = useNavigationLock();
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const isWebPortraitGameplay =
+      Platform.OS === "web" && viewportHeight >= viewportWidth && viewportWidth <= 620;
+  const isWebMobileViewport = Platform.OS === "web" && viewportWidth <= 900;
+  const portraitFitScale = Math.min(viewportWidth / 480, viewportHeight / 760);
+  const shouldScaleGameplay = isWebPortraitGameplay && viewportWidth <= 430;
+  const gameplayScale = shouldScaleGameplay
+      ? Math.max(0.9, Math.min(0.97, portraitFitScale))
+      : 1;
+  const gameplayScaledShellStyle =
+      shouldScaleGameplay && gameplayScale < 1
+          ? {
+            width: `${100 / gameplayScale}%`,
+            transform: [{ scale: gameplayScale }],
+            alignSelf: "center",
+            marginHorizontal: "auto",
+            ...(Platform.OS === "web" ? { transformOrigin: "top center" } : {}),
+          }
+          : null;
+  const isCompactGameplayLayout = isWebMobileViewport;
   const isMountedRef = useRef(true);
   const isQuittingRef = useRef(false);
   const { user, token } = useAuthStore();
@@ -272,12 +293,12 @@ function DigitalDefenders() {
       // Re-run auth check in case app just started
       const { checkAuth } = useAuthStore.getState();
       checkAuth()
-        .then(() => {
-          console.log("✅ Auth check completed");
-        })
-        .catch((error) => {
-          console.error("❌ Auth check failed:", error);
-        });
+          .then(() => {
+            console.log("✅ Auth check completed");
+          })
+          .catch((error) => {
+            console.error("❌ Auth check failed:", error);
+          });
     }
   }, [user, token]);
 
@@ -288,7 +309,7 @@ function DigitalDefenders() {
   const [isConnected, setIsConnected] = useState(false);
   const [roomData, setRoomData] = useState(null);
   const [playerName, setPlayerName] = useState(
-    user?.fullName || user?.name || `Player${Math.floor(Math.random() * 1000)}`
+      user?.fullName || user?.name || `Player${Math.floor(Math.random() * 1000)}`
   );
   const [roomId, setRoomId] = useState("");
   const [playerId, setPlayerId] = useState(null);
@@ -296,14 +317,14 @@ function DigitalDefenders() {
 
   // Game state
   const [gameState, setGameState] = useState("lobby"); // lobby, waiting, turnOrder, playing, gameOver, victory
-      // Lock tab navigation only while a Digital Defenders match is actively running.
-      useEffect(() => {
-        setNavigationLocked(gameState === "playing");
+  // Lock tab navigation only while a Digital Defenders match is actively running.
+  useEffect(() => {
+    setNavigationLocked(gameState === "playing");
 
-        return () => {
-          setNavigationLocked(false);
-        };
-      }, [gameState, setNavigationLocked]);
+    return () => {
+      setNavigationLocked(false);
+    };
+  }, [gameState, setNavigationLocked]);
 
   const [currentWave, setCurrentWave] = useState(1);
   const [pcHealth, setPcHealth] = useState(5);
@@ -346,131 +367,131 @@ function DigitalDefenders() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [uploadSuccessModalVisible, setUploadSuccessModalVisible] =
-    useState(false);
+      useState(false);
   const [uploadFailureModalVisible, setUploadFailureModalVisible] =
-    useState(false);
+      useState(false);
   const [showImportDocs, setShowImportDocs] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
 
   const renderImportDocsModal = () => (
-    <Modal
-      visible={showImportDocs}
-      animationType="slide"
-      transparent
-      onRequestClose={() => setShowImportDocs(false)}
-    >
-      <View style={styles.docsOverlay}>
-        <View style={styles.docsContainer}>
-          <View style={styles.docsHeader}>
-            <Text style={styles.docsTitle}>Question Import Guide</Text>
-            <TouchableOpacity
-              style={styles.docsCloseButton}
-              onPress={() => setShowImportDocs(false)}
+      <Modal
+          visible={showImportDocs}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowImportDocs(false)}
+      >
+        <View style={styles.docsOverlay}>
+          <View style={styles.docsContainer}>
+            <View style={styles.docsHeader}>
+              <Text style={styles.docsTitle}>Question Import Guide</Text>
+              <TouchableOpacity
+                  style={styles.docsCloseButton}
+                  onPress={() => setShowImportDocs(false)}
+              >
+                <MaterialCommunityIcons name="close" size={22} color="#3b82f6" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+                style={styles.docsScroll}
+                showsVerticalScrollIndicator={false}
             >
-              <MaterialCommunityIcons name="close" size={22} color="#3b82f6" />
-            </TouchableOpacity>
+              <Text style={styles.docsText}>
+                {`The Cyber Learn platform supports importing custom questions via JSON for three modes:\n\n• Knowledge Relay Race\n• Quiz Showdown\n• Digital Defenders\n\nAll imported questions are globally stored and persistent across sessions.\n\nJSON Requirements\n------------------\nKnowledge Relay (array of objects)\nRequired: question (string), options (array, min 2), correctAnswer (index)\nOptional: category, difficulty, points, id\n\nQuiz Showdown\nRequired: question, options (2–4), correct (index)\nOptional: category, difficulty, points\nRules: Unique questions, valid indices, auto-pads to 4 options\n\nDigital Defenders\nRequired: question (string), correctAnswer (string)\nOptional: difficulty, wave (1–10), description\nRules: Max 5 per wave, unique, case-sensitive difficulty\n\nPoint System\nEasy: 1 | Medium: 2 | Hard: 3\nManual points allowed, defaults applied if missing\n\nBest Practices\n• Validate JSON online before upload\n• Start with small test files (3–5 questions)\n• Write clear, distinct questions\n• Keep files under 1MB, UTF-8 encoded, .json extension\n\nTroubleshooting\n• Upload fails → Check format, extension, size\n• Questions missing → Verify format & success message\n• Common errors: wrong field (correct vs correctAnswer), invalid indices, bad difficulty values, duplicate/empty questions`}
+              </Text>
+            </ScrollView>
           </View>
-          <ScrollView
-            style={styles.docsScroll}
-            showsVerticalScrollIndicator={false}
-          >
-            <Text style={styles.docsText}>
-              {`The Cyber Learn platform supports importing custom questions via JSON for three modes:\n\n• Knowledge Relay Race\n• Quiz Showdown\n• Digital Defenders\n\nAll imported questions are globally stored and persistent across sessions.\n\nJSON Requirements\n------------------\nKnowledge Relay (array of objects)\nRequired: question (string), options (array, min 2), correctAnswer (index)\nOptional: category, difficulty, points, id\n\nQuiz Showdown\nRequired: question, options (2–4), correct (index)\nOptional: category, difficulty, points\nRules: Unique questions, valid indices, auto-pads to 4 options\n\nDigital Defenders\nRequired: question (string), correctAnswer (string)\nOptional: difficulty, wave (1–10), description\nRules: Max 5 per wave, unique, case-sensitive difficulty\n\nPoint System\nEasy: 1 | Medium: 2 | Hard: 3\nManual points allowed, defaults applied if missing\n\nBest Practices\n• Validate JSON online before upload\n• Start with small test files (3–5 questions)\n• Write clear, distinct questions\n• Keep files under 1MB, UTF-8 encoded, .json extension\n\nTroubleshooting\n• Upload fails → Check format, extension, size\n• Questions missing → Verify format & success message\n• Common errors: wrong field (correct vs correctAnswer), invalid indices, bad difficulty values, duplicate/empty questions`}
-            </Text>
-          </ScrollView>
         </View>
-      </View>
-    </Modal>
+      </Modal>
   );
 
   const renderActionsMenuModal = () => (
-    <Modal
-      visible={showActionsMenu}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowActionsMenu(false)}
-    >
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={() => setShowActionsMenu(false)}
-        style={styles.actionsMenuOverlay}
+      <Modal
+          visible={showActionsMenu}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowActionsMenu(false)}
       >
-        <View style={styles.actionsMenuContainer}>
-          <View style={styles.actionsMenuHeader}>
-            <Text style={styles.actionsMenuTitle}>Menu</Text>
-            <Text style={styles.actionsMenuSubtitle}>Question tools and imports</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.actionsMenuItem}
-            onPress={() => {
-              downloadSampleJSON();
-              setShowActionsMenu(false);
-            }}
-          >
-            <View style={styles.actionsMenuItemIcon}>
-              <MaterialCommunityIcons name="download" size={18} color="#10b981" />
-            </View>
-            <Text style={styles.actionsMenuItemText}>Download Sample</Text>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={20}
-              color="rgba(15, 23, 42, 0.45)"
-              style={styles.actionsMenuItemRight}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionsMenuItem}
-            onPress={() => {
-              pickJSONFile();
-              setShowActionsMenu(false);
-            }}
-          >
-            <View style={styles.actionsMenuItemIcon}>
-              <MaterialCommunityIcons name="upload" size={18} color="#0ea5e9" />
-            </View>
-            <Text style={styles.actionsMenuItemText}>Upload JSON</Text>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={20}
-              color="rgba(15, 23, 42, 0.45)"
-              style={styles.actionsMenuItemRight}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionsMenuItem}
-            onPress={() => {
-              setShowImportDocs(true);
-              setShowActionsMenu(false);
-            }}
-          >
-            <View style={styles.actionsMenuItemIcon}>
-              <MaterialCommunityIcons
-                name="book-open-page-variant"
-                size={18}
-                color="#6366f1"
-              />
-            </View>
-            <Text style={styles.actionsMenuItemText}>Import Docs</Text>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={20}
-              color="rgba(15, 23, 42, 0.45)"
-              style={styles.actionsMenuItemRight}
-            />
-          </TouchableOpacity>
-          <View style={styles.actionsMenuDivider} />
-          <TouchableOpacity
-            style={[styles.actionsMenuItem, styles.actionsMenuCloseItem]}
+        <TouchableOpacity
+            activeOpacity={1}
             onPress={() => setShowActionsMenu(false)}
-          >
-            <View style={styles.actionsMenuItemIcon}>
-              <MaterialCommunityIcons name="close" size={18} color="#ef4444" />
+            style={styles.actionsMenuOverlay}
+        >
+          <View style={styles.actionsMenuContainer}>
+            <View style={styles.actionsMenuHeader}>
+              <Text style={styles.actionsMenuTitle}>Menu</Text>
+              <Text style={styles.actionsMenuSubtitle}>Question tools and imports</Text>
             </View>
-            <Text style={styles.actionsMenuItemText}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    </Modal>
+            <TouchableOpacity
+                style={styles.actionsMenuItem}
+                onPress={() => {
+                  downloadSampleJSON();
+                  setShowActionsMenu(false);
+                }}
+            >
+              <View style={styles.actionsMenuItemIcon}>
+                <MaterialCommunityIcons name="download" size={18} color="#10b981" />
+              </View>
+              <Text style={styles.actionsMenuItemText}>Download Sample</Text>
+              <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color="rgba(15, 23, 42, 0.45)"
+                  style={styles.actionsMenuItemRight}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+                style={styles.actionsMenuItem}
+                onPress={() => {
+                  pickJSONFile();
+                  setShowActionsMenu(false);
+                }}
+            >
+              <View style={styles.actionsMenuItemIcon}>
+                <MaterialCommunityIcons name="upload" size={18} color="#0ea5e9" />
+              </View>
+              <Text style={styles.actionsMenuItemText}>Upload JSON</Text>
+              <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color="rgba(15, 23, 42, 0.45)"
+                  style={styles.actionsMenuItemRight}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+                style={styles.actionsMenuItem}
+                onPress={() => {
+                  setShowImportDocs(true);
+                  setShowActionsMenu(false);
+                }}
+            >
+              <View style={styles.actionsMenuItemIcon}>
+                <MaterialCommunityIcons
+                    name="book-open-page-variant"
+                    size={18}
+                    color="#6366f1"
+                />
+              </View>
+              <Text style={styles.actionsMenuItemText}>Import Docs</Text>
+              <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color="rgba(15, 23, 42, 0.45)"
+                  style={styles.actionsMenuItemRight}
+              />
+            </TouchableOpacity>
+            <View style={styles.actionsMenuDivider} />
+            <TouchableOpacity
+                style={[styles.actionsMenuItem, styles.actionsMenuCloseItem]}
+                onPress={() => setShowActionsMenu(false)}
+            >
+              <View style={styles.actionsMenuItemIcon}>
+                <MaterialCommunityIcons name="close" size={18} color="#ef4444" />
+              </View>
+              <Text style={styles.actionsMenuItemText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
   );
 
   // Intentionally unused pieces of state reserved for upcoming backend sync work:
@@ -485,7 +506,7 @@ function DigitalDefenders() {
   const [freezeCountdown, setFreezeCountdown] = useState(0);
   const [gameOverReason, setGameOverReason] = useState(null); // Track why the game ended
   const [questionAnsweredThisTurn, setQuestionAnsweredThisTurn] =
-    useState(false); // Track if question was answered correctly this turn
+      useState(false); // Track if question was answered correctly this turn
 
   // Game ending data for points-based wins
   const [gameEndData, setGameEndData] = useState(null); // Store winner, scores, etc.
@@ -536,7 +557,7 @@ function DigitalDefenders() {
           "completed",
         ].some((kw) => lowerTitle.includes(kw));
         const isError = ["error", "failed", "fail", "exhausted"].some((kw) =>
-          lowerTitle.includes(kw)
+            lowerTitle.includes(kw)
         );
 
         setFeedbackData({
@@ -548,8 +569,8 @@ function DigitalDefenders() {
 
         // Auto-hide after 2 seconds for non-critical messages
         if (
-          !title.toLowerCase().includes("error") &&
-          !title.toLowerCase().includes("exhausted")
+            !title.toLowerCase().includes("error") &&
+            !title.toLowerCase().includes("exhausted")
         ) {
           setTimeout(() => {
             setShowFeedback(false);
@@ -568,28 +589,28 @@ function DigitalDefenders() {
 
   const isInvalidSessionPayload = useCallback((payload) => {
     const rawMessage =
-      typeof payload === "string"
-        ? payload
-        : payload?.message || payload?.error || payload?.reason || "";
+        typeof payload === "string"
+            ? payload
+            : payload?.message || payload?.error || payload?.reason || "";
 
     return /invalid\s*session|session\s*invalid|session\s*expired|unauthorized|auth\s*failed|token\s*expired/i.test(
-      String(rawMessage)
+        String(rawMessage)
     );
   }, []);
 
   const handleInvalidSessionGameOver = useCallback(
-    (payload) => {
-      const message =
-        (typeof payload === "string" ? payload : payload?.message || payload?.error) ||
-        "Your game session is no longer valid. Please start a new match.";
+      (payload) => {
+        const message =
+            (typeof payload === "string" ? payload : payload?.message || payload?.error) ||
+            "Your game session is no longer valid. Please start a new match.";
 
-      setIsConnected(false);
-      setGameEndData({ message });
-      setGameOverReason("invalid_session");
-      setGameState("gameOver");
-      showAlert("Session Invalid", message);
-    },
-    [showAlert]
+        setIsConnected(false);
+        setGameEndData({ message });
+        setGameOverReason("invalid_session");
+        setGameState("gameOver");
+        showAlert("Session Invalid", message);
+      },
+      [showAlert]
   );
 
   // Backend data loading functions
@@ -597,7 +618,7 @@ function DigitalDefenders() {
     try {
       setIsDataLoading(true);
       console.log(
-        "🎮 Digital Defenders: Loading game data without requiring section"
+          "🎮 Digital Defenders: Loading game data without requiring section"
       );
       console.log("🔍 Current user state:", user);
       console.log("🔍 Auth store token exists:", !!token);
@@ -623,8 +644,8 @@ function DigitalDefenders() {
 
         // Find section ID for stats/leaderboard only (not required for gameplay)
         if (
-          section &&
-          (user?.privilege === "instructor" || user?.privilege === "admin")
+            section &&
+            (user?.privilege === "instructor" || user?.privilege === "admin")
         ) {
           const sectionsData = await digitalDefendersAPI.getSections();
           sectionId = sectionsData.sections?.[0]?._id;
@@ -633,7 +654,7 @@ function DigitalDefenders() {
           try {
             const sectionsData = await digitalDefendersAPI.getSections();
             const userSectionObj = sectionsData.sections?.find(
-              (s) => s.sectionCode === section || s.name === section
+                (s) => s.sectionCode === section || s.name === section
             );
             sectionId = userSectionObj?._id;
           } catch (error) {
@@ -646,11 +667,11 @@ function DigitalDefenders() {
 
       // Load questions, answers, and tool cards - always use global data for Digital Defenders
       const [questionsResult, answersResult, toolCardsResult] =
-        await Promise.all([
-          digitalDefendersAPI.getQuestions(null), // Always use global questions
-          digitalDefendersAPI.getAnswers(null), // Always use global answers
-          digitalDefendersAPI.getToolCards(),
-        ]);
+          await Promise.all([
+            digitalDefendersAPI.getQuestions(null), // Always use global questions
+            digitalDefendersAPI.getAnswers(null), // Always use global answers
+            digitalDefendersAPI.getToolCards(),
+          ]);
 
       if (questionsResult.success) {
         setQuestionCards(questionsResult.questions || []);
@@ -713,17 +734,17 @@ function DigitalDefenders() {
     // This function is now primarily for local testing/fallback
     // In multiplayer mode, question progression is handled by the backend
     console.log(
-      "� NextQuestion called - backend will handle question progression in multiplayer mode"
+        "� NextQuestion called - backend will handle question progression in multiplayer mode"
     );
 
     if (gameState === "playing" && questionCards.length > 0) {
       // Simple fallback for single-player testing
       const availableQuestions = questionCards.filter(
-        (q) => q.wave === currentWave
+          (q) => q.wave === currentWave
       );
       if (availableQuestions.length > 0) {
         const randomIndex = Math.floor(
-          Math.random() * availableQuestions.length
+            Math.random() * availableQuestions.length
         );
         setCurrentQuestion(availableQuestions[randomIndex]);
         setCountdown(Math.max(15, 30 - currentWave));
@@ -770,10 +791,10 @@ function DigitalDefenders() {
     if (firstWaveQuestions.length > 0) {
       const firstQuestion = firstWaveQuestions[0];
       const answerIndex = shuffledDeck.findIndex(
-        (card) =>
-          card.type === "answer" &&
-          card.text.toLowerCase().trim() ===
-            firstQuestion.correctAnswer.toLowerCase().trim()
+          (card) =>
+              card.type === "answer" &&
+              card.text.toLowerCase().trim() ===
+              firstQuestion.correctAnswer.toLowerCase().trim()
       );
 
       if (answerIndex !== -1) {
@@ -797,7 +818,7 @@ function DigitalDefenders() {
     const wave1Questions = questionCards.filter((q) => q.wave === 1);
     if (wave1Questions.length > 0) {
       const firstQuestion =
-        wave1Questions[Math.floor(Math.random() * wave1Questions.length)];
+          wave1Questions[Math.floor(Math.random() * wave1Questions.length)];
       setCurrentQuestion(firstQuestion);
       setQuestionsUsedInCurrentWave([firstQuestion._id]);
     } else {
@@ -805,7 +826,7 @@ function DigitalDefenders() {
       const fallbackQuestion = questionCards[0];
       setCurrentQuestion(fallbackQuestion);
       setQuestionsUsedInCurrentWave(
-        fallbackQuestion ? [fallbackQuestion._id] : []
+          fallbackQuestion ? [fallbackQuestion._id] : []
       );
     }
 
@@ -884,123 +905,123 @@ function DigitalDefenders() {
 
   // Sync local state with server state updates
   const syncWithServerState = useCallback(
-    (serverGameState) => {
-      try {
-        if (!serverGameState) return;
+      (serverGameState) => {
+        try {
+          if (!serverGameState) return;
 
-        // Update game state
-        if (serverGameState.gameState) {
-          setGameState(serverGameState.gameState);
-        }
+          // Update game state
+          if (serverGameState.gameState) {
+            setGameState(serverGameState.gameState);
+          }
 
-        // Update countdown
-        if (typeof serverGameState.countdown === "number") {
-          setCountdown(serverGameState.countdown);
-        }
+          // Update countdown
+          if (typeof serverGameState.countdown === "number") {
+            setCountdown(serverGameState.countdown);
+          }
 
-        // Update PC health
-        if (typeof serverGameState.pcHealth === "number") {
-          setPcHealth(serverGameState.pcHealth);
-        }
+          // Update PC health
+          if (typeof serverGameState.pcHealth === "number") {
+            setPcHealth(serverGameState.pcHealth);
+          }
 
-        // Update current wave
-        if (typeof serverGameState.currentWave === "number") {
-          setCurrentWave(serverGameState.currentWave);
-        }
+          // Update current wave
+          if (typeof serverGameState.currentWave === "number") {
+            setCurrentWave(serverGameState.currentWave);
+          }
 
-        // Update current question
-        if (serverGameState.currentQuestion) {
-          setCurrentQuestion(serverGameState.currentQuestion);
-        }
+          // Update current question
+          if (serverGameState.currentQuestion) {
+            setCurrentQuestion(serverGameState.currentQuestion);
+          }
 
-        // Update turn information
-        if (serverGameState.currentPlayerIndex !== undefined) {
-          setCurrentPlayerIndex(serverGameState.currentPlayerIndex);
-        }
+          // Update turn information
+          if (serverGameState.currentPlayerIndex !== undefined) {
+            setCurrentPlayerIndex(serverGameState.currentPlayerIndex);
+          }
 
-        // Update current turn counter
-        if (typeof serverGameState.currentTurn === "number") {
-          setCurrentTurn(serverGameState.currentTurn);
-        }
+          // Update current turn counter
+          if (typeof serverGameState.currentTurn === "number") {
+            setCurrentTurn(serverGameState.currentTurn);
+          }
 
-        // Update player order for turn indicator
-        if (
-          serverGameState.playerOrder &&
-          Array.isArray(serverGameState.playerOrder)
-        ) {
+          // Update player order for turn indicator
           if (
-            serverGameState.playerOrder.length > 0 &&
-            typeof serverGameState.currentTurn === "number"
+              serverGameState.playerOrder &&
+              Array.isArray(serverGameState.playerOrder)
           ) {
-            const currentPlayerIndex =
-              serverGameState.currentTurn % serverGameState.playerOrder.length;
-            const currentPlayer =
-              serverGameState.playerOrder[currentPlayerIndex];
-            setCurrentPlayerName(currentPlayer || "");
+            if (
+                serverGameState.playerOrder.length > 0 &&
+                typeof serverGameState.currentTurn === "number"
+            ) {
+              const currentPlayerIndex =
+                  serverGameState.currentTurn % serverGameState.playerOrder.length;
+              const currentPlayer =
+                  serverGameState.playerOrder[currentPlayerIndex];
+              setCurrentPlayerName(currentPlayer || "");
+            }
           }
-        }
 
-        // Update player-specific data from direct server response
-        if (serverGameState.playerHand) {
-          setPlayerHand(serverGameState.playerHand);
-        }
-
-        if (typeof serverGameState.actionsLeft === "number") {
-          setActionsLeft(serverGameState.actionsLeft);
-        }
-
-        // Update isMyTurn from server
-        if (typeof serverGameState.isPlayerTurn === "boolean") {
-          setIsMyTurn(serverGameState.isPlayerTurn);
-        }
-
-        // Update deck from server (shared deck)
-        if (serverGameState.deck) {
-          setDeck(serverGameState.deck);
-        }
-
-        // Fallback: Update player-specific data from players array
-        if (
-          serverGameState.players &&
-          playerId &&
-          !serverGameState.playerHand
-        ) {
-          const playerData = serverGameState.players.find(
-            (p) => p.id === playerId
-          );
-          if (playerData) {
-            setPlayerHand(playerData.hand || []);
-            setActionsLeft(playerData.actionsLeft || 0);
+          // Update player-specific data from direct server response
+          if (serverGameState.playerHand) {
+            setPlayerHand(serverGameState.playerHand);
           }
-        }
 
-        // Update freeze countdown
-        if (typeof serverGameState.freezeCountdown === "number") {
-          setFreezeCountdown(serverGameState.freezeCountdown);
-        }
+          if (typeof serverGameState.actionsLeft === "number") {
+            setActionsLeft(serverGameState.actionsLeft);
+          }
 
-        // Update used cards
-        if (serverGameState.usedCards) {
-          setUsedCards(serverGameState.usedCards);
-        }
+          // Update isMyTurn from server
+          if (typeof serverGameState.isPlayerTurn === "boolean") {
+            setIsMyTurn(serverGameState.isPlayerTurn);
+          }
 
-        // Update question answered state
-        if (typeof serverGameState.questionAnsweredThisTurn === "boolean") {
-          setQuestionAnsweredThisTurn(serverGameState.questionAnsweredThisTurn);
-        }
+          // Update deck from server (shared deck)
+          if (serverGameState.deck) {
+            setDeck(serverGameState.deck);
+          }
 
-        // Handle game over states
-        if (
-          serverGameState.gameState === "gameOver" &&
-          serverGameState.gameOverReason
-        ) {
-          setGameOverReason(serverGameState.gameOverReason);
+          // Fallback: Update player-specific data from players array
+          if (
+              serverGameState.players &&
+              playerId &&
+              !serverGameState.playerHand
+          ) {
+            const playerData = serverGameState.players.find(
+                (p) => p.id === playerId
+            );
+            if (playerData) {
+              setPlayerHand(playerData.hand || []);
+              setActionsLeft(playerData.actionsLeft || 0);
+            }
+          }
+
+          // Update freeze countdown
+          if (typeof serverGameState.freezeCountdown === "number") {
+            setFreezeCountdown(serverGameState.freezeCountdown);
+          }
+
+          // Update used cards
+          if (serverGameState.usedCards) {
+            setUsedCards(serverGameState.usedCards);
+          }
+
+          // Update question answered state
+          if (typeof serverGameState.questionAnsweredThisTurn === "boolean") {
+            setQuestionAnsweredThisTurn(serverGameState.questionAnsweredThisTurn);
+          }
+
+          // Handle game over states
+          if (
+              serverGameState.gameState === "gameOver" &&
+              serverGameState.gameOverReason
+          ) {
+            setGameOverReason(serverGameState.gameOverReason);
+          }
+        } catch (error) {
+          console.error("Error syncing with server state:", error);
         }
-      } catch (error) {
-        console.error("Error syncing with server state:", error);
-      }
-    },
-    [playerId]
+      },
+      [playerId]
   );
 
   // Socket connection and event handlers
@@ -1080,10 +1101,10 @@ function DigitalDefenders() {
       // Show feedback for card effects
       if (data.effect && data.effect.message) {
         const alertTitle = data.effect.questionSolved
-          ? "Correct!"
-          : data.effect.healthLost
-          ? "Wrong Answer!"
-          : "Card Effect";
+            ? "Correct!"
+            : data.effect.healthLost
+                ? "Wrong Answer!"
+                : "Card Effect";
         showAlert(alertTitle, data.effect.message);
       }
     };
@@ -1094,13 +1115,13 @@ function DigitalDefenders() {
       // Show special message if answer card was guaranteed
       if (data.guaranteedAnswer) {
         showAlert(
-          "Cards Reshuffled! 🎯",
-          `${data.playerName} reshuffled their cards`
+            "Cards Reshuffled! 🎯",
+            `${data.playerName} reshuffled their cards`
         );
       } else {
         showAlert(
-          "Cards Reshuffled",
-          `${data.playerName} reshuffled their cards`
+            "Cards Reshuffled",
+            `${data.playerName} reshuffled their cards`
         );
       }
 
@@ -1125,10 +1146,10 @@ function DigitalDefenders() {
             showAlert("Your Turn!", "It's your turn to play!");
           } else if (!data.gameState.isPlayerTurn && wasMyTurn) {
             const nextPlayerName = data.gameState.playerOrder
-              ? data.gameState.playerOrder[
-                  data.gameState.currentTurn % data.gameState.playerOrder.length
-                ]
-              : "Next player";
+                ? data.gameState.playerOrder[
+                data.gameState.currentTurn % data.gameState.playerOrder.length
+                    ]
+                : "Next player";
             showAlert("Turn Ended", `${nextPlayerName}'s turn now.`);
           }
         }, 100);
@@ -1196,8 +1217,8 @@ function DigitalDefenders() {
       }
 
       showAlert(
-        "Position Selected Successfully", // Changed title to include "Successfully" keyword
-        `${playerName} selected position ${position}`
+          "Position Selected Successfully", // Changed title to include "Successfully" keyword
+          `${playerName} selected position ${position}`
       );
     };
 
@@ -1205,8 +1226,8 @@ function DigitalDefenders() {
       console.log("Turn order finalized:", data);
       setFinalTurnOrder(data.playerOrder);
       showAlert(
-        "Turn Order Set",
-        "Turn order has been finalized! Game starting soon..."
+          "Turn Order Set",
+          "Turn order has been finalized! Game starting soon..."
       );
     };
 
@@ -1217,10 +1238,10 @@ function DigitalDefenders() {
 
       // Send enhanced notification on game completion
       await GameNotificationService.sendGameCompletionNotification(
-        "digital-defenders",
-        { victory: false },
-        showNotification,
-        settings
+          "digital-defenders",
+          { victory: false },
+          showNotification,
+          settings
       );
 
       // Store game ending data for points-based endings
@@ -1243,8 +1264,8 @@ function DigitalDefenders() {
         syncWithServerState(data.gameState);
       }
       showAlert(
-        "Game Over",
-        data.message || data.reason || "The game has ended"
+          "Game Over",
+          data.message || data.reason || "The game has ended"
       );
     };
 
@@ -1254,10 +1275,10 @@ function DigitalDefenders() {
 
       // Send enhanced notification on victory
       await GameNotificationService.sendGameCompletionNotification(
-        "digital-defenders",
-        { victory: true },
-        showNotification,
-        settings
+          "digital-defenders",
+          { victory: true },
+          showNotification,
+          settings
       );
 
       if (data.gameState) {
@@ -1312,17 +1333,17 @@ function DigitalDefenders() {
 
     const handleSocketReconnected = (data) => {
       console.log(
-        "Socket reconnected after",
-        data?.attemptNumber || 0,
-        "attempts"
+          "Socket reconnected after",
+          data?.attemptNumber || 0,
+          "attempts"
       );
       setIsConnected(true);
 
       // If we were in a room, try to rejoin or check if it still exists
       if (roomData?.id) {
         console.log(
-          "Attempting to rejoin room after reconnection:",
-          roomData.id
+            "Attempting to rejoin room after reconnection:",
+            roomData.id
         );
         // The socket will automatically rejoin rooms on reconnection
       }
@@ -1336,8 +1357,8 @@ function DigitalDefenders() {
       console.error("Socket failed to reconnect");
       setIsConnected(false);
       showAlert(
-        "Connection Lost",
-        "Unable to reconnect to server. Please refresh the app."
+          "Connection Lost",
+          "Unable to reconnect to server. Please refresh the app."
       );
     };
 
@@ -1353,12 +1374,12 @@ function DigitalDefenders() {
     digitalDefendersSocket.on("turn-updated", handleTurnUpdated);
     digitalDefendersSocket.on("wave-advanced", handleWaveAdvanced);
     digitalDefendersSocket.on(
-      "turn-order-selection-started",
-      handleTurnOrderSelectionStarted
+        "turn-order-selection-started",
+        handleTurnOrderSelectionStarted
     );
     digitalDefendersSocket.on(
-      "turn-position-selected",
-      handleTurnPositionSelected
+        "turn-position-selected",
+        handleTurnPositionSelected
     );
     digitalDefendersSocket.on("turn-order-finalized", handleTurnOrderFinalized);
     digitalDefendersSocket.on("game-over", handleGameOver);
@@ -1371,12 +1392,12 @@ function DigitalDefenders() {
     digitalDefendersSocket.on("socket-disconnected", handleSocketDisconnected);
     digitalDefendersSocket.on("socket-reconnected", handleSocketReconnected);
     digitalDefendersSocket.on(
-      "socket-reconnect-error",
-      handleSocketReconnectError
+        "socket-reconnect-error",
+        handleSocketReconnectError
     );
     digitalDefendersSocket.on(
-      "socket-reconnect-failed",
-      handleSocketReconnectFailed
+        "socket-reconnect-failed",
+        handleSocketReconnectFailed
     );
 
     // Cleanup on unmount
@@ -1393,39 +1414,39 @@ function DigitalDefenders() {
       digitalDefendersSocket.off("turn-updated", handleTurnUpdated);
       digitalDefendersSocket.off("wave-advanced", handleWaveAdvanced);
       digitalDefendersSocket.off(
-        "turn-order-selection-started",
-        handleTurnOrderSelectionStarted
+          "turn-order-selection-started",
+          handleTurnOrderSelectionStarted
       );
       digitalDefendersSocket.off(
-        "turn-position-selected",
-        handleTurnPositionSelected
+          "turn-position-selected",
+          handleTurnPositionSelected
       );
       digitalDefendersSocket.off(
-        "turn-order-finalized",
-        handleTurnOrderFinalized
+          "turn-order-finalized",
+          handleTurnOrderFinalized
       );
       digitalDefendersSocket.off("game-over", handleGameOver);
       digitalDefendersSocket.off("victory", handleVictory);
       digitalDefendersSocket.off(
-        "player-disconnected",
-        handlePlayerDisconnected
+          "player-disconnected",
+          handlePlayerDisconnected
       );
       digitalDefendersSocket.off("player-left", handlePlayerLeft);
       digitalDefendersSocket.off("socket-game-error", handleSocketError);
       digitalDefendersSocket.off("socket-error", handleSocketConnectionError);
       digitalDefendersSocket.off("socket-connected", handleSocketConnected);
       digitalDefendersSocket.off(
-        "socket-disconnected",
-        handleSocketDisconnected
+          "socket-disconnected",
+          handleSocketDisconnected
       );
       digitalDefendersSocket.off("socket-reconnected", handleSocketReconnected);
       digitalDefendersSocket.off(
-        "socket-reconnect-error",
-        handleSocketReconnectError
+          "socket-reconnect-error",
+          handleSocketReconnectError
       );
       digitalDefendersSocket.off(
-        "socket-reconnect-failed",
-        handleSocketReconnectFailed
+          "socket-reconnect-failed",
+          handleSocketReconnectFailed
       );
 
       // Don't disconnect the socket here as it may be used by other components
@@ -1447,23 +1468,23 @@ function DigitalDefenders() {
   // Check for automatic loss condition when deck is empty
   useEffect(() => {
     if (
-      gameState === "playing" &&
-      deck.length === 0 &&
-      playerHand.length === 0
+        gameState === "playing" &&
+        deck.length === 0 &&
+        playerHand.length === 0
     ) {
       // Deck is empty and no cards in hand - automatic loss
       setGameOverReason("deck_empty");
       const timer = setTimeout(() => {
         if (isMountedRef.current) {
           showAlert(
-            "Deck Exhausted!",
-            "All cards have been used. Your PC defenses have failed!",
-            [
-              {
-                text: "OK",
-                onPress: () => setGameState("gameOver"),
-              },
-            ]
+              "Deck Exhausted!",
+              "All cards have been used. Your PC defenses have failed!",
+              [
+                {
+                  text: "OK",
+                  onPress: () => setGameState("gameOver"),
+                },
+              ]
           );
         }
       }, 500); // Small delay to show the empty state before triggering game over
@@ -1475,10 +1496,10 @@ function DigitalDefenders() {
   // Lobby action functions
   const createRoom = async () => {
     console.log(
-      "Create room called, playerName:",
-      playerName,
-      "isConnected:",
-      isConnected
+        "Create room called, playerName:",
+        playerName,
+        "isConnected:",
+        isConnected
     );
 
     if (!playerName || !playerName.trim()) {
@@ -1506,18 +1527,18 @@ function DigitalDefenders() {
 
   const joinRoom = async () => {
     console.log(
-      "Join room called, playerName:",
-      playerName,
-      "roomId:",
-      roomId,
-      "isConnected:",
-      isConnected
+        "Join room called, playerName:",
+        playerName,
+        "roomId:",
+        roomId,
+        "isConnected:",
+        isConnected
     );
 
     if (!playerName || !playerName.trim() || !roomId || !roomId.trim()) {
       Alert.alert(
-        "Error",
-        "Player name not available or room ID missing. Please try again."
+          "Error",
+          "Player name not available or room ID missing. Please try again."
       );
       return;
     }
@@ -1536,10 +1557,10 @@ function DigitalDefenders() {
 
     try {
       console.log(
-        "Joining room:",
-        trimmedRoomId,
-        "with player:",
-        playerName.trim()
+          "Joining room:",
+          trimmedRoomId,
+          "with player:",
+          playerName.trim()
       );
 
       // Add a small delay to ensure socket connection is stable
@@ -1585,55 +1606,55 @@ function DigitalDefenders() {
   }, [roomData?.id]);
 
   const performQuitAndDisconnect = useCallback(
-    (onComplete) => {
-      if (isQuittingRef.current) return;
-      isQuittingRef.current = true;
+      (onComplete) => {
+        if (isQuittingRef.current) return;
+        isQuittingRef.current = true;
 
-      try {
-        if (roomData?.id && digitalDefendersSocket.isConnected()) {
-          digitalDefendersSocket.leaveRoom(roomData.id);
+        try {
+          if (roomData?.id && digitalDefendersSocket.isConnected()) {
+            digitalDefendersSocket.leaveRoom(roomData.id);
+          }
+        } catch (error) {
+          console.warn("Failed to notify room leave during quit:", error);
         }
-      } catch (error) {
-        console.warn("Failed to notify room leave during quit:", error);
-      }
 
-      try {
-        digitalDefendersSocket.disconnect();
-      } catch (error) {
-        console.warn("Failed to disconnect socket during quit:", error);
-      }
+        try {
+          digitalDefendersSocket.disconnect();
+        } catch (error) {
+          console.warn("Failed to disconnect socket during quit:", error);
+        }
 
-      setRoomData(null);
-      setRoomId("");
-      setPlayerId(null);
-      setIsCreator(false);
-      setIsConnected(false);
-      setGameState("lobby");
-      setNavigationLocked(false);
+        setRoomData(null);
+        setRoomId("");
+        setPlayerId(null);
+        setIsCreator(false);
+        setIsConnected(false);
+        setGameState("lobby");
+        setNavigationLocked(false);
 
-      if (typeof onComplete === "function") {
-        onComplete();
-      }
+        if (typeof onComplete === "function") {
+          onComplete();
+        }
 
-      setTimeout(() => {
-        isQuittingRef.current = false;
-      }, 300);
-    },
-    [roomData?.id, setNavigationLocked]
+        setTimeout(() => {
+          isQuittingRef.current = false;
+        }, 300);
+      },
+      [roomData?.id, setNavigationLocked]
   );
 
   const requestQuitConfirmation = useCallback(
-    (onConfirm) => {
-      showAlert("Quit Match", "Are you sure you want to quit?", [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes",
-          style: "destructive",
-          onPress: () => performQuitAndDisconnect(onConfirm),
-        },
-      ]);
-    },
-    [performQuitAndDisconnect]
+      (onConfirm) => {
+        showAlert("Quit Match", "Are you sure you want to quit?", [
+          { text: "No", style: "cancel" },
+          {
+            text: "Yes",
+            style: "destructive",
+            onPress: () => performQuitAndDisconnect(onConfirm),
+          },
+        ]);
+      },
+      [performQuitAndDisconnect]
   );
 
   useEffect(() => {
@@ -1693,8 +1714,8 @@ function DigitalDefenders() {
     // Check if player has any usable cards (not just empty hand)
     if (playerHand.length === 0) {
       showAlert(
-        "No Cards Left",
-        "You have no cards to play. You can only skip your turn."
+          "No Cards Left",
+          "You have no cards to play. You can only skip your turn."
       );
       return;
     }
@@ -1813,8 +1834,8 @@ function DigitalDefenders() {
           showAlert("Game Over!", "Wrong answer! PC Health reached 0.");
         } else {
           showAlert(
-            "Wrong Answer!",
-            `Wrong answer! Lost 1 health. Health: ${newHealth}/5`
+              "Wrong Answer!",
+              `Wrong answer! Lost 1 health. Health: ${newHealth}/5`
           );
         }
         return newHealth;
@@ -1837,8 +1858,8 @@ function DigitalDefenders() {
         } else {
           // Show feedback that life was lost due to using all actions
           showAlert(
-            "Actions Exhausted!",
-            `All actions used without solving the question. Lost 1 life! Health: ${newHealth}/5`
+              "Actions Exhausted!",
+              `All actions used without solving the question. Lost 1 life! Health: ${newHealth}/5`
           );
         }
         return newHealth;
@@ -1883,8 +1904,8 @@ function DigitalDefenders() {
         if (playerHand.length === 0 && deck.length === 0) {
           // Player has no cards left - this is their only option
           showAlert(
-            "Turn Skipped",
-            "No cards available - relying on teammates or countdown expiry."
+              "Turn Skipped",
+              "No cards available - relying on teammates or countdown expiry."
           );
         }
 
@@ -1920,8 +1941,8 @@ function DigitalDefenders() {
 
     if (playerHand.length === 0) {
       showAlert(
-        "No Cards to Reshuffle",
-        "You have no cards in hand to reshuffle."
+          "No Cards to Reshuffle",
+          "You have no cards in hand to reshuffle."
       );
       return;
     }
@@ -2027,12 +2048,12 @@ function DigitalDefenders() {
     // Check wave limit: maximum 5 questions per wave
     if (!editingCard) {
       const waveQuestions = questionCards.filter(
-        (card) => card.wave === formData.wave
+          (card) => card.wave === formData.wave
       );
       if (waveQuestions.length >= 5) {
         showAlert(
-          "Wave Full",
-          `Wave ${formData.wave} already has the maximum of 5 questions. Please choose a different wave or delete an existing question.`
+            "Wave Full",
+            `Wave ${formData.wave} already has the maximum of 5 questions. Please choose a different wave or delete an existing question.`
         );
         return;
       }
@@ -2048,26 +2069,26 @@ function DigitalDefenders() {
       if (editingCard) {
         // Update existing question
         questionResult = await digitalDefendersAPI.updateQuestion(
-          editingCard._id,
-          {
-            text: formData.text,
-            correctAnswer: formData.correctAnswer,
-            difficulty: getDifficultyNumber(formData.difficulty),
-            wave: formData.wave,
-          }
+            editingCard._id,
+            {
+              text: formData.text,
+              correctAnswer: formData.correctAnswer,
+              difficulty: getDifficultyNumber(formData.difficulty),
+              wave: formData.wave,
+            }
         );
 
         // Find and update corresponding answer card
         const correspondingAnswer = answerCards.find(
-          (a) => a.questionId === editingCard._id
+            (a) => a.questionId === editingCard._id
         );
         if (correspondingAnswer) {
           await digitalDefendersAPI.updateAnswer(correspondingAnswer._id, {
             text: formData.correctAnswer,
             name: `Answer for: ${formData.text.substring(0, 30)}...`,
             description: `Correct answer for the question about ${formData.text.substring(
-              0,
-              50
+                0,
+                50
             )}...`,
           });
         }
@@ -2086,8 +2107,8 @@ function DigitalDefenders() {
             text: formData.correctAnswer,
             name: `Answer for: ${formData.text.substring(0, 30)}...`,
             description: `Correct answer for the question about ${formData.text.substring(
-              0,
-              50
+                0,
+                50
             )}...`,
             questionId: questionResult.question._id,
           });
@@ -2096,17 +2117,17 @@ function DigitalDefenders() {
 
       if (questionResult?.success) {
         showAlert(
-          "Success",
-          editingCard
-            ? "Question updated successfully!"
-            : "Question created successfully!"
+            "Success",
+            editingCard
+                ? "Question updated successfully!"
+                : "Question created successfully!"
         );
         // Reload data to refresh the cards
         await loadGameData();
       } else {
         showAlert(
-          "Error",
-          questionResult?.message || "Failed to save question"
+            "Error",
+            questionResult?.message || "Failed to save question"
         );
       }
 
@@ -2145,8 +2166,8 @@ function DigitalDefenders() {
           // Validate that it's an array of questions
           if (!Array.isArray(jsonData)) {
             Alert.alert(
-              "Error",
-              "JSON file must contain an array of questions"
+                "Error",
+                "JSON file must contain an array of questions"
             );
             return;
           }
@@ -2265,300 +2286,300 @@ function DigitalDefenders() {
   const handleDeleteCard = async (card, type) => {
     console.log("🗑️ Delete card requested:", card._id, type);
     showAlert(
-      "Confirm Delete",
-      `Are you sure you want to delete this question?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            console.log("🗑️ Delete confirmed, starting deletion...");
-            try {
-              console.log("🗑️ Deleting question:", card._id);
-              const result = await digitalDefendersAPI.deleteQuestion(card._id);
-              console.log("🗑️ Question delete result:", result);
+        "Confirm Delete",
+        `Are you sure you want to delete this question?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              console.log("🗑️ Delete confirmed, starting deletion...");
+              try {
+                console.log("🗑️ Deleting question:", card._id);
+                const result = await digitalDefendersAPI.deleteQuestion(card._id);
+                console.log("🗑️ Question delete result:", result);
 
-              // Also delete corresponding answer if it exists
-              const correspondingAnswer = answerCards.find(
-                (a) => a.questionId === card._id
-              );
-              if (correspondingAnswer) {
-                console.log(
-                  "🗑️ Deleting corresponding answer:",
-                  correspondingAnswer._id
+                // Also delete corresponding answer if it exists
+                const correspondingAnswer = answerCards.find(
+                    (a) => a.questionId === card._id
                 );
-                await digitalDefendersAPI.deleteAnswer(correspondingAnswer._id);
-                console.log("🗑️ Answer deleted successfully");
-              }
+                if (correspondingAnswer) {
+                  console.log(
+                      "🗑️ Deleting corresponding answer:",
+                      correspondingAnswer._id
+                  );
+                  await digitalDefendersAPI.deleteAnswer(correspondingAnswer._id);
+                  console.log("🗑️ Answer deleted successfully");
+                }
 
-              if (result?.success) {
-                console.log("🗑️ Deletion successful, reloading data...");
-                showAlert("Success", "Question deleted successfully!");
-                // Reload data to refresh the cards
-                await loadGameData();
-                console.log("🗑️ Data reloaded after deletion");
-              } else {
-                console.error("🗑️ Delete failed:", result?.message);
+                if (result?.success) {
+                  console.log("🗑️ Deletion successful, reloading data...");
+                  showAlert("Success", "Question deleted successfully!");
+                  // Reload data to refresh the cards
+                  await loadGameData();
+                  console.log("🗑️ Data reloaded after deletion");
+                } else {
+                  console.error("🗑️ Delete failed:", result?.message);
+                  showAlert(
+                      "Error",
+                      result?.message || "Failed to delete question"
+                  );
+                }
+              } catch (error) {
+                console.error("🗑️ Error deleting question:", error);
                 showAlert(
-                  "Error",
-                  result?.message || "Failed to delete question"
+                    "Error",
+                    "Failed to delete question. Please try again."
                 );
               }
-            } catch (error) {
-              console.error("🗑️ Error deleting question:", error);
-              showAlert(
-                "Error",
-                "Failed to delete question. Please try again."
-              );
-            }
+            },
           },
-        },
-      ]
+        ]
     );
   };
 
   const renderLobby = () => (
-    <View style={styles.lobbyContainer}>
-      <ScrollView
-        style={styles.lobbyScrollView}
-        contentContainerStyle={styles.lobbyScrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.logoContainer}>
-          <MaterialCommunityIcons
-            name="shield-account"
-            size={80}
-            color="#2acde6"
-          />
-          <Text style={styles.gameTitle}>🛡️ Digital Defenders</Text>
-          <Text style={styles.gameSubtitle}>Turn-Based Card Defense</Text>
-        </View>
-
-        {/* Connection Status */}
-        <View style={styles.connectionStatus}>
-          <MaterialCommunityIcons
-            name={isConnected ? "wifi" : "wifi-off"}
-            size={16}
-            color={isConnected ? "#10b981" : "#ef4444"}
-          />
-          <Text
-            style={[
-              styles.connectionText,
-              { color: isConnected ? "#10b981" : "#ef4444" },
-            ]}
-          >
-            {isConnected ? "Connected" : "Connecting..."}
-          </Text>
-        </View>
-
-        {/* Player Name Display */}
-        <View style={styles.inputContainer}>
-
-          <View style={styles.playerNameDisplay}>
+      <View style={styles.lobbyContainer}>
+        <ScrollView
+            style={styles.lobbyScrollView}
+            contentContainerStyle={styles.lobbyScrollContent}
+            showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.logoContainer}>
             <MaterialCommunityIcons
-              name="account"
-              size={20}
-              color="#2acde6"
-              style={styles.playerIcon}
+                name="shield-account"
+                size={80}
+                color="#2acde6"
             />
-            <Text style={styles.playerNameText}>
-              {playerName || "Loading..."}
-            </Text>
+            <Text style={styles.gameTitle}>🛡️ Digital Defenders</Text>
+            <Text style={styles.gameSubtitle}>Turn-Based Card Defense</Text>
           </View>
-        </View>
 
-        {/* Create or Join Room */}
-        <View style={styles.roomActions}>
-          <TouchableOpacity
-            style={[
-              styles.lobbyActionButton,
-              styles.createRoomButton,
-              (!isConnected || !playerName.trim()) &&
-                styles.lobbyActionButtonDisabled,
-            ]}
-            onPress={createRoom}
-            disabled={!isConnected || !playerName.trim()}
-          >
-            <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
-            <Text style={styles.lobbyActionButtonText}>Create Room</Text>
-          </TouchableOpacity>
-
-          <View style={styles.joinRoomContainer}>
-            <TextInput
-              style={styles.roomIdInput}
-              value={roomId}
-              onChangeText={(text) => {
-                // Only allow letters and convert to uppercase, max 4 characters
-                const filteredText = text
-                  .replace(/[^A-Za-z]/g, "")
-                  .toUpperCase()
-                  .slice(0, 4);
-                setRoomId(filteredText);
-              }}
-              placeholder="ABCD"
-              placeholderTextColor="#666"
-              maxLength={4}
-              autoCapitalize="characters"
+          {/* Connection Status */}
+          <View style={styles.connectionStatus}>
+            <MaterialCommunityIcons
+                name={isConnected ? "wifi" : "wifi-off"}
+                size={16}
+                color={isConnected ? "#10b981" : "#ef4444"}
             />
-            <TouchableOpacity
-              style={[
-                styles.lobbyActionButton,
-                styles.joinRoomButton,
-                (!isConnected || !playerName.trim() || !roomId.trim()) &&
-                  styles.lobbyActionButtonDisabled,
-              ]}
-              onPress={joinRoom}
-              disabled={!isConnected || !playerName.trim() || !roomId.trim()}
+            <Text
+                style={[
+                  styles.connectionText,
+                  { color: isConnected ? "#10b981" : "#ef4444" },
+                ]}
             >
-              <MaterialCommunityIcons name="login" size={20} color="#FFFFFF" />
-              <Text style={styles.lobbyActionButtonText}>Join Room</Text>
+              {isConnected ? "Connected" : "Connecting..."}
+            </Text>
+          </View>
+
+          {/* Player Name Display */}
+          <View style={styles.inputContainer}>
+
+            <View style={styles.playerNameDisplay}>
+              <MaterialCommunityIcons
+                  name="account"
+                  size={20}
+                  color="#2acde6"
+                  style={styles.playerIcon}
+              />
+              <Text style={styles.playerNameText}>
+                {playerName || "Loading..."}
+              </Text>
+            </View>
+          </View>
+
+          {/* Create or Join Room */}
+          <View style={styles.roomActions}>
+            <TouchableOpacity
+                style={[
+                  styles.lobbyActionButton,
+                  styles.createRoomButton,
+                  (!isConnected || !playerName.trim()) &&
+                  styles.lobbyActionButtonDisabled,
+                ]}
+                onPress={createRoom}
+                disabled={!isConnected || !playerName.trim()}
+            >
+              <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
+              <Text style={styles.lobbyActionButtonText}>Create Room</Text>
             </TouchableOpacity>
+
+            <View style={styles.joinRoomContainer}>
+              <TextInput
+                  style={styles.roomIdInput}
+                  value={roomId}
+                  onChangeText={(text) => {
+                    // Only allow letters and convert to uppercase, max 4 characters
+                    const filteredText = text
+                        .replace(/[^A-Za-z]/g, "")
+                        .toUpperCase()
+                        .slice(0, 4);
+                    setRoomId(filteredText);
+                  }}
+                  placeholder="ABCD"
+                  placeholderTextColor="#666"
+                  maxLength={4}
+                  autoCapitalize="characters"
+              />
+              <TouchableOpacity
+                  style={[
+                    styles.lobbyActionButton,
+                    styles.joinRoomButton,
+                    (!isConnected || !playerName.trim() || !roomId.trim()) &&
+                    styles.lobbyActionButtonDisabled,
+                  ]}
+                  onPress={joinRoom}
+                  disabled={!isConnected || !playerName.trim() || !roomId.trim()}
+              >
+                <MaterialCommunityIcons name="login" size={20} color="#FFFFFF" />
+                <Text style={styles.lobbyActionButtonText}>Join Room</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
 
-        {/* Solo Play Option removed per requirement */}
+          {/* Solo Play Option removed per requirement */}
 
-        {/* Game Rules */}
-        <View style={styles.gameInfoContainer}>
-          <Text style={styles.sectionTitle}>Game Rules</Text>
-          <View style={[styles.rulesList, { opacity: 1.0 }]}>
-            <Text style={styles.ruleText}>• Survive 10 waves with 5 HP</Text>
-            <Text style={styles.ruleText}>
-              • Match answer cards to questions
-            </Text>
-            <Text style={styles.ruleText}>• Use tool cards strategically</Text>
-            <Text style={styles.ruleText}>• 2 actions per turn</Text>
-            <Text style={styles.ruleText}>
-              • Lose 1 life if countdown reaches 0
-            </Text>
-            <Text style={styles.ruleText}>
-              • All cards are consumed when used
-            </Text>
-            <Text style={styles.ruleText}>
-              • ⚠️ Game ends if deck is exhausted
-            </Text>
+          {/* Game Rules */}
+          <View style={styles.gameInfoContainer}>
+            <Text style={styles.sectionTitle}>Game Rules</Text>
+            <View style={[styles.rulesList, { opacity: 1.0 }]}>
+              <Text style={styles.ruleText}>• Survive 10 waves with 5 HP</Text>
+              <Text style={styles.ruleText}>
+                • Match answer cards to questions
+              </Text>
+              <Text style={styles.ruleText}>• Use tool cards strategically</Text>
+              <Text style={styles.ruleText}>• 2 actions per turn</Text>
+              <Text style={styles.ruleText}>
+                • Lose 1 life if countdown reaches 0
+              </Text>
+              <Text style={styles.ruleText}>
+                • All cards are consumed when used
+              </Text>
+              <Text style={styles.ruleText}>
+                • ⚠️ Game ends if deck is exhausted
+              </Text>
+            </View>
           </View>
-        </View>
 
-        {/* Instructor Tools (role restricted) */}
-        {(user?.privilege === "instructor" || user?.privilege === "admin") && (
-          <TouchableOpacity
-            style={styles.editorButton}
-            onPress={() => setShowInstructorEditor(true)}
-          >
-            <MaterialCommunityIcons name="pencil" size={20} color="#2be472ff" />
-            <Text style={styles.editorButtonText}>Edit Cards (Instructor)</Text>
-          </TouchableOpacity>
-        )}
-      </ScrollView>
-    </View>
+          {/* Instructor Tools (role restricted) */}
+          {(user?.privilege === "instructor" || user?.privilege === "admin") && (
+              <TouchableOpacity
+                  style={styles.editorButton}
+                  onPress={() => setShowInstructorEditor(true)}
+              >
+                <MaterialCommunityIcons name="pencil" size={20} color="#2be472ff" />
+                <Text style={styles.editorButtonText}>Edit Cards (Instructor)</Text>
+              </TouchableOpacity>
+          )}
+        </ScrollView>
+      </View>
   );
 
   const renderWaitingRoom = () => (
-    <View style={styles.lobbyContainer}>
-      <ScrollView
-        style={styles.lobbyScrollView}
-        contentContainerStyle={styles.lobbyScrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.logoContainer}>
-          <MaterialCommunityIcons
-            name="shield-account"
-            size={80}
-            color="#2acde6"
-          />
-          <Text style={styles.gameTitle}>🛡️ Digital Defenders</Text>
-          <Text style={styles.gameSubtitle}>Waiting for players...</Text>
-        </View>
-
-        {/* Room Info */}
-        {roomData && (
-          <View style={styles.roomInfo}>
-            <Text style={styles.roomIdDisplay}>Room ID: {roomData.id}</Text>
-            <Text style={styles.roomStatus}>
-              Players: {roomData.players?.length || 0}/4
-            </Text>
-            {isCreator && (
-              <Text style={styles.creatorBadge}>
-                👑 You are the room creator
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Players List */}
-        {roomData?.players && (
-          <View style={styles.playersContainer}>
-            <Text style={styles.sectionTitle}>Players in Room</Text>
-            {roomData.players.map((player, index) => (
-              <View
-                key={`player-${player.id}-${index}`}
-                style={styles.playerItem}
-              >
-                <Text style={styles.playerName}>
-                  {player.name}
-                  {player.id === playerId && " (You)"}
-                  {player.isCreator && " 👑"}
-                </Text>
-                <View
-                  style={[styles.playerStatus, { backgroundColor: "#10b981" }]}
-                >
-                  <Text style={styles.playerStatusText}>Ready</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Action Buttons */}
-        <View style={styles.waitingActions}>
-          {isCreator && roomData?.players?.length >= 2 && (
-            <TouchableOpacity
-              style={[styles.lobbyActionButton, styles.startGameButton]}
-              onPress={startGameMultiplayer}
-            >
-              <MaterialCommunityIcons name="play" size={20} color="#3b82f6" />
-              <Text style={styles.lobbyActionButtonText}>Start Game</Text>
-            </TouchableOpacity>
-          )}
-
-          {isCreator && roomData?.players?.length < 2 && (
-            <Text style={styles.waitingText}>
-              Waiting for at least 2 players to start...
-            </Text>
-          )}
-
-          {!isCreator && (
-            <Text style={styles.waitingText}>
-              Waiting for{" "}
-              {roomData?.players?.find((p) => p.isCreator)?.name ||
-                "room creator"}{" "}
-              to start the game...
-            </Text>
-          )}
-
-          <TouchableOpacity
-            style={[styles.lobbyActionButton, styles.leaveRoomButton]}
-            onPress={leaveRoom}
-          >
+      <View style={styles.lobbyContainer}>
+        <ScrollView
+            style={styles.lobbyScrollView}
+            contentContainerStyle={styles.lobbyScrollContent}
+            showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.logoContainer}>
             <MaterialCommunityIcons
-              name="exit-to-app"
-              size={20}
-              color="#ffffff"
+                name="shield-account"
+                size={80}
+                color="#2acde6"
             />
-            <Text style={styles.lobbyActionButtonText}>Leave Room</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </View>
+            <Text style={styles.gameTitle}>🛡️ Digital Defenders</Text>
+            <Text style={styles.gameSubtitle}>Waiting for players...</Text>
+          </View>
+
+          {/* Room Info */}
+          {roomData && (
+              <View style={styles.roomInfo}>
+                <Text style={styles.roomIdDisplay}>Room ID: {roomData.id}</Text>
+                <Text style={styles.roomStatus}>
+                  Players: {roomData.players?.length || 0}/4
+                </Text>
+                {isCreator && (
+                    <Text style={styles.creatorBadge}>
+                      👑 You are the room creator
+                    </Text>
+                )}
+              </View>
+          )}
+
+          {/* Players List */}
+          {roomData?.players && (
+              <View style={styles.playersContainer}>
+                <Text style={styles.sectionTitle}>Players in Room</Text>
+                {roomData.players.map((player, index) => (
+                    <View
+                        key={`player-${player.id}-${index}`}
+                        style={styles.playerItem}
+                    >
+                      <Text style={styles.playerName}>
+                        {player.name}
+                        {player.id === playerId && " (You)"}
+                        {player.isCreator && " 👑"}
+                      </Text>
+                      <View
+                          style={[styles.playerStatus, { backgroundColor: "#10b981" }]}
+                      >
+                        <Text style={styles.playerStatusText}>Ready</Text>
+                      </View>
+                    </View>
+                ))}
+              </View>
+          )}
+
+          {/* Action Buttons */}
+          <View style={styles.waitingActions}>
+            {isCreator && roomData?.players?.length >= 2 && (
+                <TouchableOpacity
+                    style={[styles.lobbyActionButton, styles.startGameButton]}
+                    onPress={startGameMultiplayer}
+                >
+                  <MaterialCommunityIcons name="play" size={20} color="#3b82f6" />
+                  <Text style={styles.lobbyActionButtonText}>Start Game</Text>
+                </TouchableOpacity>
+            )}
+
+            {isCreator && roomData?.players?.length < 2 && (
+                <Text style={styles.waitingText}>
+                  Waiting for at least 2 players to start...
+                </Text>
+            )}
+
+            {!isCreator && (
+                <Text style={styles.waitingText}>
+                  Waiting for{" "}
+                  {roomData?.players?.find((p) => p.isCreator)?.name ||
+                      "room creator"}{" "}
+                  to start the game...
+                </Text>
+            )}
+
+            <TouchableOpacity
+                style={[styles.lobbyActionButton, styles.leaveRoomButton]}
+                onPress={leaveRoom}
+            >
+              <MaterialCommunityIcons
+                  name="exit-to-app"
+                  size={20}
+                  color="#ffffff"
+              />
+              <Text style={styles.lobbyActionButtonText}>Leave Room</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
   );
 
   const renderTurnOrderSelection = () => {
     const playerCount = roomData?.players?.length || 0;
     const positions = Array.from({ length: playerCount }, (_, i) => i + 1);
     const orderedSelections = Array.from(turnOrderSelections.entries()).sort(
-      (a, b) => a[1].position - b[1].position
+        (a, b) => a[1].position - b[1].position
     );
 
     const getOrdinalLabel = (position) => {
@@ -2572,454 +2593,496 @@ function DigitalDefenders() {
     };
 
     return (
-      <View style={styles.lobbyContainer}>
-        <ScrollView
-          style={styles.lobbyScrollView}
-          contentContainerStyle={styles.lobbyScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.logoContainer}>
-            <View style={styles.turnOrderHeroIconWrap}>
-              <MaterialCommunityIcons
-                name="sword-cross"
-                size={46}
-                color="#9af8ff"
-              />
+        <View style={styles.lobbyContainer}>
+          <ScrollView
+              style={styles.lobbyScrollView}
+              contentContainerStyle={styles.lobbyScrollContent}
+              showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.logoContainer}>
+              <View style={styles.turnOrderHeroIconWrap}>
+                <MaterialCommunityIcons
+                    name="sword-cross"
+                    size={46}
+                    color="#9af8ff"
+                />
+              </View>
+              <Text style={styles.gameTitle}>🛡️ Digital Defenders</Text>
+              <Text style={styles.gameSubtitle}>Choose Your Turn Order</Text>
+              <View style={styles.turnOrderProgressChip}>
+                <MaterialCommunityIcons
+                    name="account-group-outline"
+                    size={16}
+                    color="#e8fcff"
+                />
+                <Text style={styles.turnOrderProgressText}>
+                  {readyPlayersCount}/{playerCount} players locked in
+                </Text>
+              </View>
             </View>
-            <Text style={styles.gameTitle}>🛡️ Digital Defenders</Text>
-            <Text style={styles.gameSubtitle}>Choose Your Turn Order</Text>
-            <View style={styles.turnOrderProgressChip}>
-              <MaterialCommunityIcons
-                name="account-group-outline"
-                size={16}
-                color="#e8fcff"
-              />
-              <Text style={styles.turnOrderProgressText}>
-                {readyPlayersCount}/{playerCount} players locked in
+
+            {/* Instructions */}
+            <View style={styles.turnOrderInstructions}>
+              <Text style={styles.instructionsTitle}>Select Your Position</Text>
+              <Text style={styles.instructionsText}>
+                Pick when you want to take your turn. Position 1 goes first!
+              </Text>
+              <Text style={styles.turnOrderHelperText}>
+                Locked positions cannot be claimed by another player.
               </Text>
             </View>
-          </View>
 
-          {/* Instructions */}
-          <View style={styles.turnOrderInstructions}>
-            <Text style={styles.instructionsTitle}>Select Your Position</Text>
-            <Text style={styles.instructionsText}>
-              Pick when you want to take your turn. Position 1 goes first!
-            </Text>
-            <Text style={styles.turnOrderHelperText}>
-              Locked positions cannot be claimed by another player.
-            </Text>
-          </View>
+            {/* Position Selection Grid */}
+            <View style={styles.positionGrid}>
+              {positions.map((position) => {
+                const isSelected = mySelectedPosition === position;
+                const isTaken = Array.from(turnOrderSelections.values()).some(
+                    (selection) => selection.position === position
+                );
+                const isMySelection = mySelectedPosition === position;
+                const takenBy = Array.from(turnOrderSelections.entries()).find(
+                    ([_, selection]) => selection.position === position
+                );
 
-          {/* Position Selection Grid */}
-          <View style={styles.positionGrid}>
-            {positions.map((position) => {
-              const isSelected = mySelectedPosition === position;
-              const isTaken = Array.from(turnOrderSelections.values()).some(
-                (selection) => selection.position === position
-              );
-              const isMySelection = mySelectedPosition === position;
-              const takenBy = Array.from(turnOrderSelections.entries()).find(
-                ([_, selection]) => selection.position === position
-              );
-
-              return (
-                <TouchableOpacity
-                  key={position}
-                  style={[
-                    styles.positionButton,
-                    isSelected && styles.positionButtonSelected,
-                    isTaken && !isMySelection && styles.positionButtonTaken,
-                    mySelectedPosition &&
-                      !isMySelection &&
-                      styles.positionButtonDisabled,
-                  ]}
-                  onPress={() => selectTurnPosition(position)}
-                  disabled={isTaken || (mySelectedPosition && !isMySelection)}
-                  activeOpacity={0.86}
-                >
-                  <View style={styles.positionStateBadge}>
-                    <Text style={styles.positionStateBadgeText}>
-                      {isMySelection
-                        ? "LOCKED"
-                        : isTaken
-                        ? "TAKEN"
-                        : "OPEN"}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.positionButtonText,
-                      isSelected && styles.positionButtonTextSelected,
-                      isTaken &&
-                        !isMySelection &&
-                        styles.positionButtonTextTaken,
-                    ]}
-                  >
-                    {position}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.positionLabel,
-                      isSelected && styles.positionLabelSelected,
-                      isTaken && !isMySelection && styles.positionLabelTaken,
-                    ]}
-                  >
-                    {getOrdinalLabel(position)}
-                  </Text>
-                  {takenBy && (
-                    <Text
-                      style={[
-                        styles.playerNameOnPosition,
-                        isMySelection && styles.playerNameOnPositionSelected,
-                      ]}
+                return (
+                    <TouchableOpacity
+                        key={position}
+                        style={[
+                          styles.positionButton,
+                          isSelected && styles.positionButtonSelected,
+                          isTaken && !isMySelection && styles.positionButtonTaken,
+                          mySelectedPosition &&
+                          !isMySelection &&
+                          styles.positionButtonDisabled,
+                        ]}
+                        onPress={() => selectTurnPosition(position)}
+                        disabled={isTaken || (mySelectedPosition && !isMySelection)}
+                        activeOpacity={0.86}
                     >
-                      {isMySelection ? "You" : takenBy[1].playerName}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Current Selections Display */}
-          {turnOrderSelections.size > 0 && (
-            <View style={styles.currentSelections}>
-              <Text style={styles.currentSelectionsTitle}>
-                Current Selections:
-              </Text>
-              {orderedSelections.map(([selectedPlayerId, selection]) => (
-                <View key={selectedPlayerId} style={styles.selectionItem}>
-                  <MaterialCommunityIcons
-                    name="shield-account-outline"
-                    size={16}
-                    color="#dffcff"
-                  />
-                  <Text style={styles.selectionText}>
-                    Position {selection.position}: {" "}
-                    {selectedPlayerId === playerId ? "You" : selection.playerName}
-                  </Text>
-                </View>
-              ))}
+                      <View style={styles.positionStateBadge}>
+                        <Text style={styles.positionStateBadgeText}>
+                          {isMySelection
+                              ? "LOCKED"
+                              : isTaken
+                                  ? "TAKEN"
+                                  : "OPEN"}
+                        </Text>
+                      </View>
+                      <Text
+                          style={[
+                            styles.positionButtonText,
+                            isSelected && styles.positionButtonTextSelected,
+                            isTaken &&
+                            !isMySelection &&
+                            styles.positionButtonTextTaken,
+                          ]}
+                      >
+                        {position}
+                      </Text>
+                      <Text
+                          style={[
+                            styles.positionLabel,
+                            isSelected && styles.positionLabelSelected,
+                            isTaken && !isMySelection && styles.positionLabelTaken,
+                          ]}
+                      >
+                        {getOrdinalLabel(position)}
+                      </Text>
+                      {takenBy && (
+                          <Text
+                              style={[
+                                styles.playerNameOnPosition,
+                                isMySelection && styles.playerNameOnPositionSelected,
+                              ]}
+                          >
+                            {isMySelection ? "You" : takenBy[1].playerName}
+                          </Text>
+                      )}
+                    </TouchableOpacity>
+                );
+              })}
             </View>
-          )}
 
-          {/* Final Turn Order Display */}
-          {finalTurnOrder.length > 0 && (
-            <View style={styles.finalTurnOrder}>
-              <Text style={styles.finalTurnOrderTitle}>Final Turn Order:</Text>
-              {finalTurnOrder.map((player, index) => (
-                <View key={player.socketId} style={styles.finalOrderItem}>
-                  <MaterialCommunityIcons
-                    name="medal-outline"
-                    size={16}
-                    color="#dffcff"
-                  />
-                  <Text style={styles.finalOrderText}>
-                    {index + 1}. {player.playerName}
+            {/* Current Selections Display */}
+            {turnOrderSelections.size > 0 && (
+                <View style={styles.currentSelections}>
+                  <Text style={styles.currentSelectionsTitle}>
+                    Current Selections:
                   </Text>
+                  {orderedSelections.map(([selectedPlayerId, selection]) => (
+                      <View key={selectedPlayerId} style={styles.selectionItem}>
+                        <MaterialCommunityIcons
+                            name="shield-account-outline"
+                            size={16}
+                            color="#dffcff"
+                        />
+                        <Text style={styles.selectionText}>
+                          Position {selection.position}: {" "}
+                          {selectedPlayerId === playerId ? "You" : selection.playerName}
+                        </Text>
+                      </View>
+                  ))}
                 </View>
-              ))}
-              <Text style={styles.gameStartingSoon}>Game starting soon...</Text>
-            </View>
-          )}
+            )}
 
-          {/* Leave Room Button */}
-          <View style={styles.lobbyActions}>
-            <TouchableOpacity
-              style={[styles.lobbyActionButton, styles.leaveRoomButton]}
-              onPress={leaveRoom}
-            >
-              <MaterialCommunityIcons
-                name="exit-to-app"
-                size={20}
-                color="#ffffff"
-              />
-              <Text style={styles.lobbyActionButtonText}>Leave Room</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
+            {/* Final Turn Order Display */}
+            {finalTurnOrder.length > 0 && (
+                <View style={styles.finalTurnOrder}>
+                  <Text style={styles.finalTurnOrderTitle}>Final Turn Order:</Text>
+                  {finalTurnOrder.map((player, index) => (
+                      <View key={player.socketId} style={styles.finalOrderItem}>
+                        <MaterialCommunityIcons
+                            name="medal-outline"
+                            size={16}
+                            color="#dffcff"
+                        />
+                        <Text style={styles.finalOrderText}>
+                          {index + 1}. {player.playerName}
+                        </Text>
+                      </View>
+                  ))}
+                  <Text style={styles.gameStartingSoon}>Game starting soon...</Text>
+                </View>
+            )}
+
+            {/* Leave Room Button */}
+            <View style={styles.lobbyActions}>
+              <TouchableOpacity
+                  style={[styles.lobbyActionButton, styles.leaveRoomButton]}
+                  onPress={leaveRoom}
+              >
+                <MaterialCommunityIcons
+                    name="exit-to-app"
+                    size={20}
+                    color="#ffffff"
+                />
+                <Text style={styles.lobbyActionButtonText}>Leave Room</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
     );
   };
 
-  const renderGameplay = () => (
-    <View style={styles.gameplayContainer}>
-      {/* Game Header */}
-      <View style={styles.gameHeader}>
-        <View style={styles.gameStats}>
-          <Text style={styles.waveText}>Wave {currentWave}/10</Text>
-          <View style={styles.healthContainer}>
-            {Array.from({ length: 5 }, (_, i) => (
-              <MaterialCommunityIcons
-                key={`heart-${i}`}
-                name={i < pcHealth ? "heart" : "heart-outline"}
-                size={20}
-                color={i < pcHealth ? "#e74c3c" : "#666"}
-              />
-            ))}
-          </View>
-          <Text style={styles.actionsText}>Actions: {actionsLeft}/2</Text>
-        </View>
-
-        {/* Turn Indicator - Only show in multiplayer */}
-        {roomData && (
-          <View style={styles.turnIndicatorContainer}>
-            <View
-              style={[
-                styles.turnIndicator,
-                isMyTurn ? styles.myTurnIndicator : styles.otherTurnIndicator,
-              ]}
-            >
-              <MaterialCommunityIcons
-                name={isMyTurn ? "account" : "account-outline"}
-                size={16}
-                color={isMyTurn ? "#fff" : "#e2e8f0"}
-              />
-              <Text
-                style={[
-                  styles.turnIndicatorText,
-                  isMyTurn ? styles.myTurnText : styles.otherTurnText,
-                ]}
-              >
-                {isMyTurn ? "Your Turn" : `${currentPlayerName}'s Turn`}
-              </Text>
-            </View>
-            {!isMyTurn && (
-              <Text style={styles.waitingText}>Wait for your turn...</Text>
-            )}
-          </View>
-        )}
-
-        <View style={styles.countdownContainer}>
-          <Text
+  const renderGameplay = () => {
+    const gameplayContent = (
+        <View
             style={[
-              styles.countdownText,
-              countdown <= 3 && styles.countdownCritical,
-              freezeCountdown > 0 && styles.countdownFrozen,
+              styles.gameplayContainer,
+              isCompactGameplayLayout && styles.gameplayContainerCompact,
             ]}
-          >
-            {freezeCountdown > 0 ? `🧊 ${countdown}` : countdown}
-          </Text>
-          {freezeCountdown > 0 && (
-            <Text style={styles.freezeText}>Frozen: {freezeCountdown}</Text>
-          )}
-        </View>
-      </View>
-
-      {/* Question Card Area */}
-      <View style={styles.questionArea}>
-        {currentQuestion && (
-          <View style={styles.questionCard}>
-            <Text style={styles.questionText}>{currentQuestion.text}</Text>
-            {selectedCard && (
-              <View style={styles.instructionIndicator}>
-                <MaterialCommunityIcons
-                  name="gesture-tap"
-                  size={24}
-                  color="#2ecc71"
-                />
-                <Text style={styles.instructionText}>
-                  Tap selected card again to activate
-                </Text>
-              </View>
-            )}
-            {playerHand.length === 0 && deck.length === 0 && (
-              <View style={styles.noCardsWarning}>
-                <MaterialCommunityIcons
-                  name="alert-circle"
-                  size={24}
-                  color="#e74c3c"
-                />
-                <Text style={styles.noCardsText}>
-                  No cards remaining - can only skip turns
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* Player Hand */}
-      <View style={styles.handContainer}>
-        <View style={styles.handHeader}>
-          <Text style={styles.handTitle}>Your Hand</Text>
-          <View style={styles.deckStatus}>
-            <Text style={[styles.deckCount, { opacity: 1 }]}>
-              Deck: {deck.length} | Used: {usedCards.length}
-            </Text>
-            {deck.length === 0 && playerHand.length > 0 && (
-              <Text style={[styles.deckWarning, { opacity: 1 }]}>
-                ⚠️ No cards to draw
-              </Text>
-            )}
-            {deck.length === 0 && playerHand.length === 0 && (
-              <Text style={[styles.deckEmpty, { opacity: 1 }]}>
-                ❌ All cards exhausted
-              </Text>
-            )}
-          </View>
-        </View>
-
-        {/* Turn restriction overlay */}
-        {roomData && !isMyTurn && (
-          <View style={styles.turnRestrictionOverlay}>
-            <MaterialCommunityIcons
-              name="account-clock"
-              size={24}
-              color="#666"
-            />
-            <Text style={styles.turnRestrictionText}>
-              Wait for {currentPlayerName}&apos;s turn to finish
-            </Text>
-          </View>
-        )}
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={[
-            styles.handScroll,
-            roomData && !isMyTurn && styles.handScrollDisabled,
-          ]}
         >
-          {playerHand.length === 0 ? (
-            <View style={styles.emptyHandIndicator}>
-              <MaterialCommunityIcons
-                name="cards-outline"
-                size={40}
-                color="#666"
-              />
-              <Text style={styles.emptyHandText}>No cards left</Text>
-              <Text style={styles.emptyHandSubtext}>
-                {deck.length > 0
-                  ? "Cards will be drawn next turn"
-                  : "Deck is empty - can only skip"}
+          {/* Game Header */}
+          <View style={[styles.gameHeader, isCompactGameplayLayout && styles.gameHeaderCompact]}>
+            <View style={styles.gameStats}>
+              <Text style={[styles.waveText, isCompactGameplayLayout && styles.waveTextCompact]}>
+                Wave {currentWave}/10
+              </Text>
+              <View style={styles.healthContainer}>
+                {Array.from({ length: 5 }, (_, i) => (
+                    <MaterialCommunityIcons
+                        key={`heart-${i}`}
+                        name={i < pcHealth ? "heart" : "heart-outline"}
+                        size={20}
+                        color={i < pcHealth ? "#e74c3c" : "#666"}
+                    />
+                ))}
+              </View>
+              <Text style={[styles.actionsText, isCompactGameplayLayout && styles.actionsTextCompact]}>
+                Actions: {actionsLeft}/2
               </Text>
             </View>
-          ) : (
-            playerHand.map((card, index) => {
-              const isSelected = selectedCard && selectedCard.id === card.id;
-              const isDisabled = roomData && !isMyTurn;
 
-              return (
-                <TouchableOpacity
-                  key={`hand-${card.id}-${index}`}
-                  style={[
-                    styles.card,
-                    card.type === "tool" && styles.toolCard,
-                    isSelected && styles.cardSelected, // Green highlight when selected
-                    isDisabled && styles.cardDisabled, // Disabled when not player's turn
-                  ]}
-                  onPress={() => handleCardTap(card)}
-                  activeOpacity={isDisabled ? 0.3 : 0.8}
-                  disabled={isDisabled}
+            {/* Turn Indicator - Only show in multiplayer */}
+            {roomData && (
+                <View
+                    style={[
+                      styles.turnIndicatorContainer,
+                      isCompactGameplayLayout && styles.turnIndicatorContainerCompact,
+                    ]}
                 >
-                  <LinearGradient
-                    colors={
-                      card.type === "tool"
-                        ? ["rgba(139, 92, 246, 0.7)", "rgba(79, 32, 166, 0.8)"]
-                        : ["rgba(253, 241, 187, 1)", "rgba(248, 212, 158, 0.9)"]
-                    }
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.cardGradient}
+                  <View
+                      style={[
+                        styles.turnIndicator,
+                        isMyTurn ? styles.myTurnIndicator : styles.otherTurnIndicator,
+                      ]}
                   >
-                    {card.type === "tool" ? (
-                      // Tool cards keep their header and description
-                      <>
-                        <View style={styles.cardHeader}>
-                          <MaterialCommunityIcons
-                            name={card.icon}
-                            size={16}
-                            color="#2acde6"
-                          />
-                          <Text style={styles.cardName}>
-                            {card.name || card.text}
-                          </Text>
-                        </View>
-                        <Text
-                          style={[
-                            styles.cardDescription,
-                            isSelected && styles.cardDescriptionOnDark,
-                          ]}
-                        >
-                          {card.description || card.text}
-                        </Text>
-                        <View style={styles.toolIndicator}>
-                          <Text style={styles.toolText}>TOOL</Text>
-                        </View>
-                      </>
-                    ) : (
-                      // Answer cards only show the answer text, no header
-                      <View style={styles.answerCardContent}>
-                        <Text style={styles.answerCardText}>
-                          {card.text || card.name}
-                        </Text>
-                      </View>
-                    )}
-                    {isSelected && (
-                      <View style={styles.selectedIndicator}>
+                    <MaterialCommunityIcons
+                        name={isMyTurn ? "account" : "account-outline"}
+                        size={16}
+                        color={isMyTurn ? "#fff" : "#e2e8f0"}
+                    />
+                    <Text
+                        style={[
+                          styles.turnIndicatorText,
+                          isMyTurn ? styles.myTurnText : styles.otherTurnText,
+                        ]}
+                    >
+                      {isMyTurn ? "Your Turn" : `${currentPlayerName}'s Turn`}
+                    </Text>
+                  </View>
+                  {!isMyTurn && (
+                      <Text style={styles.waitingText}>Wait for your turn...</Text>
+                  )}
+                </View>
+            )}
+
+            <View
+                style={[
+                  styles.countdownContainer,
+                  isCompactGameplayLayout && styles.countdownContainerCompact,
+                ]}
+            >
+              <Text
+                  style={[
+                    styles.countdownText,
+                    isCompactGameplayLayout && styles.countdownTextCompact,
+                    countdown <= 3 && styles.countdownCritical,
+                    freezeCountdown > 0 && styles.countdownFrozen,
+                  ]}
+              >
+                {freezeCountdown > 0 ? `🧊 ${countdown}` : countdown}
+              </Text>
+              {freezeCountdown > 0 && (
+                  <Text style={styles.freezeText}>Frozen: {freezeCountdown}</Text>
+              )}
+            </View>
+          </View>
+
+          {/* Question Card Area */}
+          <View style={[styles.questionArea, isCompactGameplayLayout && styles.questionAreaCompact]}>
+            {currentQuestion && (
+                <View style={[styles.questionCard, isCompactGameplayLayout && styles.questionCardCompact]}>
+                  <Text style={[styles.questionText, isCompactGameplayLayout && styles.questionTextCompact]}>
+                    {currentQuestion.text}
+                  </Text>
+                  {selectedCard && (
+                      <View style={styles.instructionIndicator}>
                         <MaterialCommunityIcons
-                          name="check-circle"
-                          size={20}
-                          color="#2ecc71"
+                            name="gesture-tap"
+                            size={24}
+                            color="#2ecc71"
                         />
+                        <Text style={styles.instructionText}>
+                          Tap selected card again to activate
+                        </Text>
                       </View>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </ScrollView>
-      </View>
+                  )}
+                  {playerHand.length === 0 && deck.length === 0 && (
+                      <View style={styles.noCardsWarning}>
+                        <MaterialCommunityIcons
+                            name="alert-circle"
+                            size={24}
+                            color="#e74c3c"
+                        />
+                        <Text style={styles.noCardsText}>
+                          No cards remaining - can only skip turns
+                        </Text>
+                      </View>
+                  )}
+                </View>
+            )}
+          </View>
 
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            (actionsLeft === 0 || (roomData && !isMyTurn)) &&
-              styles.actionButtonDisabled,
-          ]}
-          onPress={skipTurn}
-          disabled={actionsLeft === 0 || (roomData && !isMyTurn)}
-        >
-          <MaterialCommunityIcons name="skip-next" size={20} color="#3b82f6" />
-          <Text style={styles.actionButtonText}>
-            {roomData && !isMyTurn ? "Not Your Turn" : "Skip Turn"}
-          </Text>
-        </TouchableOpacity>
+          {/* Player Hand */}
+          <View style={[styles.handContainer, isCompactGameplayLayout && styles.handContainerCompact]}>
+            <View style={[styles.handHeader, isCompactGameplayLayout && styles.handHeaderCompact]}>
+              <Text style={[styles.handTitle, isCompactGameplayLayout && styles.handTitleCompact]}>Your Hand</Text>
+              <View style={styles.deckStatus}>
+                <Text style={[styles.deckCount, isCompactGameplayLayout && styles.deckCountCompact, { opacity: 1 }]}>
+                  Deck: {deck.length} | Used: {usedCards.length}
+                </Text>
+                {deck.length === 0 && playerHand.length > 0 && (
+                    <Text style={[styles.deckWarning, { opacity: 1 }]}>
+                      ⚠️ No cards to draw
+                    </Text>
+                )}
+                {deck.length === 0 && playerHand.length === 0 && (
+                    <Text style={[styles.deckEmpty, { opacity: 1 }]}>
+                      ❌ All cards exhausted
+                    </Text>
+                )}
+              </View>
+            </View>
 
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            styles.reshuffleButton,
-            (actionsLeft === 0 ||
-              playerHand.length === 0 ||
-              (roomData && !isMyTurn)) &&
-              styles.actionButtonDisabled,
-          ]}
-          onPress={reshuffle}
-          disabled={
-            actionsLeft === 0 ||
-            playerHand.length === 0 ||
-            (roomData && !isMyTurn)
-          }
-        >
-          <MaterialCommunityIcons name="shuffle" size={20} color="#3b82f6" />
-          <Text style={styles.actionButtonText}>
-            {roomData && !isMyTurn
-              ? "Not Your Turn"
-              : playerHand.length === 0
-              ? "No Cards to Reshuffle"
-              : "Reshuffle"}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+            {/* Turn restriction overlay */}
+            {roomData && !isMyTurn && (
+                <View style={styles.turnRestrictionOverlay}>
+                  <MaterialCommunityIcons
+                      name="account-clock"
+                      size={24}
+                      color="#666"
+                  />
+                  <Text style={styles.turnRestrictionText}>
+                    Wait for {currentPlayerName}&apos;s turn to finish
+                  </Text>
+                </View>
+            )}
+
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={[
+                  styles.handScroll,
+                  isCompactGameplayLayout && styles.handScrollCompact,
+                  roomData && !isMyTurn && styles.handScrollDisabled,
+                ]}
+            >
+              {playerHand.length === 0 ? (
+                  <View style={[styles.emptyHandIndicator, isCompactGameplayLayout && styles.emptyHandIndicatorCompact]}>
+                    <MaterialCommunityIcons
+                        name="cards-outline"
+                        size={40}
+                        color="#666"
+                    />
+                    <Text style={styles.emptyHandText}>No cards left</Text>
+                    <Text style={styles.emptyHandSubtext}>
+                      {deck.length > 0
+                          ? "Cards will be drawn next turn"
+                          : "Deck is empty - can only skip"}
+                    </Text>
+                  </View>
+              ) : (
+                  playerHand.map((card, index) => {
+                    const isSelected = selectedCard && selectedCard.id === card.id;
+                    const isDisabled = roomData && !isMyTurn;
+
+                    return (
+                        <TouchableOpacity
+                            key={`hand-${card.id}-${index}`}
+                            style={[
+                              styles.card,
+                              isCompactGameplayLayout && styles.cardCompact,
+                              card.type === "tool" && styles.toolCard,
+                              isSelected && styles.cardSelected, // Green highlight when selected
+                              isDisabled && styles.cardDisabled, // Disabled when not player's turn
+                            ]}
+                            onPress={() => handleCardTap(card)}
+                            activeOpacity={isDisabled ? 0.3 : 0.8}
+                            disabled={isDisabled}
+                        >
+                          <LinearGradient
+                              colors={
+                                card.type === "tool"
+                                    ? ["rgba(139, 92, 246, 0.7)", "rgba(79, 32, 166, 0.8)"]
+                                    : ["rgba(253, 241, 187, 1)", "rgba(248, 212, 158, 0.9)"]
+                              }
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={styles.cardGradient}
+                          >
+                            {card.type === "tool" ? (
+                                // Tool cards keep their header and description
+                                <>
+                                  <View style={styles.cardHeader}>
+                                    <MaterialCommunityIcons
+                                        name={card.icon}
+                                        size={16}
+                                        color="#2acde6"
+                                    />
+                                    <Text style={styles.cardName}>
+                                      {card.name || card.text}
+                                    </Text>
+                                  </View>
+                                  <Text
+                                      style={[
+                                        styles.cardDescription,
+                                        isSelected && styles.cardDescriptionOnDark,
+                                      ]}
+                                  >
+                                    {card.description || card.text}
+                                  </Text>
+                                  <View style={styles.toolIndicator}>
+                                    <Text style={styles.toolText}>TOOL</Text>
+                                  </View>
+                                </>
+                            ) : (
+                                // Answer cards only show the answer text, no header
+                                <View style={styles.answerCardContent}>
+                                  <Text style={styles.answerCardText}>
+                                    {card.text || card.name}
+                                  </Text>
+                                </View>
+                            )}
+                            {isSelected && (
+                                <View style={styles.selectedIndicator}>
+                                  <MaterialCommunityIcons
+                                      name="check-circle"
+                                      size={20}
+                                      color="#2ecc71"
+                                  />
+                                </View>
+                            )}
+                          </LinearGradient>
+                        </TouchableOpacity>
+                    );
+                  })
+              )}
+            </ScrollView>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={[styles.actionButtons, isCompactGameplayLayout && styles.actionButtonsCompact]}>
+            <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  isCompactGameplayLayout && styles.actionButtonCompact,
+                  (actionsLeft === 0 || (roomData && !isMyTurn)) &&
+                  styles.actionButtonDisabled,
+                ]}
+                onPress={skipTurn}
+                disabled={actionsLeft === 0 || (roomData && !isMyTurn)}
+            >
+              <MaterialCommunityIcons name="skip-next" size={20} color="#3b82f6" />
+              <Text style={[styles.actionButtonText, isCompactGameplayLayout && styles.actionButtonTextCompact]}>
+                {roomData && !isMyTurn ? "Not Your Turn" : "Skip Turn"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  isCompactGameplayLayout && styles.actionButtonCompact,
+                  styles.reshuffleButton,
+                  (actionsLeft === 0 ||
+                      playerHand.length === 0 ||
+                      (roomData && !isMyTurn)) &&
+                  styles.actionButtonDisabled,
+                ]}
+                onPress={reshuffle}
+                disabled={
+                    actionsLeft === 0 ||
+                    playerHand.length === 0 ||
+                    (roomData && !isMyTurn)
+                }
+            >
+              <MaterialCommunityIcons name="shuffle" size={20} color="#3b82f6" />
+              <Text style={[styles.actionButtonText, isCompactGameplayLayout && styles.actionButtonTextCompact]}>
+                {roomData && !isMyTurn
+                    ? "Not Your Turn"
+                    : playerHand.length === 0
+                        ? "No Cards to Reshuffle"
+                        : "Reshuffle"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+    );
+
+    if (isCompactGameplayLayout) {
+      return (
+          <ScrollView
+              style={styles.gameplayScrollCompact}
+              contentContainerStyle={styles.gameplayScrollContentCompact}
+              showsVerticalScrollIndicator={true}
+          >
+            {gameplayContent}
+          </ScrollView>
+      );
+    }
+
+    return gameplayContent;
+  };
 
   const renderGameOver = () => {
     const getGameOverMessage = () => {
@@ -3044,7 +3107,7 @@ function DigitalDefenders() {
             title: gameEndData?.isTie ? "It's a Tie!" : "Game Complete!",
             message: gameEndData?.message || "All players are out of cards!",
             subtitle: `Final Wave: ${
-              gameEndData?.finalWave || currentWave
+                gameEndData?.finalWave || currentWave
             } | Final Health: ${gameEndData?.finalHealth || pcHealth}/5`,
           };
         case "invalid_session":
@@ -3052,8 +3115,8 @@ function DigitalDefenders() {
             icon: "account-alert",
             title: "Session Invalid",
             message:
-              gameEndData?.message ||
-              "This game session is no longer valid. Start a new match to continue.",
+                gameEndData?.message ||
+                "This game session is no longer valid. Start a new match to continue.",
             subtitle: "Please rejoin from the lobby.",
           };
         default:
@@ -3069,188 +3132,188 @@ function DigitalDefenders() {
     const gameOverInfo = getGameOverMessage();
 
     return (
-      <View style={styles.gameOverContainer}>
-        <View style={styles.gameOverContent}>
-          <MaterialCommunityIcons
-            name={gameOverInfo.icon}
-            size={80}
-            color={
-              gameOverReason === "no_cards_remaining" ? "#f39c12" : "#e74c3c"
-            }
-          />
-          <Text style={styles.gameOverTitle}>{gameOverInfo.title}</Text>
-          <Text style={styles.gameOverText}>{gameOverInfo.message}</Text>
-          <Text style={styles.gameOverSubtext}>{gameOverInfo.subtitle}</Text>
+        <View style={styles.gameOverContainer}>
+          <View style={styles.gameOverContent}>
+            <MaterialCommunityIcons
+                name={gameOverInfo.icon}
+                size={80}
+                color={
+                  gameOverReason === "no_cards_remaining" ? "#f39c12" : "#e74c3c"
+                }
+            />
+            <Text style={styles.gameOverTitle}>{gameOverInfo.title}</Text>
+            <Text style={styles.gameOverText}>{gameOverInfo.message}</Text>
+            <Text style={styles.gameOverSubtext}>{gameOverInfo.subtitle}</Text>
 
-          {gameOverReason === "deck_empty" && (
-            <View style={styles.gameOverStats}>
-              <Text style={styles.gameOverStatText}>
-                Cards Used: {usedCards.length}/15
-              </Text>
-              <Text style={styles.gameOverStatText}>
-                Final Health: {pcHealth}/5
-              </Text>
-            </View>
-          )}
-
-          {gameOverReason === "no_cards_remaining" && gameEndData && (
-            <View style={styles.gameOverStats}>
-              <Text style={styles.gameOverStatTitle}>Final Scores:</Text>
-              {gameEndData.playerStats?.map((player, index) => (
-                <View key={player.playerId} style={styles.playerScoreContainer}>
-                  <Text
-                    style={[
-                      styles.playerScoreText,
-                      gameEndData.winner?.playerId === player.playerId &&
-                      !gameEndData.isTie
-                        ? styles.winnerText
-                        : null,
-                    ]}
-                  >
-                    {index + 1}. {player.playerName}: {player.score} points
+            {gameOverReason === "deck_empty" && (
+                <View style={styles.gameOverStats}>
+                  <Text style={styles.gameOverStatText}>
+                    Cards Used: {usedCards.length}/15
                   </Text>
-                  <Text style={styles.playerScoreDetails}>
-                    Waves: {player.wavesCompleted} | Health:{" "}
-                    {player.healthRemaining}
+                  <Text style={styles.gameOverStatText}>
+                    Final Health: {pcHealth}/5
                   </Text>
                 </View>
-              ))}
-            </View>
-          )}
+            )}
 
-          <TouchableOpacity
-            style={styles.restartButton}
-            onPress={() => setGameState("lobby")}
-          >
-            <MaterialCommunityIcons name="restart" size={20} color="#ffffff" />
-            <Text style={styles.restartButtonText}>Try Again</Text>
-          </TouchableOpacity>
+            {gameOverReason === "no_cards_remaining" && gameEndData && (
+                <View style={styles.gameOverStats}>
+                  <Text style={styles.gameOverStatTitle}>Final Scores:</Text>
+                  {gameEndData.playerStats?.map((player, index) => (
+                      <View key={player.playerId} style={styles.playerScoreContainer}>
+                        <Text
+                            style={[
+                              styles.playerScoreText,
+                              gameEndData.winner?.playerId === player.playerId &&
+                              !gameEndData.isTie
+                                  ? styles.winnerText
+                                  : null,
+                            ]}
+                        >
+                          {index + 1}. {player.playerName}: {player.score} points
+                        </Text>
+                        <Text style={styles.playerScoreDetails}>
+                          Waves: {player.wavesCompleted} | Health:{" "}
+                          {player.healthRemaining}
+                        </Text>
+                      </View>
+                  ))}
+                </View>
+            )}
+
+            <TouchableOpacity
+                style={styles.restartButton}
+                onPress={() => setGameState("lobby")}
+            >
+              <MaterialCommunityIcons name="restart" size={20} color="#ffffff" />
+              <Text style={styles.restartButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
     );
   };
 
   const renderVictory = () => (
-    <View
-      style={[
-        styles.victoryContainer,
-        Platform.OS === "web" && styles.victoryContainerWeb,
-      ]}
-    >
-      <LinearGradient
-        colors={["rgba(255,255,255,0.98)", "rgba(246,253,250,0.96)"]}
-        style={[
-          styles.victoryContent,
-          Platform.OS === "web" && styles.victoryContentWeb,
-        ]}
+      <View
+          style={[
+            styles.victoryContainer,
+            Platform.OS === "web" && styles.victoryContainerWeb,
+          ]}
       >
-        <View
-          style={[
-            styles.victoryHeroBadge,
-            Platform.OS === "web" && styles.victoryHeroBadgeWeb,
-          ]}
+        <LinearGradient
+            colors={["rgba(255,255,255,0.98)", "rgba(246,253,250,0.96)"]}
+            style={[
+              styles.victoryContent,
+              Platform.OS === "web" && styles.victoryContentWeb,
+            ]}
         >
-          <MaterialCommunityIcons
-            name="trophy"
-            size={Platform.OS === "web" ? 52 : 42}
-            color="#f59e0b"
-          />
-        </View>
-
-        <Text style={styles.victoryTitle}>Mission Complete</Text>
-        <Text
-          style={[
-            styles.victoryText,
-            Platform.OS === "web" && styles.victoryTextWeb,
-          ]}
-        >
-          You successfully defended your system through all 10 waves.
-        </Text>
-
-        <View
-          style={[
-            styles.victoryStatsRow,
-            Platform.OS === "web" && styles.victoryStatsRowWeb,
-          ]}
-        >
-          <View style={styles.victoryStatCard}>
+          <View
+              style={[
+                styles.victoryHeroBadge,
+                Platform.OS === "web" && styles.victoryHeroBadgeWeb,
+              ]}
+          >
             <MaterialCommunityIcons
-              name="heart-pulse"
-              size={18}
-              color={PREMIUM_ACCENT_DARK}
+                name="trophy"
+                size={Platform.OS === "web" ? 52 : 42}
+                color="#f59e0b"
             />
-            <Text style={styles.victoryStatLabel}>Final HP</Text>
-            <Text style={styles.victoryStatValue}>{pcHealth}/5</Text>
           </View>
-          <View style={styles.victoryStatCard}>
-            <MaterialCommunityIcons
-              name="shield-check"
-              size={18}
-              color={PREMIUM_ACCENT_DARK}
-            />
-            <Text style={styles.victoryStatLabel}>Waves Cleared</Text>
-            <Text style={styles.victoryStatValue}>10/10</Text>
-          </View>
-        </View>
 
-        <View style={styles.victoryTagRow}>
-          <View style={styles.victoryTagChip}>
-            <MaterialCommunityIcons
-              name="star-four-points"
-              size={14}
-              color="#f8fafc"
-            />
-            <Text style={styles.victoryTagText}>Perfect Defense Run</Text>
-          </View>
-        </View>
+          <Text style={styles.victoryTitle}>Mission Complete</Text>
+          <Text
+              style={[
+                styles.victoryText,
+                Platform.OS === "web" && styles.victoryTextWeb,
+              ]}
+          >
+            You successfully defended your system through all 10 waves.
+          </Text>
 
-        <TouchableOpacity
-          style={[
-            styles.victoryRestartButton,
-            Platform.OS === "web" && styles.victoryRestartButtonWeb,
-          ]}
-          onPress={() => setGameState("lobby")}
-        >
-          <MaterialCommunityIcons name="restart" size={19} color="#f8fafc" />
-          <Text style={styles.victoryRestartButtonText}>Play Again</Text>
-        </TouchableOpacity>
-      </LinearGradient>
-    </View>
+          <View
+              style={[
+                styles.victoryStatsRow,
+                Platform.OS === "web" && styles.victoryStatsRowWeb,
+              ]}
+          >
+            <View style={styles.victoryStatCard}>
+              <MaterialCommunityIcons
+                  name="heart-pulse"
+                  size={18}
+                  color={PREMIUM_ACCENT_DARK}
+              />
+              <Text style={styles.victoryStatLabel}>Final HP</Text>
+              <Text style={styles.victoryStatValue}>{pcHealth}/5</Text>
+            </View>
+            <View style={styles.victoryStatCard}>
+              <MaterialCommunityIcons
+                  name="shield-check"
+                  size={18}
+                  color={PREMIUM_ACCENT_DARK}
+              />
+              <Text style={styles.victoryStatLabel}>Waves Cleared</Text>
+              <Text style={styles.victoryStatValue}>10/10</Text>
+            </View>
+          </View>
+
+          <View style={styles.victoryTagRow}>
+            <View style={styles.victoryTagChip}>
+              <MaterialCommunityIcons
+                  name="star-four-points"
+                  size={14}
+                  color="#f8fafc"
+              />
+              <Text style={styles.victoryTagText}>Perfect Defense Run</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+              style={[
+                styles.victoryRestartButton,
+                Platform.OS === "web" && styles.victoryRestartButtonWeb,
+              ]}
+              onPress={() => setGameState("lobby")}
+          >
+            <MaterialCommunityIcons name="restart" size={19} color="#f8fafc" />
+            <Text style={styles.victoryRestartButtonText}>Play Again</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+      </View>
   );
 
   const renderInstructorEditor = () => {
     const editorBody = (
-      <>
-        {renderImportDocsModal?.()}
-        {renderActionsMenuModal?.()}
-        <View style={styles.editorHeader}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => setShowInstructorEditor(false)}
-          >
-            <MaterialCommunityIcons
-              name="close"
-              size={24}
-              color={COLORS.textPrimary}
-            />
-          </TouchableOpacity>
-          <View style={styles.editorTitleBlock}>
-            <Text style={styles.editorTitle}>Edit Cards</Text>
-            <Text style={styles.editorSubtitle}>Digital Defenders Question Manager</Text>
+        <>
+          {renderImportDocsModal?.()}
+          {renderActionsMenuModal?.()}
+          <View style={styles.editorHeader}>
+            <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowInstructorEditor(false)}
+            >
+              <MaterialCommunityIcons
+                  name="close"
+                  size={24}
+                  color={COLORS.textPrimary}
+              />
+            </TouchableOpacity>
+            <View style={styles.editorTitleBlock}>
+              <Text style={styles.editorTitle}>Edit Cards</Text>
+              <Text style={styles.editorSubtitle}>Digital Defenders Question Manager</Text>
+            </View>
+            <TouchableOpacity
+                style={styles.moreMenuButton}
+                onPress={() => setShowActionsMenu(true)}
+            >
+              <MaterialCommunityIcons
+                  name="dots-vertical"
+                  size={26}
+                  color={COLORS.textPrimary}
+              />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.moreMenuButton}
-            onPress={() => setShowActionsMenu(true)}
-          >
-            <MaterialCommunityIcons
-              name="dots-vertical"
-              size={26}
-              color={COLORS.textPrimary}
-            />
-          </TouchableOpacity>
-        </View>
 
-        <ScrollView style={styles.editorContent}>
+          <ScrollView style={styles.editorContent}>
             <Text style={styles.editorSectionTitle}>
               Question Cards by Wave
             </Text>
@@ -3264,101 +3327,101 @@ function DigitalDefenders() {
             {Array.from({ length: 10 }, (_, waveIndex) => {
               const waveNumber = waveIndex + 1;
               const waveQuestions = questionCards.filter(
-                (card) => card.wave === waveNumber
+                  (card) => card.wave === waveNumber
               );
 
               return (
-                <View key={`wave-${waveNumber}`} style={styles.waveSection}>
-                  <View style={styles.waveSectionHeader}>
-                    <Text style={styles.waveSectionTitle}>
-                      🌊 Wave {waveNumber}
-                    </Text>
-                    <Text style={styles.waveSectionCounter}>
-                      {waveQuestions.length}/5 questions
-                    </Text>
-                  </View>
-
-                  {waveQuestions.length < 5 && (
-                    <TouchableOpacity
-                      style={styles.createCardButton}
-                      onPress={() => openCreateForm("question", waveNumber)}
-                    >
-                      <MaterialCommunityIcons
-                        name="plus"
-                        size={20}
-                        color="#2acde6"
-                      />
-                      <Text style={styles.createCardButtonText}>
-                        Add Question to Wave {waveNumber}
+                  <View key={`wave-${waveNumber}`} style={styles.waveSection}>
+                    <View style={styles.waveSectionHeader}>
+                      <Text style={styles.waveSectionTitle}>
+                        🌊 Wave {waveNumber}
                       </Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {waveQuestions.length >= 5 && (
-                    <View style={styles.waveFullNotice}>
-                      <MaterialCommunityIcons
-                        name="check-circle"
-                        size={16}
-                        color="#4CAF50"
-                      />
-                      <Text style={styles.waveFullText}>
-                        Wave {waveNumber} is full (5/5 questions)
+                      <Text style={styles.waveSectionCounter}>
+                        {waveQuestions.length}/5 questions
                       </Text>
                     </View>
-                  )}
 
-                  {waveQuestions.map((card, index) => (
-                    <View
-                      key={`question-${card.id}-${index}`}
-                      style={styles.editorCard}
-                    >
-                      <Text style={styles.editorCardTitle}>
-                        Question {index + 1}
-                      </Text>
-                      <Text style={styles.editorCardText}>{card.text}</Text>
-                      <Text style={styles.editorCardAnswer}>
-                        Answer: {card.correctAnswer}
-                      </Text>
-                      <Text style={styles.editorCardMeta}>
-                        Difficulty: {getDifficultyLabel(card.difficulty)}
-                      </Text>
-                      <View style={styles.cardActionButtons}>
+                    {waveQuestions.length < 5 && (
                         <TouchableOpacity
-                          style={styles.editCardButton}
-                          onPress={() => openEditForm(card)}
+                            style={styles.createCardButton}
+                            onPress={() => openCreateForm("question", waveNumber)}
                         >
                           <MaterialCommunityIcons
-                            name="pencil"
-                            size={16}
-                            color="#2acde6"
+                              name="plus"
+                              size={20}
+                              color="#2acde6"
                           />
-                          <Text style={styles.editCardButtonText}>Edit</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.deleteCardButton}
-                          onPress={() => handleDeleteCard(card, "question")}
-                        >
-                          <MaterialCommunityIcons
-                            name="delete"
-                            size={16}
-                            color="#ef4444"
-                          />
-                          <Text style={styles.deleteCardButtonText}>
-                            Delete
+                          <Text style={styles.createCardButtonText}>
+                            Add Question to Wave {waveNumber}
                           </Text>
                         </TouchableOpacity>
-                      </View>
-                    </View>
-                  ))}
+                    )}
 
-                  {waveQuestions.length === 0 && (
-                    <View style={styles.emptyWaveNotice}>
-                      <Text style={styles.emptyWaveText}>
-                        No questions in this wave yet
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                    {waveQuestions.length >= 5 && (
+                        <View style={styles.waveFullNotice}>
+                          <MaterialCommunityIcons
+                              name="check-circle"
+                              size={16}
+                              color="#4CAF50"
+                          />
+                          <Text style={styles.waveFullText}>
+                            Wave {waveNumber} is full (5/5 questions)
+                          </Text>
+                        </View>
+                    )}
+
+                    {waveQuestions.map((card, index) => (
+                        <View
+                            key={`question-${card.id}-${index}`}
+                            style={styles.editorCard}
+                        >
+                          <Text style={styles.editorCardTitle}>
+                            Question {index + 1}
+                          </Text>
+                          <Text style={styles.editorCardText}>{card.text}</Text>
+                          <Text style={styles.editorCardAnswer}>
+                            Answer: {card.correctAnswer}
+                          </Text>
+                          <Text style={styles.editorCardMeta}>
+                            Difficulty: {getDifficultyLabel(card.difficulty)}
+                          </Text>
+                          <View style={styles.cardActionButtons}>
+                            <TouchableOpacity
+                                style={styles.editCardButton}
+                                onPress={() => openEditForm(card)}
+                            >
+                              <MaterialCommunityIcons
+                                  name="pencil"
+                                  size={16}
+                                  color="#2acde6"
+                              />
+                              <Text style={styles.editCardButtonText}>Edit</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.deleteCardButton}
+                                onPress={() => handleDeleteCard(card, "question")}
+                            >
+                              <MaterialCommunityIcons
+                                  name="delete"
+                                  size={16}
+                                  color="#ef4444"
+                              />
+                              <Text style={styles.deleteCardButtonText}>
+                                Delete
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                    ))}
+
+                    {waveQuestions.length === 0 && (
+                        <View style={styles.emptyWaveNotice}>
+                          <Text style={styles.emptyWaveText}>
+                            No questions in this wave yet
+                          </Text>
+                        </View>
+                    )}
+                  </View>
               );
             })}
 
@@ -3366,62 +3429,62 @@ function DigitalDefenders() {
               Tool Cards (Non-editable)
             </Text>
             {TOOL_CARDS.map((card) => (
-              <View
-                key={`tool-${card.id}`}
-                style={[styles.editorCard, styles.editorCardDisabled]}
-              >
-                <View style={styles.toolCardHeader}>
-                  <MaterialCommunityIcons
-                    name={card.icon}
-                    size={20}
-                    color="#666"
-                  />
+                <View
+                    key={`tool-${card.id}`}
+                    style={[styles.editorCard, styles.editorCardDisabled]}
+                >
+                  <View style={styles.toolCardHeader}>
+                    <MaterialCommunityIcons
+                        name={card.icon}
+                        size={20}
+                        color="#666"
+                    />
+                    <Text
+                        style={[
+                          styles.editorCardTitle,
+                          styles.editorCardTitleDisabled,
+                        ]}
+                    >
+                      {card.name}
+                    </Text>
+                  </View>
                   <Text
-                    style={[
-                      styles.editorCardTitle,
-                      styles.editorCardTitleDisabled,
-                    ]}
+                      style={[
+                        styles.editorCardDescription,
+                        styles.editorCardDescriptionDisabled,
+                      ]}
                   >
-                    {card.name}
+                    {card.description}
                   </Text>
                 </View>
-                <Text
-                  style={[
-                    styles.editorCardDescription,
-                    styles.editorCardDescriptionDisabled,
-                  ]}
-                >
-                  {card.description}
-                </Text>
-              </View>
             ))}
-        </ScrollView>
-      </>
+          </ScrollView>
+        </>
     );
 
     return (
-      <Modal
-        visible={showInstructorEditor}
-        animationType={Platform.OS === "web" ? "fade" : "slide"}
-        transparent={Platform.OS === "web"}
-        onRequestClose={() => setShowInstructorEditor(false)}
-      >
-        {Platform.OS === "web" ? (
-          <View style={styles.editorWebModalOverlay}>
-            <TouchableWithoutFeedback onPress={() => setShowInstructorEditor(false)}>
-              <View style={styles.editorWebModalBackdrop} />
-            </TouchableWithoutFeedback>
+        <Modal
+            visible={showInstructorEditor}
+            animationType={Platform.OS === "web" ? "fade" : "slide"}
+            transparent={Platform.OS === "web"}
+            onRequestClose={() => setShowInstructorEditor(false)}
+        >
+          {Platform.OS === "web" ? (
+              <View style={styles.editorWebModalOverlay}>
+                <TouchableWithoutFeedback onPress={() => setShowInstructorEditor(false)}>
+                  <View style={styles.editorWebModalBackdrop} />
+                </TouchableWithoutFeedback>
 
-            <LinearGradient colors={PREMIUM_GRADIENT} style={styles.editorWebModalCard}>
-              <SafeAreaView style={styles.safeArea}>{editorBody}</SafeAreaView>
-            </LinearGradient>
-          </View>
-        ) : (
-          <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
-            <SafeAreaView style={styles.safeArea}>{editorBody}</SafeAreaView>
-          </LinearGradient>
-        )}
-      </Modal>
+                <LinearGradient colors={PREMIUM_GRADIENT} style={styles.editorWebModalCard}>
+                  <SafeAreaView style={styles.safeArea}>{editorBody}</SafeAreaView>
+                </LinearGradient>
+              </View>
+          ) : (
+              <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
+                <SafeAreaView style={styles.safeArea}>{editorBody}</SafeAreaView>
+              </LinearGradient>
+          )}
+        </Modal>
     );
   };
 
@@ -3434,257 +3497,257 @@ function DigitalDefenders() {
     };
 
     const editFormBody = (
-      <SafeAreaView style={styles.editFormSafeArea}>
-        <View style={styles.editFormHeader}>
-          <TouchableOpacity
-            style={styles.editFormCloseButton}
-            onPress={() => setShowEditForm(false)}
-          >
-            <MaterialCommunityIcons name="arrow-left" size={22} color={PREMIUM_TEXT} />
-          </TouchableOpacity>
+        <SafeAreaView style={styles.editFormSafeArea}>
+          <View style={styles.editFormHeader}>
+            <TouchableOpacity
+                style={styles.editFormCloseButton}
+                onPress={() => setShowEditForm(false)}
+            >
+              <MaterialCommunityIcons name="arrow-left" size={22} color={PREMIUM_TEXT} />
+            </TouchableOpacity>
 
-          <View style={styles.editFormTitleBlock}>
-            <Text style={styles.editFormTitle}>{editingCard ? "Edit Question" : "Create Question"}</Text>
-            <Text style={styles.editFormSubtitle}>Digital Defenders Question Builder</Text>
-          </View>
+            <View style={styles.editFormTitleBlock}>
+              <Text style={styles.editFormTitle}>{editingCard ? "Edit Question" : "Create Question"}</Text>
+              <Text style={styles.editFormSubtitle}>Digital Defenders Question Builder</Text>
+            </View>
 
-          <View style={styles.editFormHeaderBadge}>
-            <MaterialCommunityIcons name="shield-sword" size={18} color={PREMIUM_ACCENT_DARK} />
-          </View>
-        </View>
-
-        <ScrollView
-          style={styles.editFormScroll}
-          contentContainerStyle={styles.editFormScrollContent}
-          showsVerticalScrollIndicator
-        >
-          <LinearGradient
-            colors={["rgba(255,255,255,0.98)", "rgba(246,253,250,0.96)"]}
-            style={styles.editFormHeroCard}
-          >
-            <Text style={styles.editFormHeroTitle}>Craft a polished challenge card</Text>
-            <Text style={styles.editFormHeroText}>
-              Keep wording clear and concise so players can answer quickly during turns.
-            </Text>
-          </LinearGradient>
-
-          <View style={styles.editFormFieldCard}>
-            <Text style={styles.editFormLabel}>Question Text *</Text>
-            <Text style={styles.editFormLabelHint}>This appears to players during battle.</Text>
-            <TextInput
-              style={[styles.editFormInput, styles.editFormInputMultiline]}
-              value={formData.text}
-              onChangeText={(text) => setFormData((prev) => ({ ...prev, text }))}
-              placeholder="Enter the question..."
-              placeholderTextColor="rgba(51, 65, 85, 0.6)"
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
-
-          <View style={styles.editFormFieldCard}>
-            <Text style={styles.editFormLabel}>Correct Answer *</Text>
-            <Text style={styles.editFormLabelHint}>Accepted answer that validates the card.</Text>
-            <TextInput
-              style={styles.editFormInput}
-              value={formData.correctAnswer}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, correctAnswer: text }))
-              }
-              placeholder="Enter the correct answer..."
-              placeholderTextColor="rgba(51, 65, 85, 0.6)"
-            />
-          </View>
-
-          <View style={styles.editFormFieldCard}>
-            <Text style={styles.editFormLabel}>Difficulty Tier</Text>
-            <View style={styles.editFormDifficultyRow}>
-              {["easy", "medium", "hard"].map((level) => {
-                const isSelected = formData.difficulty === level;
-                return (
-                  <TouchableOpacity
-                    key={level}
-                    style={[
-                      styles.editFormDifficultyButton,
-                      isSelected && styles.editFormDifficultyButtonSelected,
-                    ]}
-                    onPress={() => setFormData((prev) => ({ ...prev, difficulty: level }))}
-                  >
-                    <MaterialCommunityIcons
-                      name={difficultyMeta[level].icon}
-                      size={16}
-                      color={isSelected ? "#f8fafc" : PREMIUM_ACCENT_DARK}
-                    />
-                    <Text
-                      style={[
-                        styles.editFormDifficultyButtonText,
-                        isSelected && styles.editFormDifficultyButtonTextSelected,
-                      ]}
-                    >
-                      {difficultyMeta[level].label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={styles.editFormHeaderBadge}>
+              <MaterialCommunityIcons name="shield-sword" size={18} color={PREMIUM_ACCENT_DARK} />
             </View>
           </View>
 
-          <View style={styles.editFormNoteCard}>
-            <MaterialCommunityIcons name="lightbulb-on-outline" size={18} color={PREMIUM_ACCENT_DARK} />
-            <Text style={styles.editFormNoteText}>
-              Saving this entry auto-generates the answer card pair. Wave assignment follows the active editor section.
-            </Text>
-          </View>
-
-          <View style={styles.editFormButtonContainer}>
-            <TouchableOpacity
-              style={styles.editFormCancelButton}
-              onPress={() => setShowEditForm(false)}
+          <ScrollView
+              style={styles.editFormScroll}
+              contentContainerStyle={styles.editFormScrollContent}
+              showsVerticalScrollIndicator
+          >
+            <LinearGradient
+                colors={["rgba(255,255,255,0.98)", "rgba(246,253,250,0.96)"]}
+                style={styles.editFormHeroCard}
             >
-              <Text style={styles.editFormCancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+              <Text style={styles.editFormHeroTitle}>Craft a polished challenge card</Text>
+              <Text style={styles.editFormHeroText}>
+                Keep wording clear and concise so players can answer quickly during turns.
+              </Text>
+            </LinearGradient>
 
-            <TouchableOpacity style={styles.editFormSubmitButton} onPress={handleFormSubmit}>
-              <MaterialCommunityIcons name="content-save-outline" size={18} color="#f8fafc" />
-              <Text style={styles.editFormSubmitButtonText}>{editingCard ? "Update" : "Create"}</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+            <View style={styles.editFormFieldCard}>
+              <Text style={styles.editFormLabel}>Question Text *</Text>
+              <Text style={styles.editFormLabelHint}>This appears to players during battle.</Text>
+              <TextInput
+                  style={[styles.editFormInput, styles.editFormInputMultiline]}
+                  value={formData.text}
+                  onChangeText={(text) => setFormData((prev) => ({ ...prev, text }))}
+                  placeholder="Enter the question..."
+                  placeholderTextColor="rgba(51, 65, 85, 0.6)"
+                  multiline
+                  textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.editFormFieldCard}>
+              <Text style={styles.editFormLabel}>Correct Answer *</Text>
+              <Text style={styles.editFormLabelHint}>Accepted answer that validates the card.</Text>
+              <TextInput
+                  style={styles.editFormInput}
+                  value={formData.correctAnswer}
+                  onChangeText={(text) =>
+                      setFormData((prev) => ({ ...prev, correctAnswer: text }))
+                  }
+                  placeholder="Enter the correct answer..."
+                  placeholderTextColor="rgba(51, 65, 85, 0.6)"
+              />
+            </View>
+
+            <View style={styles.editFormFieldCard}>
+              <Text style={styles.editFormLabel}>Difficulty Tier</Text>
+              <View style={styles.editFormDifficultyRow}>
+                {["easy", "medium", "hard"].map((level) => {
+                  const isSelected = formData.difficulty === level;
+                  return (
+                      <TouchableOpacity
+                          key={level}
+                          style={[
+                            styles.editFormDifficultyButton,
+                            isSelected && styles.editFormDifficultyButtonSelected,
+                          ]}
+                          onPress={() => setFormData((prev) => ({ ...prev, difficulty: level }))}
+                      >
+                        <MaterialCommunityIcons
+                            name={difficultyMeta[level].icon}
+                            size={16}
+                            color={isSelected ? "#f8fafc" : PREMIUM_ACCENT_DARK}
+                        />
+                        <Text
+                            style={[
+                              styles.editFormDifficultyButtonText,
+                              isSelected && styles.editFormDifficultyButtonTextSelected,
+                            ]}
+                        >
+                          {difficultyMeta[level].label}
+                        </Text>
+                      </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.editFormNoteCard}>
+              <MaterialCommunityIcons name="lightbulb-on-outline" size={18} color={PREMIUM_ACCENT_DARK} />
+              <Text style={styles.editFormNoteText}>
+                Saving this entry auto-generates the answer card pair. Wave assignment follows the active editor section.
+              </Text>
+            </View>
+
+            <View style={styles.editFormButtonContainer}>
+              <TouchableOpacity
+                  style={styles.editFormCancelButton}
+                  onPress={() => setShowEditForm(false)}
+              >
+                <Text style={styles.editFormCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.editFormSubmitButton} onPress={handleFormSubmit}>
+                <MaterialCommunityIcons name="content-save-outline" size={18} color="#f8fafc" />
+                <Text style={styles.editFormSubmitButtonText}>{editingCard ? "Update" : "Create"}</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
     );
 
     return (
-      <Modal
-        visible={showEditForm}
-        animationType={Platform.OS === "web" ? "fade" : "slide"}
-        transparent={Platform.OS === "web"}
-        onRequestClose={() => setShowEditForm(false)}
-      >
-        {Platform.OS === "web" ? (
-          <View style={styles.editFormWebModalOverlay}>
-            <TouchableWithoutFeedback onPress={() => setShowEditForm(false)}>
-              <View style={styles.editFormWebModalBackdrop} />
-            </TouchableWithoutFeedback>
-            <LinearGradient colors={PREMIUM_GRADIENT} style={styles.editFormWebModalCard}>
-              {editFormBody}
-            </LinearGradient>
-          </View>
-        ) : (
-          <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
-            {editFormBody}
-          </LinearGradient>
-        )}
-      </Modal>
+        <Modal
+            visible={showEditForm}
+            animationType={Platform.OS === "web" ? "fade" : "slide"}
+            transparent={Platform.OS === "web"}
+            onRequestClose={() => setShowEditForm(false)}
+        >
+          {Platform.OS === "web" ? (
+              <View style={styles.editFormWebModalOverlay}>
+                <TouchableWithoutFeedback onPress={() => setShowEditForm(false)}>
+                  <View style={styles.editFormWebModalBackdrop} />
+                </TouchableWithoutFeedback>
+                <LinearGradient colors={PREMIUM_GRADIENT} style={styles.editFormWebModalCard}>
+                  {editFormBody}
+                </LinearGradient>
+              </View>
+          ) : (
+              <LinearGradient colors={PREMIUM_GRADIENT} style={styles.container}>
+                {editFormBody}
+              </LinearGradient>
+          )}
+        </Modal>
     );
   };
 
   // Cross-platform feedback modal
   const renderFeedbackModal = () => (
-    <Modal visible={showFeedback} transparent animationType="fade">
-      <View style={styles.feedbackOverlay}>
-        <View style={styles.feedbackContainer}>
-          <MaterialCommunityIcons
-            name={feedbackData.isCorrect ? "check-circle" : "close-circle"}
-            size={60}
-            color={feedbackData.isCorrect ? "#4CAF50" : "#FF6B6B"}
-          />
-          <Text
-            style={[
-              styles.feedbackTitle,
-              { color: feedbackData.isCorrect ? "#4CAF50" : "#FF6B6B" },
-            ]}
-          >
-            {feedbackData.title}
-          </Text>
-          <Text style={styles.feedbackMessage}>{feedbackData.message}</Text>
-          <TouchableOpacity
-            style={[
-              styles.feedbackButton,
-              {
-                backgroundColor: feedbackData.isCorrect ? "#4CAF50" : "#FF6B6B",
-              },
-            ]}
-            onPress={() => setShowFeedback(false)}
-          >
-            <Text style={styles.feedbackButtonText}>Continue</Text>
-          </TouchableOpacity>
+      <Modal visible={showFeedback} transparent animationType="fade">
+        <View style={styles.feedbackOverlay}>
+          <View style={styles.feedbackContainer}>
+            <MaterialCommunityIcons
+                name={feedbackData.isCorrect ? "check-circle" : "close-circle"}
+                size={60}
+                color={feedbackData.isCorrect ? "#4CAF50" : "#FF6B6B"}
+            />
+            <Text
+                style={[
+                  styles.feedbackTitle,
+                  { color: feedbackData.isCorrect ? "#4CAF50" : "#FF6B6B" },
+                ]}
+            >
+              {feedbackData.title}
+            </Text>
+            <Text style={styles.feedbackMessage}>{feedbackData.message}</Text>
+            <TouchableOpacity
+                style={[
+                  styles.feedbackButton,
+                  {
+                    backgroundColor: feedbackData.isCorrect ? "#4CAF50" : "#FF6B6B",
+                  },
+                ]}
+                onPress={() => setShowFeedback(false)}
+            >
+              <Text style={styles.feedbackButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
   );
 
   // Wave transition modal
   const renderWaveTransitionModal = () => (
-    <Modal visible={showWaveTransition} transparent animationType="fade">
-      <View style={styles.waveTransitionOverlay}>
-        <View style={styles.waveTransitionContainer}>
-          <MaterialCommunityIcons
-            name="shield-sword-outline"
-            size={100}
-            color="#2acde6"
-          />
-          <Text style={styles.waveTransitionTitle}>
-            WAVE {currentWave - 1} COMPLETE!
-          </Text>
-          <View style={styles.waveTransitionDivider} />
-          <MaterialCommunityIcons
-            name="sword-cross"
-            size={60}
-            color="#00E5FF"
-          />
-          <Text style={styles.waveTransitionSubtitle}>
-            Entering Wave {currentWave}
-          </Text>
-          <Text style={styles.waveTransitionDescription}>
-            New challenges await!
-          </Text>
-          <View style={styles.waveTransitionProgress}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${((currentWave - 1) / 10) * 100}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {currentWave - 1}/10 Waves Complete
+      <Modal visible={showWaveTransition} transparent animationType="fade">
+        <View style={styles.waveTransitionOverlay}>
+          <View style={styles.waveTransitionContainer}>
+            <MaterialCommunityIcons
+                name="shield-sword-outline"
+                size={100}
+                color="#2acde6"
+            />
+            <Text style={styles.waveTransitionTitle}>
+              WAVE {currentWave - 1} COMPLETE!
             </Text>
+            <View style={styles.waveTransitionDivider} />
+            <MaterialCommunityIcons
+                name="sword-cross"
+                size={60}
+                color="#00E5FF"
+            />
+            <Text style={styles.waveTransitionSubtitle}>
+              Entering Wave {currentWave}
+            </Text>
+            <Text style={styles.waveTransitionDescription}>
+              New challenges await!
+            </Text>
+            <View style={styles.waveTransitionProgress}>
+              <View style={styles.progressBar}>
+                <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${((currentWave - 1) / 10) * 100}%` },
+                    ]}
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {currentWave - 1}/10 Waves Complete
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
   );
 
   // Upload modal for JSON file selection
   const renderUploadModal = () => (
-    <Modal
-      visible={uploadModalVisible}
-      animationType="slide"
-      transparent={true}
-    >
-      <View style={styles.uploadModalOverlay}>
-        <View style={styles.uploadModalContainer}>
-          <Text style={styles.uploadModalTitle}>Upload Questions</Text>
+      <Modal
+          visible={uploadModalVisible}
+          animationType="slide"
+          transparent={true}
+      >
+        <View style={styles.uploadModalOverlay}>
+          <View style={styles.uploadModalContainer}>
+            <Text style={styles.uploadModalTitle}>Upload Questions</Text>
 
-          {selectedFile && (
-            <View style={styles.fileInfoContainer}>
-              <Text style={styles.fileInfoText}>File: {selectedFile.name}</Text>
-              <Text style={styles.fileInfoDetails}>
-                Size: {(selectedFile.size / 1024).toFixed(2)} KB
-              </Text>
-            </View>
-          )}
+            {selectedFile && (
+                <View style={styles.fileInfoContainer}>
+                  <Text style={styles.fileInfoText}>File: {selectedFile.name}</Text>
+                  <Text style={styles.fileInfoDetails}>
+                    Size: {(selectedFile.size / 1024).toFixed(2)} KB
+                  </Text>
+                </View>
+            )}
 
-          <Text style={styles.uploadModalDescription}>
-            This will add the questions from your JSON file to the global
-            Digital Defenders question bank. Make sure your JSON file contains
-            an array of question objects with the following format:
-          </Text>
+            <Text style={styles.uploadModalDescription}>
+              This will add the questions from your JSON file to the global
+              Digital Defenders question bank. Make sure your JSON file contains
+              an array of question objects with the following format:
+            </Text>
 
-          <View style={styles.formatExample}>
-            <Text style={styles.formatExampleText}>
-              {`[
+            <View style={styles.formatExample}>
+              <Text style={styles.formatExampleText}>
+                {`[
   {
     "question": "Your question text",
     "correctAnswer": "The correct answer",
@@ -3693,175 +3756,179 @@ function DigitalDefenders() {
     "description": "Optional description"
   }
 ]`}
-            </Text>
-          </View>
-
-          <View style={styles.uploadModalActions}>
-            <TouchableOpacity
-              style={[styles.uploadModalButton, styles.uploadModalCancelButton]}
-              onPress={() => {
-                setUploadModalVisible(false);
-                setSelectedFile(null);
-              }}
-            >
-              <Text style={styles.uploadModalButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.uploadModalButton,
-                styles.uploadModalUploadButton,
-                isUploading && styles.uploadModalButtonDisabled,
-              ]}
-              onPress={uploadQuestions}
-              disabled={isUploading}
-            >
-              <Text style={styles.uploadModalButtonText}>
-                {isUploading ? "Uploading..." : "Upload"}
               </Text>
-            </TouchableOpacity>
+            </View>
+
+            <View style={styles.uploadModalActions}>
+              <TouchableOpacity
+                  style={[styles.uploadModalButton, styles.uploadModalCancelButton]}
+                  onPress={() => {
+                    setUploadModalVisible(false);
+                    setSelectedFile(null);
+                  }}
+              >
+                <Text style={styles.uploadModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                  style={[
+                    styles.uploadModalButton,
+                    styles.uploadModalUploadButton,
+                    isUploading && styles.uploadModalButtonDisabled,
+                  ]}
+                  onPress={uploadQuestions}
+                  disabled={isUploading}
+              >
+                <Text style={styles.uploadModalButtonText}>
+                  {isUploading ? "Uploading..." : "Upload"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
   );
 
   // Success modal for upload results
   const renderUploadSuccessModal = () => (
-    <Modal
-      visible={uploadSuccessModalVisible}
-      animationType="fade"
-      transparent={true}
-    >
-      <View style={styles.uploadResultOverlay}>
-        <View style={styles.uploadResultContainer}>
-          <MaterialCommunityIcons
-            name="check-circle"
-            size={80}
-            color="#4CAF50"
-          />
-          <Text style={styles.uploadResultTitle}>Upload Successful!</Text>
-          <Text style={styles.uploadResultMessage}>
-            {uploadResult?.message}
-          </Text>
-          <TouchableOpacity
-            style={styles.uploadResultButton}
-            onPress={() => setUploadSuccessModalVisible(false)}
-          >
-            <Text style={styles.uploadResultButtonText}>Continue</Text>
-          </TouchableOpacity>
+      <Modal
+          visible={uploadSuccessModalVisible}
+          animationType="fade"
+          transparent={true}
+      >
+        <View style={styles.uploadResultOverlay}>
+          <View style={styles.uploadResultContainer}>
+            <MaterialCommunityIcons
+                name="check-circle"
+                size={80}
+                color="#4CAF50"
+            />
+            <Text style={styles.uploadResultTitle}>Upload Successful!</Text>
+            <Text style={styles.uploadResultMessage}>
+              {uploadResult?.message}
+            </Text>
+            <TouchableOpacity
+                style={styles.uploadResultButton}
+                onPress={() => setUploadSuccessModalVisible(false)}
+            >
+              <Text style={styles.uploadResultButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
   );
 
   // Failure modal for upload errors
   const renderUploadFailureModal = () => (
-    <Modal
-      visible={uploadFailureModalVisible}
-      animationType="fade"
-      transparent={true}
-    >
-      <View style={styles.uploadResultOverlay}>
-        <View style={styles.uploadResultContainer}>
-          <MaterialCommunityIcons
-            name="alert-circle"
-            size={80}
-            color="#f44336"
-          />
-          <Text style={styles.uploadResultTitle}>Upload Issues</Text>
-          <Text style={styles.uploadResultMessage}>
-            {uploadResult?.message}
-          </Text>
+      <Modal
+          visible={uploadFailureModalVisible}
+          animationType="fade"
+          transparent={true}
+      >
+        <View style={styles.uploadResultOverlay}>
+          <View style={styles.uploadResultContainer}>
+            <MaterialCommunityIcons
+                name="alert-circle"
+                size={80}
+                color="#f44336"
+            />
+            <Text style={styles.uploadResultTitle}>Upload Issues</Text>
+            <Text style={styles.uploadResultMessage}>
+              {uploadResult?.message}
+            </Text>
 
-          {uploadResult?.errors && uploadResult.errors.length > 0 && (
-            <ScrollView
-              style={styles.errorScrollView}
-              showsVerticalScrollIndicator
+            {uploadResult?.errors && uploadResult.errors.length > 0 && (
+                <ScrollView
+                    style={styles.errorScrollView}
+                    showsVerticalScrollIndicator
+                >
+                  <Text style={styles.errorTitle}>Errors found:</Text>
+                  {uploadResult.errors.map((error, index) => (
+                      <Text key={index} style={styles.errorText}>
+                        • {error}
+                      </Text>
+                  ))}
+                </ScrollView>
+            )}
+
+            <TouchableOpacity
+                style={styles.uploadResultButton}
+                onPress={() => setUploadFailureModalVisible(false)}
             >
-              <Text style={styles.errorTitle}>Errors found:</Text>
-              {uploadResult.errors.map((error, index) => (
-                <Text key={index} style={styles.errorText}>
-                  • {error}
-                </Text>
-              ))}
-            </ScrollView>
-          )}
-
-          <TouchableOpacity
-            style={styles.uploadResultButton}
-            onPress={() => setUploadFailureModalVisible(false)}
-          >
-            <Text style={styles.uploadResultButtonText}>Close</Text>
-          </TouchableOpacity>
+              <Text style={styles.uploadResultButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
   );
 
   return (
-    <ImageBackground
-      source={DEFENDERS_BG}
-      style={styles.container}
-      resizeMode="cover"
-      imageStyle={Platform.OS === "web" ? styles.defendersBackgroundImageWeb : undefined}
-    >
-      <LinearGradient colors={DEFENDERS_BG_GRADIENT} style={styles.defendersBackgroundOverlay}>
-      <SafeAreaView style={styles.safeArea}>
-        {renderImportDocsModal?.()}
-        <View style={styles.header}>
-          <View style={styles.titleContainer}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() =>
-                requestQuitConfirmation(() => router.push("/(tabs)/game"))
-              }
-            >
-              <MaterialCommunityIcons
-                name="arrow-left"
-                size={24}
-                color="#f8fafc"
-              />
-            </TouchableOpacity>
-            <Text style={styles.title}>🛡️ Digital Defenders</Text>
-          </View>
-        </View>
+      <ImageBackground
+          source={DEFENDERS_BG}
+          style={styles.container}
+          resizeMode="cover"
+          imageStyle={Platform.OS === "web" ? styles.defendersBackgroundImageWeb : undefined}
+      >
+        <LinearGradient colors={DEFENDERS_BG_GRADIENT} style={styles.defendersBackgroundOverlay}>
+          <SafeAreaView style={styles.safeArea}>
+            {renderImportDocsModal?.()}
+            <View style={styles.header}>
+              <View style={styles.titleContainer}>
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() =>
+                        requestQuitConfirmation(() => router.push("/(tabs)/game"))
+                    }
+                >
+                  <MaterialCommunityIcons
+                      name="arrow-left"
+                      size={24}
+                      color="#f8fafc"
+                  />
+                </TouchableOpacity>
+                <Text style={styles.title}>🛡️ Digital Defenders</Text>
+              </View>
+            </View>
 
-        {/* Loading / auth states */}
-        {(!user || !token) && (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>🔐 Authenticating...</Text>
-            <Text style={styles.waitingText}>
-              User: {user ? "✅" : "❌"} | Token: {token ? "✅" : "❌"}
-            </Text>
-          </View>
-        )}
-        {user && token && isDataLoading && (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>🎮 Loading game data...</Text>
-          </View>
-        )}
-        {/* Show game content when ready */}
-        {user && token && !isDataLoading && (
-          <>
-            {gameState === "lobby" && renderLobby()}
-            {gameState === "waiting" && renderWaitingRoom()}
-            {gameState === "turnOrder" && renderTurnOrderSelection()}
-            {gameState === "playing" && renderGameplay()}
-            {gameState === "gameOver" && renderGameOver()}
-            {gameState === "victory" && renderVictory()}
-          </>
-        )}
+            {/* Loading / auth states */}
+            {(!user || !token) && (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>🔐 Authenticating...</Text>
+                  <Text style={styles.waitingText}>
+                    User: {user ? "✅" : "❌"} | Token: {token ? "✅" : "❌"}
+                  </Text>
+                </View>
+            )}
+            {user && token && isDataLoading && (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>🎮 Loading game data...</Text>
+                </View>
+            )}
+            {/* Show game content when ready */}
+            {user && token && !isDataLoading && (
+                <>
+                  {gameState === "lobby" && renderLobby()}
+                  {gameState === "waiting" && renderWaitingRoom()}
+                  {gameState === "turnOrder" && renderTurnOrderSelection()}
+                  {gameState === "playing" && (
+                      <View style={[styles.gameplayScaleShell, gameplayScaledShellStyle]}>
+                        {renderGameplay()}
+                      </View>
+                  )}
+                  {gameState === "gameOver" && renderGameOver()}
+                  {gameState === "victory" && renderVictory()}
+                </>
+            )}
 
-        {renderInstructorEditor()}
-        {renderEditForm()}
-        {renderFeedbackModal()}
-        {renderWaveTransitionModal()}
-        {renderUploadModal()}
-        {renderUploadSuccessModal()}
-        {renderUploadFailureModal()}
-      </SafeAreaView>
-      </LinearGradient>
-    </ImageBackground>
+            {renderInstructorEditor()}
+            {renderEditForm()}
+            {renderFeedbackModal()}
+            {renderWaveTransitionModal()}
+            {renderUploadModal()}
+            {renderUploadSuccessModal()}
+            {renderUploadFailureModal()}
+          </SafeAreaView>
+        </LinearGradient>
+      </ImageBackground>
   );
 }
 
@@ -3869,6 +3936,26 @@ function DigitalDefenders() {
 export default memo(DigitalDefenders);
 
 const styles = StyleSheet.create({
+  gameplayScaleShell: {
+    flex: 1,
+    width: "100%",
+    alignSelf: "center",
+    marginHorizontal: "auto",
+    ...Platform.select({
+      web: {
+        transformOrigin: "top center",
+      },
+      default: {},
+    }),
+  },
+  gameplayScrollCompact: {
+    flex: 1,
+    width: "100%",
+  },
+  gameplayScrollContentCompact: {
+    flexGrow: 1,
+    paddingBottom: 12,
+  },
   container: {
     flex: 1,
   },
@@ -3976,8 +4063,8 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
     alignSelf: Platform.OS === "web" ? "center" : undefined,
-    width: Platform.OS === "web" ? 800 : "100%",
-    maxWidth: "100%",
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 800 : "100%",
   },
   logoContainer: {
     alignItems: "center",
@@ -4275,7 +4362,14 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 15,
     alignSelf: Platform.OS === "web" ? "center" : undefined,
-    width: Platform.OS === "web" ? 800 : "100%",
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 800 : "100%",
+  },
+  gameplayContainerCompact: {
+    width: "100%",
+    maxWidth: 560,
+    padding: 10,
+    alignSelf: "stretch",
   },
   gameHeader: {
     flexDirection: "row",
@@ -4284,8 +4378,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 10,
   },
+  gameHeaderCompact: {
+    flexWrap: "wrap",
+    rowGap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
   gameStats: {
     alignItems: "flex-start",
+    minWidth: 0,
   },
   waveText: {
     fontSize: 18,
@@ -4296,6 +4397,9 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  waveTextCompact: {
+    fontSize: 15,
+  },
   healthContainer: {
     flexDirection: "row",
     marginBottom: 5,
@@ -4304,14 +4408,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#dbeafe",
   },
+  actionsTextCompact: {
+    fontSize: 12,
+  },
   countdownContainer: {
     alignItems: "center",
+  },
+  countdownContainerCompact: {
+    alignItems: "flex-end",
   },
   countdownText: {
     fontSize: 36,
     fontWeight: "bold",
     color: "#2ecc71",
     textAlign: "center",
+  },
+  countdownTextCompact: {
+    fontSize: 28,
   },
   countdownCritical: {
     color: "#e74c3c",
@@ -4331,6 +4444,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flex: 1,
     paddingHorizontal: 10,
+  },
+  turnIndicatorContainerCompact: {
+    flexBasis: "100%",
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
+    paddingHorizontal: 0,
+    marginTop: 2,
   },
   turnIndicator: {
     flexDirection: "row",
@@ -4376,12 +4496,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
+  questionAreaCompact: {
+    marginBottom: 12,
+  },
   questionCard: {
     backgroundColor: PREMIUM_SURFACE,
     borderRadius: 20,
     padding: 25,
     minHeight: 150,
-    width: Platform.OS === "web" ? 700 : screenWidth - 60,
+    width: Platform.OS === "web" ? "100%" : screenWidth - 60,
+    maxWidth: 700,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
@@ -4392,11 +4516,20 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 4,
   },
+  questionCardCompact: {
+    width: "100%",
+    maxWidth: 520,
+    minHeight: 120,
+    padding: 16,
+  },
   questionText: {
     fontSize: 18,
     color: PREMIUM_TEXT,
     textAlign: "center",
     fontWeight: "700",
+  },
+  questionTextCompact: {
+    fontSize: 16,
   },
   instructionIndicator: {
     position: "absolute",
@@ -4439,11 +4572,18 @@ const styles = StyleSheet.create({
   handContainer: {
     marginBottom: 20,
   },
+  handContainerCompact: {
+    marginBottom: 12,
+  },
   handHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 10,
+  },
+  handHeaderCompact: {
+    marginBottom: 8,
+    rowGap: 4,
   },
   handTitle: {
     fontSize: 16,
@@ -4452,6 +4592,9 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  handTitleCompact: {
+    fontSize: 14,
   },
   deckStatus: {
     alignItems: "flex-end",
@@ -4462,6 +4605,9 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  deckCountCompact: {
+    fontSize: 11,
   },
   deckWarning: {
     fontSize: 10,
@@ -4477,6 +4623,9 @@ const styles = StyleSheet.create({
   },
   handScroll: {
     maxHeight: 200, // Increased from 120px to 200px to accommodate taller cards
+  },
+  handScrollCompact: {
+    maxHeight: 170,
   },
   handScrollDisabled: {
     opacity: 0.6,
@@ -4507,11 +4656,18 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: screenWidth - 60,
+    minWidth: Platform.OS === "web" ? 0 : screenWidth - 60,
+    width: Platform.OS === "web" ? "100%" : undefined,
+    maxWidth: Platform.OS === "web" ? 700 : undefined,
     minHeight: 100,
     borderWidth: 1,
     borderColor: "rgba(74, 124, 89, 0.2)",
     borderStyle: "dashed",
+  },
+  emptyHandIndicatorCompact: {
+    minWidth: 0,
+    width: "100%",
+    padding: 14,
   },
   emptyHandText: {
     fontSize: 16,
@@ -4541,6 +4697,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.23,
     shadowRadius: 2.62,
     elevation: 4,
+  },
+  cardCompact: {
+    width: 120,
+    minHeight: 150,
+    padding: 10,
+    marginRight: 8,
   },
   cardGradient: {
     flex: 1,
@@ -4639,6 +4801,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     gap: 15,
   },
+  actionButtonsCompact: {
+    flexDirection: "column",
+    gap: 10,
+  },
   actionButton: {
     backgroundColor: "#34495e",
     flexDirection: "row",
@@ -4649,6 +4815,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
     flex: 1,
+  },
+  actionButtonCompact: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   actionButtonDisabled: {
     backgroundColor: "#2c3e50",
@@ -4661,6 +4831,9 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "bold",
     fontSize: 14,
+  },
+  actionButtonTextCompact: {
+    fontSize: 13,
   },
 
   // Game Over/Victory Styles
@@ -4912,7 +5085,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 18,
   },
   editorWebModalBackdrop: {
@@ -5575,9 +5748,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.32,
-    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
     elevation: 8,
   },
   turnOrderProgressChip: {
@@ -5736,7 +5909,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 15,
     backgroundColor: "rgba(10, 49, 62, 0.72)",
     borderRadius: 10,
