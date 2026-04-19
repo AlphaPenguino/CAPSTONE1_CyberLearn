@@ -54,6 +54,9 @@ export const sendNewAccountEmail = async ({
           <p style="margin: 0 0 8px;"><strong>Username:</strong> ${username}</p>
           <p style="margin: 0;"><strong>Temporary Password:</strong> ${temporaryPassword}</p>
         </div>
+        <p>
+          Website: <a href="https://www.cyberlearn.online/" target="_blank" rel="noopener noreferrer">www.cyberlearn.online</a>
+        </p>
         <p>Please sign in and change your password immediately for security.</p>
         
         <p style="color: #5f6c7b; font-size: 12px; margin-top: 24px;">This is an automated message from CyberLearn.</p>
