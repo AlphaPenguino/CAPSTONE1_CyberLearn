@@ -66,7 +66,7 @@ const migrateSortingItems = (questions) => {
 };
 
 export default function Create() {
-  const { edit, from } = useLocalSearchParams();
+  const { edit, from, subjectId, focusModuleId } = useLocalSearchParams();
   const router = useRouter();
   const { colors, isDarkMode } = useTheme();
   // Use dark blue in light mode instead of yellow for text & icon accents
@@ -81,13 +81,17 @@ export default function Create() {
   console.log("🔍 Create Component - Edit param:", edit);
   console.log("🔍 Create Component - Type of edit:", typeof edit);
 
-  // Simply check: if we have edit param, we're in edit mode
-  // If user clicks Create tab directly, they can click "Create New" to start fresh
-  const isEditMode = !!edit;
-  const fromSource = Array.isArray(from) ? from[0] : from;
-  const openedFromInstructorTools = fromSource === "instructor-tools";
-  const openedFromIndex = fromSource === "index";
-  console.log("🔍 Create Component - isEditMode:", isEditMode);
+    // Simply check: if we have edit param, we're in edit mode
+    // If user clicks Create tab directly, they can click "Create New" to start fresh
+    const isEditMode = !!edit;
+    const fromSource = Array.isArray(from) ? from[0] : from;
+    const returnSubjectId = Array.isArray(subjectId) ? subjectId[0] : subjectId;
+    const returnFocusModuleId = Array.isArray(focusModuleId)
+    ? focusModuleId[0]
+    : focusModuleId;
+    const openedFromInstructorTools = fromSource === "instructor-tools";
+    const openedFromIndex = fromSource === "index";
+    console.log("🔍 Create Component - isEditMode:", isEditMode);
 
   // Internal UI state to track which creator is active
   const [activeCreator, setActiveCreator] = useState(() => {
@@ -98,20 +102,41 @@ export default function Create() {
   });
   const questMenuControlRef = useRef(null);
 
-  // Function to clear edit mode and show options
-  const resetToCreateMode = useCallback(() => {
+    // Function to clear edit mode and show options
+    const resetToCreateMode = useCallback(() => {
     console.log("🔍 Resetting to create mode");
     setActiveCreator("");
     // Clear URL parameters by replacing the current route
     router.replace("/create");
-  }, [router]);
+    }, [router]);
 
-  const handleCreatorBack = useCallback(() => {
+    const navigateBackToIndexWithContext = useCallback(() => {
+    const params = {};
+    if (returnSubjectId) {
+      params.subjectId = String(returnSubjectId);
+    }
+    if (returnFocusModuleId) {
+      params.focusModuleId = String(returnFocusModuleId);
+    }
+
+    if (Object.keys(params).length > 0) {
+      router.replace({ pathname: "/(tabs)", params });
+      return;
+    }
+
+    router.replace("/(tabs)");
+    }, [returnSubjectId, returnFocusModuleId, router]);
+
+    const handleCreatorBack = useCallback(() => {
     // In creator flows, go back to creator options first and clear edit params when needed.
     if (activeCreator) {
       questMenuControlRef.current?.closeMenu?.();
       if (isEditMode) {
-        resetToCreateMode();
+        if (openedFromIndex) {
+          navigateBackToIndexWithContext();
+        } else {
+          resetToCreateMode();
+        }
       } else {
         setActiveCreator("");
       }
@@ -127,20 +152,21 @@ export default function Create() {
     }
 
     if (openedFromIndex) {
-      router.replace("/(tabs)");
+      navigateBackToIndexWithContext();
       return;
     }
 
     router.back();
-  }, [
+    }, [
     activeCreator,
     isEditMode,
     openedFromIndex,
     openedFromInstructorTools,
+    navigateBackToIndexWithContext,
     resetToCreateMode,
     router,
     questMenuControlRef,
-  ]);
+    ]);
 
   useEffect(() => {
     if (activeCreator !== "cyber-quest-map") {
@@ -2504,9 +2530,14 @@ export default function Create() {
             "success",
             () => {
               if (isEditing) {
-                // After editing, go back to home and clear edit parameters
-                resetToCreateMode();
-                router.push("/(tabs)");
+                // After editing from map, return to the same selected subject/module.
+                if (openedFromIndex) {
+                  navigateBackToIndexWithContext();
+                } else {
+                  // Existing behavior for non-map edit flows
+                  resetToCreateMode();
+                  router.push("/(tabs)");
+                }
               } else {
                 // After creating, reset form and go back to options
                 setQuestData({
@@ -4592,13 +4623,13 @@ export default function Create() {
                   style={styles.buttonGradient}
                 >
                   {loading ? (
-                    <Text style={[styles.buttonText, { color: colors.text }]}>
+                    <Text style={[styles.buttonText, { color: "#ffffff" }]}>
                       Creating...
                     </Text>
                   ) : (
                     <>
-                      <Ionicons name="school" size={20} color={colors.text} />
-                      <Text style={[styles.buttonText, { color: colors.text }]}>
+                      <Ionicons name="school" size={20} color="#ffffff" />
+                      <Text style={[styles.buttonText, { color: "#ffffff" }]}>
                         Create Subject
                       </Text>
                     </>

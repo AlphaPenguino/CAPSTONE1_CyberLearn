@@ -141,25 +141,82 @@ router.get(
 
 /**
  * @route   GET /api/quickplay/questions
- * @desc    Get randomized questions aggregated from all active Cyber Quests for Quick Play mode
- *          Falls back to internal sample questions if there are not enough created questions.
+ * @desc    Get randomized questions from active Cyber Quests the user can access.
+ *          - students: enrolled subjects
+ *          - instructors: handled subjects
+ *          - admins: all active subjects
  * @query   limit (optional) number of questions to return (default 10, max 25)
  * @access  Private (any authenticated user)
  */
 router.get("/quickplay/questions", protectRoute, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 10, 25);
+    const userId = req.user.id;
+    const userRole = req.user.privilege;
+
+    const baseSubjectFilter = {
+      isActive: { $ne: false },
+      archived: { $ne: true },
+    };
+
+    let subjectAccessFilter = baseSubjectFilter;
+    if (userRole === "student") {
+      subjectAccessFilter = {
+        ...baseSubjectFilter,
+        students: userId,
+      };
+    } else if (userRole === "instructor") {
+      subjectAccessFilter = {
+        ...baseSubjectFilter,
+        $or: [{ instructor: userId }, { instructors: userId }],
+      };
+    }
+
+    const accessibleSubjects = await Section.find(subjectAccessFilter).select("_id");
+    const accessibleSubjectIds = accessibleSubjects.map((subject) => subject._id);
+
+    if (accessibleSubjectIds.length === 0) {
+      return res.json({
+        success: true,
+        questions: [],
+        meta: {
+          totalAvailable: 0,
+          provided: 0,
+          accessibleSubjects: 0,
+        },
+      });
+    }
 
     // Fetch only required fields to minimize payload
-    const quests = await CyberQuest.find({ isActive: true }).select(
-      "questions difficulty title"
-    );
+    const quests = await CyberQuest.find({
+      isActive: true,
+      subject: { $in: accessibleSubjectIds },
+    })
+      .select("questions difficulty title")
+      .lean();
 
     const aggregated = [];
     let runningId = 1;
+
+    const isPlaceholderQuestionText = (text = "") => {
+      const normalized = String(text).trim().toLowerCase();
+      if (!normalized) {
+        return true;
+      }
+      return (
+        normalized.includes("lorem ipsum") ||
+        normalized.includes("sample question") ||
+        normalized.includes("dummy question")
+      );
+    };
+
     for (const quest of quests) {
       const questDifficulty = quest.difficulty || "medium";
       (quest.questions || []).forEach((q) => {
+        if (isPlaceholderQuestionText(q.text)) {
+          return;
+        }
+
         // Each embedded question has no _id (schema _id:false), so assign ephemeral id
         const base = {
           id: runningId++,
@@ -224,66 +281,7 @@ router.get("/quickplay/questions", protectRoute, async (req, res) => {
       });
     }
 
-    // Fallback / initialization sample questions (same structure as old DUMMY_QUESTIONS)
-    const fallbackSample = [
-      {
-        id: 10001,
-        type: "multipleChoice",
-        question: "What does HTML stand for?",
-        options: [
-          "Hyper Text Markup Language",
-          "High Tech Modern Language",
-          "Home Tool Markup Language",
-          "Hyperlink and Text Markup Language",
-        ],
-        correctAnswer: 0,
-        difficulty: "easy",
-        category: "Web Development",
-      },
-      {
-        id: 10002,
-        type: "codeMissing",
-        question:
-          "Complete the JavaScript function to calculate the area of a rectangle:",
-        codeTemplate: `function calculateArea(length, width) {\n    return ____;\n}`,
-        correctAnswer: "length * width",
-        difficulty: "easy",
-        category: "Programming",
-      },
-      {
-        id: 10003,
-        type: "fillInBlanks",
-        question:
-          "In JavaScript, ____ is used to declare variables that cannot be reassigned, while ____ allows reassignment.",
-        blanks: ["const", "let"],
-        difficulty: "medium",
-        category: "Programming",
-      },
-      {
-        id: 10004,
-        type: "codeOrdering",
-        question:
-          "Arrange these JavaScript statements to create a proper function:",
-        codeBlocks: [
-          { id: 1, code: "function addNumbers(a, b) {", position: 0 },
-          { id: 2, code: "let result = a + b;", position: 1 },
-          { id: 3, code: "return result;", position: 2 },
-          { id: 4, code: "}", position: 3 },
-        ],
-        difficulty: "medium",
-        category: "Programming",
-      },
-    ];
-
     const totalAvailable = aggregated.length;
-    let fallbackUsed = false;
-
-    if (aggregated.length < limit) {
-      // Use fallback to fill the gap (do not exceed limit)
-      fallbackUsed = true;
-      const needed = limit - aggregated.length;
-      aggregated.push(...fallbackSample.slice(0, needed));
-    }
 
     // Shuffle
     const shuffled = aggregated.sort(() => Math.random() - 0.5).slice(0, limit);
@@ -291,7 +289,11 @@ router.get("/quickplay/questions", protectRoute, async (req, res) => {
     res.json({
       success: true,
       questions: shuffled,
-      meta: { totalAvailable, provided: shuffled.length, fallbackUsed },
+      meta: {
+        totalAvailable,
+        provided: shuffled.length,
+        accessibleSubjects: accessibleSubjectIds.length,
+      },
     });
   } catch (error) {
     console.error("Error generating quickplay questions:", error);

@@ -267,6 +267,15 @@ const SAMPLE_QS_QUESTIONS = [
 const PREMIUM_GRADIENT = ["#caf1c8", "#5fd2cd"];
 const SHOWDOWN_BG = require("../../assets/images/showdownbg.png");
 const QUIZ_BG_GRADIENT = ["rgba(0,0,0,0.62)", "rgba(0,0,0,0.44)"];
+const QUIZ_SHOWDOWN_RULES_TEXT = `Quiz Showdown • Game Rules
+Join or create a Room ID to begin
+Join Team A or Team B (Max 4 per team)
+Battle starts once both teams have players
+Compete together to answer questions
+Earn points for your team's total
+Mistakes give the opponent a chance to score
+Highest score claims the showdown victory
+⚠️ Game ends when questions or time run out`;
 
 export default function QuizShowdown() {
   const router = useRouter();
@@ -346,6 +355,7 @@ export default function QuizShowdown() {
   const [isInstructor, setIsInstructor] = useState(false);
   const [showImportDocs, setShowImportDocs] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showRoomInstructions, setShowRoomInstructions] = useState(false);
 
   const renderImportDocsModal = () => (
     <Modal
@@ -1884,6 +1894,8 @@ export default function QuizShowdown() {
         isJoiningRoom={isJoiningRoom}
         instructorPrivilege={instructorPrivilege}
         quizShowdownSocket={quizShowdownSocket}
+        showRoomInstructions={showRoomInstructions}
+        setShowRoomInstructions={setShowRoomInstructions}
       />
     );
   }
@@ -2375,6 +2387,7 @@ export default function QuizShowdown() {
         <ScrollView
           style={styles.gameContent}
           contentContainerStyle={styles.gameContentContainer}
+          scrollEnabled={gamePhase !== "buzzer"}
           showsVerticalScrollIndicator={false}
         >
           {/* Team Scores */}
@@ -2395,8 +2408,7 @@ export default function QuizShowdown() {
           </View>
 
           {/* Question Display - Show in buzzer, question, and answered phases */}
-          {(gamePhase === "buzzer" ||
-            gamePhase === "question" ||
+          {(gamePhase === "question" ||
             gamePhase === "answered") &&
             currentQuestion && (
               <View style={styles.questionContainer}>
@@ -2599,7 +2611,7 @@ export default function QuizShowdown() {
                   >
                     <MaterialCommunityIcons
                       name="bell"
-                      size={48}
+                      size={Platform.OS === "android" ? 40 : 48}
                       color={canBuzz ? "white" : "#666"}
                     />
                     <Text style={styles.buzzerText}>
@@ -2675,6 +2687,8 @@ const LobbyScreen = ({
   connectionError,
   isJoiningRoom,
   instructorPrivilege,
+  showRoomInstructions,
+  setShowRoomInstructions,
 }) => (
   <ImageBackground
     source={SHOWDOWN_BG}
@@ -2733,7 +2747,16 @@ const LobbyScreen = ({
           </View>
 
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Room ID</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.inputLabel}>Room ID</Text>
+              <TouchableOpacity
+                style={styles.roomInfoButton}
+                onPress={() => setShowRoomInstructions(true)}
+                accessibilityLabel="Show Quiz Showdown game rules"
+              >
+                <Text style={styles.roomInfoButtonText}>i</Text>
+              </TouchableOpacity>
+            </View>
             <TextInput
               style={styles.roomCodeInput}
               value={roomCode}
@@ -2821,6 +2844,34 @@ const LobbyScreen = ({
             )}
             </View>
           )}
+
+          <Modal
+            visible={showRoomInstructions}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowRoomInstructions(false)}
+          >
+            <View style={styles.roomInfoOverlay}>
+              <View style={styles.roomInfoModalCard}>
+                <View style={styles.roomInfoHeader}>
+                  <Text style={styles.roomInfoTitle}>Quiz Showdown Instructions</Text>
+                  <TouchableOpacity
+                    style={styles.roomInfoCloseButton}
+                    onPress={() => setShowRoomInstructions(false)}
+                    accessibilityLabel="Close Quiz Showdown instructions"
+                  >
+                    <MaterialCommunityIcons name="close" size={20} color="#0f172a" />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView
+                  style={styles.roomInfoScroll}
+                  showsVerticalScrollIndicator={Platform.OS === "web"}
+                >
+                  <Text style={styles.roomInfoModalText}>{QUIZ_SHOWDOWN_RULES_TEXT}</Text>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
         </View>
       </ScrollView>
       </SafeAreaView>
@@ -3188,42 +3239,56 @@ const ResultsScreen = ({
   );
 };
 
-const TeamScoreCard = ({ team, isMyTeam, buzzedTeam }) => {
+const TeamScoreCard = ({ team, isMyTeam, buzzedTeam, compact = false }) => {
   return (
     <View
       style={[
         styles.teamCard,
+        compact && styles.teamCardCompactAndroid,
         { opacity: 0.9 }, // Added 90% opacity
         isMyTeam && styles.myTeamCard,
         buzzedTeam && styles.buzzedTeamCard,
       ]}
     >
-      <View style={[styles.teamHeader, { backgroundColor: team.color }]}>
+      <View
+        style={[
+          styles.teamHeader,
+          compact && styles.teamHeaderCompactAndroid,
+          { backgroundColor: team.color },
+        ]}
+      >
         <MaterialCommunityIcons
           name={isMyTeam ? "account-star" : "shield"}
-          size={20}
+          size={compact ? 16 : 20}
           color="#ffffff"
         />
-        <Text style={styles.teamName}>{team.name}</Text>
+        <Text style={[styles.teamName, compact && styles.teamNameCompactAndroid]}>
+          {team.name}
+        </Text>
       </View>
 
       <View style={styles.scoreContainer}>
-        <Text style={styles.scoreText}>{team.score}</Text>
+        <Text style={[styles.scoreText, compact && styles.scoreTextCompactAndroid]}>
+          {team.score}
+        </Text>
       </View>
 
       <View style={styles.playersContainer}>
-        <Text style={styles.playersLabel}>
+        <Text style={[styles.playersLabel, compact && styles.playersLabelCompactAndroid]}>
           {(team.players || []).length} Player
           {(team.players || []).length !== 1 ? "s" : ""}
         </Text>
-        {(team.players || []).slice(0, 3).map((player, index) => (
-          <Text key={`player-${player}-${index}`} style={styles.playerText}>
+        {(team.players || []).slice(0, compact ? 2 : 3).map((player, index) => (
+          <Text
+            key={`player-${player}-${index}`}
+            style={[styles.playerText, compact && styles.playerTextCompactAndroid]}
+          >
             {player}
           </Text>
         ))}
-        {(team.players || []).length > 3 && (
-          <Text style={styles.playerText}>
-            +{(team.players || []).length - 3} more
+        {(team.players || []).length > (compact ? 2 : 3) && (
+          <Text style={[styles.playerText, compact && styles.playerTextCompactAndroid]}>
+            +{(team.players || []).length - (compact ? 2 : 3)} more
           </Text>
         )}
       </View>
@@ -3356,6 +3421,9 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         width: "100%",
+      },
+      android: {
+        paddingBottom: 16,
       },
       default: {},
     }),
@@ -3579,6 +3647,10 @@ const styles = StyleSheet.create({
         maxWidth: 600,
         marginHorizontal: "auto",
       },
+      android: {
+        paddingHorizontal: 14,
+        minHeight: 120,
+      },
       default: {},
     }),
   },
@@ -3594,6 +3666,10 @@ const styles = StyleSheet.create({
         maxWidth: 900, // Wider container
         marginHorizontal: "auto",
         paddingHorizontal: 0, // Remove padding on web to maximize width
+      },
+      android: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
       },
       default: {},
     }),
@@ -3859,6 +3935,85 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     marginBottom: 8,
+  },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  roomInfoButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#0f766e",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+    ...Platform.select({
+      web: {
+        cursor: "pointer",
+      },
+      default: {},
+    }),
+  },
+  roomInfoButtonText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 12,
+  },
+  roomInfoOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  roomInfoModalCard: {
+    width: "100%",
+    maxWidth: 620,
+    maxHeight: "80%",
+    backgroundColor: "rgba(255,255,255,0.98)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.4)",
+    padding: 16,
+  },
+  roomInfoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  roomInfoTitle: {
+    flex: 1,
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: "800",
+    marginRight: 8,
+  },
+  roomInfoCloseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(226,232,240,0.95)",
+    ...Platform.select({
+      web: {
+        cursor: "pointer",
+      },
+      default: {},
+    }),
+  },
+  roomInfoScroll: {
+    marginTop: 6,
+  },
+  roomInfoModalText: {
+    color: "#0f172a",
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: "600",
   },
   textInput: {
     backgroundColor: "rgba(74, 124, 89, 0.2)",
@@ -4378,6 +4533,9 @@ const styles = StyleSheet.create({
         minWidth: 400, // Wider team cards
         padding: 16, // Larger padding for better visual
       },
+      android: {
+        padding: 8,
+      },
       default: {},
     }),
   },
@@ -4401,6 +4559,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     marginLeft: 4,
+    ...Platform.select({
+      android: {
+        fontSize: 13,
+      },
+      default: {},
+    }),
   },
   scoreContainer: {
     alignItems: "center",
@@ -4420,6 +4584,9 @@ const styles = StyleSheet.create({
       web: {
         fontSize: 32, // Larger score text on web
       },
+      android: {
+        fontSize: 20,
+      },
       default: {},
     }),
   },
@@ -4431,11 +4598,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     marginBottom: 2,
+    ...Platform.select({
+      android: {
+        fontSize: 10,
+      },
+      default: {},
+    }),
   },
   playerText: {
     color: "#ffffff",
     fontSize: 15,
     fontWeight: "500",
+    ...Platform.select({
+      android: {
+        fontSize: 12,
+      },
+      default: {},
+    }),
   },
   vsContainer: {
     marginHorizontal: 12,
@@ -4443,6 +4622,9 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         marginHorizontal: 20, // More spacing between teams on web
+      },
+      android: {
+        marginHorizontal: 8,
       },
       default: {},
     }),
@@ -4464,6 +4646,14 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
     marginBottom: 12,
+    ...Platform.select({
+      android: {
+        fontSize: 12,
+        marginBottom: 6,
+        paddingHorizontal: 8,
+      },
+      default: {},
+    }),
     textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -4645,6 +4835,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 15,
     elevation: 8,
+    ...Platform.select({
+      android: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+      },
+      default: {},
+    }),
   },
   buzzerDisabled: {
     backgroundColor: "#666",
@@ -4655,6 +4853,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     marginTop: 6,
+    ...Platform.select({
+      android: {
+        fontSize: 12,
+        marginTop: 4,
+      },
+      default: {},
+    }),
   },
 
   // Instructor Screen Styles
@@ -5340,5 +5545,95 @@ const styles = StyleSheet.create({
   actionsMenuCloseItem: {
     marginTop: 4,
     backgroundColor: "rgba(248,113,113,0.14)",
+  },
+
+  // Compact short-Android buzzer layout
+  gameContentContainerCompactAndroid: {
+    justifyContent: "space-between",
+    paddingBottom: 8,
+  },
+  gameHeaderCompactAndroid: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  headerTitleCompactAndroid: {
+    fontSize: 17,
+    marginLeft: 10,
+  },
+  roundContainerCompactAndroid: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  roundTextCompactAndroid: {
+    fontSize: 12,
+  },
+  timerBarContainerCompactAndroid: {
+    marginHorizontal: 14,
+    marginBottom: 6,
+  },
+  timerTextCompactAndroid: {
+    top: -20,
+    fontSize: 12,
+  },
+  scoresContainerCompactAndroid: {
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  teamCardCompactAndroid: {
+    padding: 8,
+    borderRadius: 10,
+  },
+  teamHeaderCompactAndroid: {
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  teamNameCompactAndroid: {
+    fontSize: 13,
+    marginLeft: 3,
+  },
+  scoreTextCompactAndroid: {
+    fontSize: 20,
+  },
+  playersLabelCompactAndroid: {
+    fontSize: 10,
+    marginBottom: 1,
+  },
+  playerTextCompactAndroid: {
+    fontSize: 12,
+  },
+  vsContainerCompactAndroid: {
+    marginHorizontal: 8,
+  },
+  vsTextCompactAndroid: {
+    fontSize: 12,
+  },
+  buzzerContainerCompactAndroid: {
+    minHeight: 0,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 4,
+    justifyContent: "center",
+  },
+  statusTextCompactAndroid: {
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  buzzerButtonAndroid: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  buzzerTextAndroid: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  buzzedTeamContainerCompactAndroid: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  buzzedTeamTextCompactAndroid: {
+    fontSize: 12,
   },
 });

@@ -1304,11 +1304,15 @@ const handleImportCyberQuestsWeb = () => {
     modules.length === 0 &&
     userSubjects.length === 0;
 
+  const showStudentNoSubjectsFullScreen =
+    !isInstructorOrAdmin && !loading && !error && userSubjects.length === 0;
+
   const showWebMapBackdrop =
     Platform.OS === "web" &&
     !!selectedBackground?.image &&
     !(!!selectedSubject && !loading && !error && modules.length === 0) &&
-    !showPrivilegedNoSubjectsState;
+    !showPrivilegedNoSubjectsState &&
+    !showStudentNoSubjectsFullScreen;
 
   const screenGradient = isDarkMode
     ? ["#020617", "#0B1220"]
@@ -1464,6 +1468,7 @@ const handleImportCyberQuestsWeb = () => {
         </>
       )}
       {/* Enhanced Header with Mobile-Optimized Layout */}
+      {!showStudentNoSubjectsFullScreen && (
       <View
         style={[
           styles.header,
@@ -1912,9 +1917,10 @@ const handleImportCyberQuestsWeb = () => {
           </View>
         )}
       </View>
+      )}
 
       {/* Subject Selector Dropdown - Mobile optimized */}
-      {showSubjectSelector && userSubjects.length > 0 && (
+      {!showStudentNoSubjectsFullScreen && showSubjectSelector && userSubjects.length > 0 && (
         <View
           style={[
             styles.sectionDropdown,
@@ -2057,7 +2063,7 @@ const handleImportCyberQuestsWeb = () => {
       )}
 
       {/* Background Selector Dropdown */}
-      {showBackgroundSelector && isinstructor && (
+      {!showStudentNoSubjectsFullScreen && showBackgroundSelector && isinstructor && (
         <View
           style={[
             styles.backgroundDropdown,
@@ -2152,6 +2158,7 @@ const handleImportCyberQuestsWeb = () => {
           <View
             style={[
               styles.errorContainer,
+              showStudentNoSubjectsFullScreen && styles.noSubjectsFullScreen,
               {
                 backgroundColor: colors.background,
                 alignItems: "center", // Center content horizontally
@@ -2177,6 +2184,26 @@ const handleImportCyberQuestsWeb = () => {
 
             {/* Container for buttons */}
             <View style={styles.buttonContainer}>
+              {!isinstructor && (
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    isWebMobilePortrait && styles.actionButtonWebCompact,
+                    {
+                      backgroundColor: colors.primary,
+                      borderColor: colors.primary,
+                      borderWidth: 1,
+                    },
+                  ]}
+                  onPress={handleOpenJoinSubject}
+                >
+                  <Ionicons name="enter" size={20} color="#FFFFFF" />
+                  <Text style={[styles.actionButtonText, { color: "#FFFFFF" }]}> 
+                    Join Subject
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
                 style={[
                   styles.actionButton,
@@ -2961,7 +2988,20 @@ const handleImportCyberQuestsWeb = () => {
                             style={styles.optionItem}
                             onPress={() => {
                               setMenuVisible(null);
-                              router.push(`/(tabs)/create?edit=${module._id}`);
+                              const editRouteParams = {
+                                edit: String(module._id),
+                                from: "index",
+                                focusModuleId: String(module._id),
+                              };
+                              const selectedSubjectId =
+                                selectedSubject?._id || selectedSubject?.id;
+                              if (selectedSubjectId) {
+                                editRouteParams.subjectId = String(selectedSubjectId);
+                              }
+                              router.push({
+                                pathname: "/(tabs)/create",
+                                params: editRouteParams,
+                              });
                             }}
                           >
                             <Ionicons
@@ -5241,6 +5281,16 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginHorizontal: 32,
     lineHeight: 24,
+  },
+  noSubjectsFullScreen: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    zIndex: 999,
   },
   userProfilePanel: {
     position: "absolute",

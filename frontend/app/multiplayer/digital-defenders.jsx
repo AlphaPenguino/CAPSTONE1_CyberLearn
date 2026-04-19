@@ -2889,9 +2889,7 @@ function DigitalDefenders() {
             <View style={[styles.handHeader, isCompactGameplayLayout && styles.handHeaderCompact]}>
               <Text style={[styles.handTitle, isCompactGameplayLayout && styles.handTitleCompact]}>Your Hand</Text>
               <View style={styles.deckStatus}>
-                <Text style={[styles.deckCount, isCompactGameplayLayout && styles.deckCountCompact, { opacity: 1 }]}>
-                  Deck: {deck.length} | Used: {usedCards.length}
-                </Text>
+                
                 {deck.length === 0 && playerHand.length > 0 && (
                     <Text style={[styles.deckWarning, { opacity: 1 }]}>
                       ⚠️ No cards to draw

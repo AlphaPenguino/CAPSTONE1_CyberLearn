@@ -24,137 +24,6 @@ import AnswerFeedbackModal from "@/components/ui/AnswerFeedbackModal";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNavigationLock } from "@/contexts/NavigationLockContext";
 
-// Local fallback data for different question types (used only if API not available)
-const FALLBACK_QUESTIONS = [
-  // Multiple Choice Questions
-  {
-    id: 1,
-    type: "multipleChoice",
-    question: "What does HTML stand for?",
-    options: [
-      "Hyper Text Markup Language",
-      "High Tech Modern Language",
-      "Home Tool Markup Language",
-      "Hyperlink and Text Markup Language",
-    ],
-    correctAnswer: 0,
-    difficulty: "easy",
-    category: "Web Development",
-  },
-  {
-    id: 2,
-    type: "multipleChoice",
-    question: "Which of the following is NOT a programming language?",
-    options: ["Python", "JavaScript", "HTML", "Java"],
-    correctAnswer: 2,
-    difficulty: "medium",
-    category: "Programming",
-  },
-  {
-    id: 3,
-    type: "multipleChoice",
-    question: "What is the primary function of CSS?",
-    options: [
-      "To add interactivity to web pages",
-      "To structure web content",
-      "To style and layout web pages",
-      "To store data",
-    ],
-    correctAnswer: 2,
-    difficulty: "easy",
-    category: "Web Development",
-  },
-
-  // Fill in the Blanks Questions
-  {
-    id: 4,
-    type: "fillInBlanks",
-    question:
-      "The ____ tag is used to create hyperlinks in HTML, and it uses the ____ attribute to specify the destination URL.",
-    blanks: ["<a>", "href"],
-    difficulty: "medium",
-    category: "Web Development",
-  },
-  {
-    id: 5,
-    type: "fillInBlanks",
-    question:
-      "In JavaScript, ____ is used to declare variables that cannot be reassigned, while ____ allows reassignment.",
-    blanks: ["const", "let"],
-    difficulty: "medium",
-    category: "Programming",
-  },
-  {
-    id: 6,
-    type: "fillInBlanks",
-    question: "CSS stands for ____ ____ ____.",
-    blanks: ["Cascading", "Style", "Sheets"],
-    difficulty: "easy",
-    category: "Web Development",
-  },
-
-  // Code Missing Questions
-  {
-    id: 7,
-    type: "codeMissing",
-    question:
-      "Complete the JavaScript function to calculate the area of a rectangle:",
-    codeTemplate: `function calculateArea(length, width) {
-    return ____;
-}`,
-    correctAnswer: "length * width",
-    difficulty: "easy",
-    category: "Programming",
-  },
-  {
-    id: 8,
-    type: "codeMissing",
-    question: "Complete the HTML structure for a basic webpage:",
-    codeTemplate: `<!DOCTYPE html>
-<html>
-<head>
-    <title>My Page</title>
-</head>
-<____>
-    <h1>Welcome</h1>
-</____>
-</html>`,
-    correctAnswer: "body",
-    difficulty: "easy",
-    category: "Web Development",
-  },
-
-  // Code Ordering Questions
-  {
-    id: 9,
-    type: "codeOrdering",
-    question:
-      "Arrange these CSS properties in the correct order to create a centered box:",
-    codeBlocks: [
-      { id: 1, code: "margin: 0 auto;", position: 2 },
-      { id: 2, code: "width: 300px;", position: 0 },
-      { id: 3, code: "text-align: center;", position: 3 },
-      { id: 4, code: "display: block;", position: 1 },
-    ],
-    difficulty: "hard",
-    category: "Web Development",
-  },
-  {
-    id: 10,
-    type: "codeOrdering",
-    question:
-      "Arrange these JavaScript statements to create a proper function:",
-    codeBlocks: [
-      { id: 1, code: "return result;", position: 2 },
-      { id: 2, code: "function addNumbers(a, b) {", position: 0 },
-      { id: 3, code: "}", position: 3 },
-      { id: 4, code: "let result = a + b;", position: 1 },
-    ],
-    difficulty: "medium",
-    category: "Programming",
-  },
-];
-
 const WEB_UI_SCALE = 1.2;
 const webScale = (value) =>
   Platform.OS === "web" ? Math.round(value * WEB_UI_SCALE) : value;
@@ -206,6 +75,59 @@ export default function QuickPlay() {
   const isExitPromptOpenRef = useRef(false);
   const isCompactWeb = Platform.OS === "web" && viewportWidth <= 900;
   const isNarrowWeb = Platform.OS === "web" && viewportWidth <= 560;
+
+  const normalizeApiQuestion = useCallback((q, idx) => {
+    if (!q?.type || !q?.question) {
+      return null;
+    }
+
+    const base = {
+      id: q.id || idx,
+      type: q.type,
+      question: q.question,
+      difficulty: q.difficulty || "medium",
+      category: q.category || "Cyber Quest",
+    };
+
+    switch (q.type) {
+      case "multipleChoice":
+        if (!Array.isArray(q.options) || q.options.length === 0) {
+          return null;
+        }
+        return {
+          ...base,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+        };
+      case "fillInBlanks":
+        if (!Array.isArray(q.blanks) || q.blanks.length === 0) {
+          return null;
+        }
+        return {
+          ...base,
+          blanks: q.blanks,
+        };
+      case "codeMissing":
+        if (!q.codeTemplate || typeof q.correctAnswer !== "string") {
+          return null;
+        }
+        return {
+          ...base,
+          codeTemplate: q.codeTemplate,
+          correctAnswer: q.correctAnswer,
+        };
+      case "codeOrdering":
+        if (!Array.isArray(q.codeBlocks) || q.codeBlocks.length === 0) {
+          return null;
+        }
+        return {
+          ...base,
+          codeBlocks: q.codeBlocks,
+        };
+      default:
+        return null;
+    }
+  }, []);
 
   const confirmQuitGame = useCallback(
     (onConfirm) => {
@@ -260,52 +182,40 @@ export default function QuickPlay() {
   const startGame = async () => {
     setLoading(true);
     setError(null);
+
+    setCurrentQuestionIndex(0);
+    setAnswers({});
+    setScore(0);
+    setTimeLeft(30);
+    setLives(3);
+    setGameComplete(false);
+
     try {
       // Dynamically import to avoid circular issues & only load when needed
       const quickPlayApi = (await import("@/services/quickPlayApi")).default;
       const { questions } = await quickPlayApi.fetchQuestions(10);
-      const normalized = questions.map((q, idx) => {
-        // Normalize field names to those expected by component logic
-        if (q.type === "multipleChoice") {
-          return {
-            id: q.id || idx,
-            type: q.type,
-            question: q.question,
-            options: q.options || [],
-            correctAnswer: q.correctAnswer, // index
-            difficulty: q.difficulty || "medium",
-            category: q.category || "General",
-          };
-        }
-        return {
-          id: q.id || idx,
-          type: q.type,
-          // unify property names
-          question: q.question,
-          options: q.options,
-          blanks: q.blanks,
-          codeTemplate: q.codeTemplate,
-          codeBlocks: q.codeBlocks,
-          correctAnswer: q.correctAnswer,
-          difficulty: q.difficulty || "medium",
-          category: q.category || "General",
-        };
-      });
-      const shuffled = [...normalized].sort(() => Math.random() - 0.5);
+      const normalized = (questions || [])
+        .map((q, idx) => normalizeApiQuestion(q, idx))
+        .filter(Boolean);
+
+      if (normalized.length === 0) {
+        setShuffledQuestions([]);
+        setGameState("menu");
+        setError(
+          "No quick play questions available from your enrolled/handled Cyber Quests yet."
+        );
+        return;
+      }
+
+      const shuffled = normalized.sort(() => Math.random() - 0.5);
       setShuffledQuestions(shuffled);
-    } catch (err) {
-      console.log("QuickPlay API failed, using fallback questions", err);
-      setError("Using fallback questions (no created questions available)");
-      const shuffled = [...FALLBACK_QUESTIONS].sort(() => Math.random() - 0.5);
-      setShuffledQuestions(shuffled);
-    } finally {
-      setCurrentQuestionIndex(0);
-      setAnswers({});
-      setScore(0);
-      setTimeLeft(30);
-      setLives(3);
-      setGameComplete(false);
       setGameState("playing");
+    } catch (err) {
+      console.log("QuickPlay API failed", err);
+      setShuffledQuestions([]);
+      setGameState("menu");
+      setError(err?.message || "Failed to load quick play questions.");
+    } finally {
       setLoading(false);
     }
   };
@@ -548,7 +458,7 @@ export default function QuickPlay() {
               },
             ]}
           >
-            Solo practice with randomized questions from all levels
+            Solo practice with randomized questions from your Cyber Quests
           </Text>
           <Text
             style={[
@@ -561,7 +471,7 @@ export default function QuickPlay() {
               },
             ]}
           >
-            • Randomized questions from all available levels
+            • Questions from your enrolled or handled subjects
           </Text>
           <Text
             style={[

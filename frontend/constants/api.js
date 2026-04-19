@@ -19,13 +19,14 @@ if (envApiUrl) {
   } else {
     // Local web dev (localhost)
     API_URL = "http://localhost:3000/api";
-    //API_URL = "https://capstone-backend-deploy.onrender.com/api";
+    //API_URL = "https: below:
+    //    //API_URL = "http://192.168.254.103:3000/api"//capstone-backend-deploy.onrender.com/api";
   }
 } else {
   // Native mobile — always use deployed backend in production
   API_URL = "https://capstone-backend-deploy.onrender.com/api";
-  // For local mobile dev, comment above and uncomment below:
-   //API_URL = "http://192.168.254.100:3000/api";
+  // For local mobile dev, comment above and uncomment;
+  //API_URL = "http://192.168.254.103:3000/api"
 }
 
 console.log("🚀 ~ API_URL:", API_URL);

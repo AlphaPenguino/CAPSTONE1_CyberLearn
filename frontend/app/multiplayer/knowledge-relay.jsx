@@ -65,6 +65,15 @@ const PHASES = {
 
 const RELAY_RACE_BG = require("../../assets/images/relayracebg.png");
 const RELAY_BG_GRADIENT = ["rgba(0,0,0,0.65)", "rgba(0,0,0,0.45)"];
+const KNOWLEDGE_RELAY_INSTRUCTIONS_TEXT = `Knowledge Relay Race • Game Rules
+Join or create a Room ID to enter
+Pick a team (Alpha, Beta, Charlie, Delta)
+Minimum 1 player on different teams to start
+Take turns answering questions relay-style
+Earn points for every correct answer
+Wrong answers pass the turn to the next player
+Highest score wins the race
+🏁 Game ends after all rounds are finished`;
 
 // Sample JSON structure for Knowledge Relay questions
 const SAMPLE_KR_QUESTIONS = [
@@ -172,6 +181,7 @@ export default function KnowledgeRelay() {
   const answeredQuestionIndexRef = useRef(null);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showRoomInstructions, setShowRoomInstructions] = useState(false);
 
   // Socket.IO connection
   useEffect(() => {
@@ -1839,6 +1849,36 @@ export default function KnowledgeRelay() {
     return currentPlayer && currentPlayer.name === playerName;
   };
 
+  const renderRoomInstructionsModal = () => (
+    <Modal
+      visible={showRoomInstructions}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowRoomInstructions(false)}
+    >
+      <View style={styles.roomInfoOverlay}>
+        <View style={styles.roomInfoCard}>
+          <View style={styles.roomInfoHeader}>
+            <Text style={styles.roomInfoTitle}>Knowledge Relay Instructions</Text>
+            <TouchableOpacity
+              style={styles.roomInfoCloseButton}
+              onPress={() => setShowRoomInstructions(false)}
+              accessibilityLabel="Close Knowledge Relay instructions"
+            >
+              <MaterialCommunityIcons name="close" size={20} color="#0f172a" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            style={styles.roomInfoScroll}
+            showsVerticalScrollIndicator={Platform.OS === "web"}
+          >
+            <Text style={styles.roomInfoText}>{KNOWLEDGE_RELAY_INSTRUCTIONS_TEXT}</Text>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   // Render functions
   const renderRoomSetup = () => (
     <ImageBackground
@@ -1867,7 +1907,16 @@ export default function KnowledgeRelay() {
             <Text style={styles.pageTitle}>Join a Game Room</Text>
             <View style={styles.setupCard}>
               <View style={styles.inputContainer}>
-                <Text style={styles.label}>Room ID</Text>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Room ID</Text>
+                  <TouchableOpacity
+                    style={styles.roomInfoButton}
+                    onPress={() => setShowRoomInstructions(true)}
+                    accessibilityLabel="Show Knowledge Relay game rules"
+                  >
+                    <Text style={styles.roomInfoButtonText}>i</Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   style={styles.textInput}
                   value={roomId}
@@ -1929,6 +1978,7 @@ export default function KnowledgeRelay() {
                 </TouchableOpacity>
               </View>
             )}
+            {renderRoomInstructionsModal()}
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -2900,6 +2950,85 @@ const styles = StyleSheet.create({
     fontSize: scaleWeb(16),
     color: "#0f766e",
     marginBottom: scaleWeb(8),
+    fontWeight: "600",
+  },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  roomInfoButton: {
+    width: scaleWeb(20),
+    height: scaleWeb(20),
+    borderRadius: scaleWeb(10),
+    backgroundColor: "#0f766e",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: scaleWeb(6),
+    ...Platform.select({
+      web: {
+        cursor: "pointer",
+      },
+      default: {},
+    }),
+  },
+  roomInfoButtonText: {
+    color: "#ffffff",
+    fontSize: scaleWeb(12),
+    fontWeight: "800",
+    lineHeight: scaleWeb(12),
+  },
+  roomInfoOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  roomInfoCard: {
+    width: "100%",
+    maxWidth: 620,
+    maxHeight: "80%",
+    backgroundColor: "rgba(255,255,255,0.98)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.4)",
+    padding: 16,
+  },
+  roomInfoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  roomInfoTitle: {
+    flex: 1,
+    color: "#0f172a",
+    fontSize: scaleWeb(18),
+    fontWeight: "800",
+    marginRight: 8,
+  },
+  roomInfoCloseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(226,232,240,0.95)",
+    ...Platform.select({
+      web: {
+        cursor: "pointer",
+      },
+      default: {},
+    }),
+  },
+  roomInfoScroll: {
+    marginTop: 6,
+  },
+  roomInfoText: {
+    color: "#0f172a",
+    fontSize: scaleWeb(14),
+    lineHeight: scaleWeb(22),
     fontWeight: "600",
   },
   textInput: {

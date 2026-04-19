@@ -498,40 +498,7 @@ export default function GameArcade() {
                   Practice solo, challenge friends, and climb the leaderboard
                 </Text>
               </View>
-              {!isInstructor && (
-                <View
-                  style={[
-                    styles.userPoints,
-                    compactWeb && { marginTop: 8, alignSelf: "flex-start" },
-                    {
-                      // In dark mode keep navy card background; in light mode use a subtle gold tint for contrast
-                      backgroundColor: isDarkMode
-                        ? COLORS.cardBackground
-                        : "rgba(255,215,0,0.18)",
-                      borderWidth: 1,
-                      borderColor: isDarkMode
-                        ? "rgba(255,215,0,0.25)"
-                        : COLORS.primary,
-                      shadowColor: isDarkMode ? "#000" : "#FFD700",
-                      shadowOpacity: isDarkMode ? 0.3 : 0.25,
-                      shadowRadius: 4,
-                      shadowOffset: { width: 0, height: 2 },
-                      ...(Platform.OS === "android" && {
-                        elevation: 3,
-                      }),
-                    },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="star"
-                    size={16}
-                    color="#FFD700"
-                  />
-                  <Text style={[styles.pointsText, { color: colors.text }]}>
-                    {userLeaderboardData?.combinedScore || 0} XP
-                  </Text>
-                </View>
-              )}
+              
             </View>
 
             <FeaturedGame
