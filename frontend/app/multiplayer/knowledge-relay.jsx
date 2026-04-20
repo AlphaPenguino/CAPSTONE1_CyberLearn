@@ -13,6 +13,7 @@ import {
   Platform,
   ActivityIndicator,
   ImageBackground,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -32,10 +33,14 @@ import COLORS from "@/constants/custom-colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNavigationLock } from "@/contexts/NavigationLockContext";
 
-const WEB_UI_SCALE = 1.;
+const WEB_VIEWPORT_WIDTH =
+  Platform.OS === "web" ? Dimensions.get("window").width : 1024;
+const IS_WEB_MOBILE = Platform.OS === "web" && WEB_VIEWPORT_WIDTH <= 900;
+const IS_WEB_NARROW = Platform.OS === "web" && WEB_VIEWPORT_WIDTH <= 520;
+const WEB_UI_SCALE = IS_WEB_NARROW ? 0.86 : 1;
 const scaleWeb = (value) =>
   Platform.OS === "web" ? Math.round(value * WEB_UI_SCALE) : value;
-const TEAM_SELECTION_SCALE_WEB = 1.18;
+const TEAM_SELECTION_SCALE_WEB = IS_WEB_MOBILE ? 1 : 1.18;
 const TEAM_SELECTION_SCALE_MOBILE = 1.1;
 const scaleTeamSelection = (value) =>
   Math.round(
@@ -2769,7 +2774,7 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    padding: scaleWeb(20),
+    padding: Platform.OS === "web" && IS_WEB_NARROW ? 12 : scaleWeb(20),
     ...Platform.select({
       android: {
         padding: 10,
@@ -2777,7 +2782,7 @@ const styles = StyleSheet.create({
       },
       web: {
         width: "100%",
-        maxWidth: scaleWeb(1200),
+        maxWidth: IS_WEB_MOBILE ? "100%" : scaleWeb(1200),
       },
       default: {},
     }),
@@ -2814,7 +2819,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   teamSelectionTitle: {
-    fontSize: scaleWeb(30),
+    fontSize: IS_WEB_NARROW ? 24 : scaleWeb(30),
     fontWeight: "800",
     color: "#f8fafc",
     textAlign: "center",
@@ -2825,7 +2830,7 @@ const styles = StyleSheet.create({
   },
   teamSelectionSubtitle: {
     marginTop: scaleWeb(6),
-    fontSize: scaleWeb(14),
+    fontSize: IS_WEB_NARROW ? 12 : scaleWeb(14),
     color: "#dbeafe",
     textAlign: "center",
     fontWeight: "500",
@@ -2915,10 +2920,10 @@ const styles = StyleSheet.create({
     elevation: 4,
     ...Platform.select({
       web: {
-        width: scaleWeb(600),
-        maxWidth: "90%",
+        width: "100%",
+        maxWidth: IS_WEB_MOBILE ? "100%" : "90%",
         marginHorizontal: "auto",
-        minWidth: scaleWeb(480),
+        minWidth: 0,
       },
       default: {},
     }),
@@ -3177,7 +3182,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     ...Platform.select({
       web: {
-        justifyContent: "center",
+        justifyContent: IS_WEB_MOBILE ? "space-between" : "center",
         gap: 16,
       },
       default: {},
@@ -3191,8 +3196,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...Platform.select({
       web: {
-        width: scaleTeamSelection(scaleWeb(300)),
-        maxWidth: "45%",
+        width: IS_WEB_MOBILE ? "100%" : scaleTeamSelection(scaleWeb(300)),
+        maxWidth: IS_WEB_MOBILE ? "100%" : "45%",
       },
       default: {},
     }),
@@ -3316,6 +3321,10 @@ const styles = StyleSheet.create({
     ...Platform.select({
       android: {
         marginBottom: 10,
+      },
+      web: {
+        flexWrap: IS_WEB_MOBILE ? "wrap" : "nowrap",
+        rowGap: IS_WEB_MOBILE ? 8 : 0,
       },
       default: {},
     }),
@@ -3476,6 +3485,8 @@ const styles = StyleSheet.create({
       web: {
         maxWidth: 800,
         marginHorizontal: "auto",
+        flexDirection: IS_WEB_MOBILE ? "column" : "row",
+        rowGap: IS_WEB_MOBILE ? 8 : 0,
       },
       default: {},
     }),
@@ -3495,6 +3506,7 @@ const styles = StyleSheet.create({
       },
       web: {
         cursor: "pointer",
+        marginRight: IS_WEB_MOBILE ? 0 : 10,
       },
       default: {},
     }),

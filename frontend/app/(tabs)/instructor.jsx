@@ -130,6 +130,17 @@ export default function InstructorDashboard() {
   const getNormalizedRole = (account) =>
       (account?.privilege || account?.role || "student").toLowerCase();
 
+  const getUserIdentifier = (account) =>
+      String(
+          account?._id ||
+          account?.id ||
+          account?.userId ||
+          account?.studentId ||
+          account?.student?._id ||
+          account?.student?.id ||
+          ""
+      );
+
   const getSubjectCode = (subject) =>
       subject?.subjectCode || subject?.sectionCode || "N/A";
 
@@ -177,7 +188,7 @@ export default function InstructorDashboard() {
 
   const openUserProfileModal = useCallback(
       async (userItem) => {
-        const userId = String(userItem?._id || userItem?.id || userItem?.userId || "");
+        const userId = getUserIdentifier(userItem);
         if (!userId) {
           Alert.alert("User Profile", "Unable to open profile for this student.");
           return;
@@ -187,14 +198,25 @@ export default function InstructorDashboard() {
         const fallbackProfile = {
           basic: {
             _id: userId,
-            username: userItem?.username || userItem?.studentName || "N/A",
+            username:
+                userItem?.username ||
+                userItem?.student?.username ||
+                userItem?.studentName ||
+                "N/A",
             fullName:
-                userItem?.fullName || userItem?.studentName || userItem?.username || "N/A",
-            email: userItem?.email || "N/A",
+                userItem?.fullName ||
+                userItem?.student?.fullName ||
+                userItem?.studentName ||
+                userItem?.student?.username ||
+                userItem?.username ||
+                "N/A",
+            email: userItem?.email || userItem?.student?.email || "N/A",
             profileImage:
                 userItem?.profileImage ||
                 userItem?.profilePicture ||
                 userItem?.profileImageUrl ||
+                userItem?.student?.profileImage ||
+                userItem?.student?.profilePicture ||
                 null,
             role: baseRole,
           },
@@ -247,7 +269,7 @@ export default function InstructorDashboard() {
           }
 
           const role = getNormalizedRole(fetchedUser);
-          const normalizedUserId = String(fetchedUser?._id || userId);
+          const normalizedUserId = getUserIdentifier(fetchedUser) || userId;
           const allSections = await fetchSectionsCatalog();
 
           const enrolledSubjects = allSections.filter((section) => {
@@ -310,15 +332,25 @@ export default function InstructorDashboard() {
             basic: {
               _id: normalizedUserId,
               username:
-                  fetchedUser?.username || fetchedUser?.studentName || userItem?.studentName || "N/A",
+                  fetchedUser?.username ||
+                  fetchedUser?.student?.username ||
+                  fetchedUser?.studentName ||
+                  userItem?.studentName ||
+                  "N/A",
               fullName:
                   fetchedUser?.fullName ||
+                  fetchedUser?.student?.fullName ||
                   fetchedUser?.studentName ||
                   fetchedUser?.username ||
                   userItem?.studentName ||
                   "N/A",
-              email: fetchedUser?.email || userItem?.email || "N/A",
-              profileImage: fetchedUser?.profileImage || fetchedUser?.profilePicture || null,
+              email: fetchedUser?.email || fetchedUser?.student?.email || userItem?.email || "N/A",
+              profileImage:
+                  fetchedUser?.profileImage ||
+                  fetchedUser?.profilePicture ||
+                  fetchedUser?.student?.profileImage ||
+                  fetchedUser?.student?.profilePicture ||
+                  null,
               role,
             },
             student:
@@ -497,24 +529,30 @@ export default function InstructorDashboard() {
                     activeOpacity={0.86}
                 >
                   <View style={styles.activityIcon}>
-                    {(activity.profileImageUrl || activity.profileImage) &&
-                    !imageErrors[activity.id || activity._id] ? (
-                        <Image
-                            source={{
-                              uri:
-                                  activity.profileImageUrl ||
-                                  getCompatibleImageUrl(activity.profileImage),
-                            }}
-                            style={styles.activityAvatarImage}
-                            onError={() => handleImageError(activity.id || activity._id)}
-                        />
-                    ) : (
-                        <MaterialCommunityIcons
-                            name="account-circle"
-                            size={32}
-                            color={highlightColor}
-                        />
-                    )}
+                    {/** Normalize to user id first so Android image/error mapping is stable. */}
+                    {(() => {
+                      const activityUserId = getUserIdentifier(activity);
+                      const activityImageKey =
+                          activityUserId || activity.id || activity._id || String(index);
+                      return (activity.profileImageUrl || activity.profileImage) &&
+                          !imageErrors[activityImageKey] ? (
+                          <Image
+                              source={{
+                                uri:
+                                    activity.profileImageUrl ||
+                                    getCompatibleImageUrl(activity.profileImage),
+                              }}
+                              style={styles.activityAvatarImage}
+                              onError={() => handleImageError(activityImageKey)}
+                          />
+                      ) : (
+                          <MaterialCommunityIcons
+                              name="account-circle"
+                              size={32}
+                              color={highlightColor}
+                          />
+                      );
+                    })()}
                   </View>
                   <View style={styles.activityInfo}>
                     <Text style={[styles.activityStudent, { color: colors.text }]}>
@@ -1198,8 +1236,10 @@ const styles = StyleSheet.create({
   },
   profileModalContent: {
     width: "100%",
-    maxWidth: 680,
-    maxHeight: "92%",
+    maxWidth: Platform.OS === "web" ? 680 : 560,
+    height: Platform.OS === "web" ? "86%" : "90%",
+    minHeight: Platform.OS === "web" ? 440 : 360,
+    maxHeight: Platform.OS === "web" ? "90%" : "92%",
     borderRadius: 18,
     borderWidth: 1,
     overflow: "hidden",
@@ -1228,10 +1268,13 @@ const styles = StyleSheet.create({
   },
   profileScrollArea: {
     flex: 1,
+    minHeight: 0,
+    width: "100%",
   },
   profileScrollContent: {
     padding: 16,
     paddingBottom: 24,
+    flexGrow: 1,
     gap: 12,
   },
   profileInlineWarning: {

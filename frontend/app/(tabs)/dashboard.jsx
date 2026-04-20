@@ -523,6 +523,17 @@ export default function Dashboard() {
   const getNormalizedRole = (account) =>
       (account?.privilege || account?.role || "student").toLowerCase();
 
+  const getUserIdentifier = (account) =>
+      String(
+          account?._id ||
+          account?.id ||
+          account?.userId ||
+          account?.studentId ||
+          account?.student?._id ||
+          account?.student?.id ||
+          ""
+      );
+
   const getSubjectCode = (subject) =>
       subject?.subjectCode || subject?.sectionCode || "N/A";
 
@@ -570,7 +581,7 @@ export default function Dashboard() {
 
   const openUserProfileModal = useCallback(
       async (userItem) => {
-        const userId = String(userItem?._id || userItem?.id || userItem?.userId || "");
+        const userId = getUserIdentifier(userItem);
         if (!userId) {
           Alert.alert("User Profile", "Unable to open profile for this student.");
           return;
@@ -580,10 +591,26 @@ export default function Dashboard() {
         const fallbackProfile = {
           basic: {
             _id: userId,
-            username: userItem?.username || "N/A",
-            fullName: userItem?.fullName || userItem?.username || "N/A",
-            email: userItem?.email || "N/A",
-            profileImage: userItem?.profileImage || userItem?.profilePicture || null,
+            username:
+                userItem?.username ||
+                userItem?.student?.username ||
+                userItem?.studentName ||
+                "N/A",
+            fullName:
+                userItem?.fullName ||
+                userItem?.student?.fullName ||
+                userItem?.studentName ||
+                userItem?.student?.username ||
+                userItem?.username ||
+                "N/A",
+            email: userItem?.email || userItem?.student?.email || "N/A",
+            profileImage:
+                userItem?.profileImage ||
+                userItem?.profilePicture ||
+                userItem?.profileImageUrl ||
+                userItem?.student?.profileImage ||
+                userItem?.student?.profilePicture ||
+                null,
             role: baseRole,
           },
           student:
@@ -635,7 +662,7 @@ export default function Dashboard() {
           }
 
           const role = getNormalizedRole(fetchedUser);
-          const normalizedUserId = String(fetchedUser?._id || userId);
+          const normalizedUserId = getUserIdentifier(fetchedUser) || userId;
           const allSections = await fetchSectionsCatalog();
 
           const enrolledSubjects = allSections.filter((section) => {
@@ -697,10 +724,24 @@ export default function Dashboard() {
           const compiledProfile = {
             basic: {
               _id: normalizedUserId,
-              username: fetchedUser?.username || "N/A",
-              fullName: fetchedUser?.fullName || fetchedUser?.username || "N/A",
-              email: fetchedUser?.email || "N/A",
-              profileImage: fetchedUser?.profileImage || fetchedUser?.profilePicture || null,
+              username:
+                  fetchedUser?.username ||
+                  fetchedUser?.student?.username ||
+                  fetchedUser?.studentName ||
+                  "N/A",
+              fullName:
+                  fetchedUser?.fullName ||
+                  fetchedUser?.student?.fullName ||
+                  fetchedUser?.studentName ||
+                  fetchedUser?.username ||
+                  "N/A",
+              email: fetchedUser?.email || fetchedUser?.student?.email || "N/A",
+              profileImage:
+                  fetchedUser?.profileImage ||
+                  fetchedUser?.profilePicture ||
+                  fetchedUser?.student?.profileImage ||
+                  fetchedUser?.student?.profilePicture ||
+                  null,
               role,
             },
             student:
@@ -1228,9 +1269,10 @@ export default function Dashboard() {
                               {topPerformers.map((performer, idx) => {
                                 const medalColor =
                                     idx === 0 ? "#FFD700" : idx === 1 ? "#C0C0C0" : "#CD7F32";
+                                const performerId = getUserIdentifier(performer);
                                 return (
                                     <TouchableOpacity
-                                        key={performer._id || `${performer.username}-${idx}`}
+                                        key={performerId || `${performer.username}-${idx}`}
                                         style={[
                                           styles.topPerformerCard,
                                           { backgroundColor: colors.card },
@@ -1857,7 +1899,7 @@ export default function Dashboard() {
                       <ActivityIndicator size="large" color={colors.primary} />
                       <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading user profile...</Text>
                     </View>
-                ) : selectedProfileData ? (
+                ) : selectedProfileData?.basic ? (
                     <ScrollView
                         style={styles.profileScrollArea}
                         contentContainerStyle={styles.profileScrollContent}
@@ -2604,8 +2646,10 @@ const styles = StyleSheet.create({
   },
   profileModalContent: {
     width: "100%",
-    maxWidth: 680,
-    maxHeight: "92%",
+    maxWidth: Platform.OS === "web" ? 680 : 560,
+    height: Platform.OS === "web" ? "86%" : "90%",
+    minHeight: Platform.OS === "web" ? 440 : 360,
+    maxHeight: Platform.OS === "web" ? "90%" : "92%",
     borderRadius: 18,
     borderWidth: 1,
     overflow: "hidden",
@@ -2634,10 +2678,13 @@ const styles = StyleSheet.create({
   },
   profileScrollArea: {
     flex: 1,
+    minHeight: 0,
+    width: "100%",
   },
   profileScrollContent: {
     padding: 16,
     paddingBottom: 24,
+    flexGrow: 1,
     gap: 12,
   },
   profileInlineWarning: {

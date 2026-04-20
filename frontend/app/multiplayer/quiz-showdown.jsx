@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   ImageBackground,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -25,6 +26,11 @@ import { useAuthStore } from "@/store/authStore";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { GameNotificationService } from "@/services/gameNotificationService";
+
+const WEB_VIEWPORT_WIDTH =
+  Platform.OS === "web" ? Dimensions.get("window").width : 1024;
+const IS_WEB_MOBILE = Platform.OS === "web" && WEB_VIEWPORT_WIDTH <= 900;
+const IS_WEB_NARROW = Platform.OS === "web" && WEB_VIEWPORT_WIDTH <= 520;
 
 // Mock questions with multiple choice format - Updated with comprehensive cybersecurity and ICT questions
 const sampleQuestions = [
@@ -2391,19 +2397,21 @@ export default function QuizShowdown() {
           showsVerticalScrollIndicator={false}
         >
           {/* Team Scores */}
-          <View style={styles.scoresContainer}>
+          <View style={[styles.scoresContainer, IS_WEB_MOBILE && styles.scoresContainerWebMobile]}>
             <TeamScoreCard
               team={teams.teamA}
               isMyTeam={selectedTeam?.trim() === "Team A"}
               buzzedTeam={buzzedTeam?.trim() === "Team A"}
+              compact={IS_WEB_MOBILE}
             />
-            <View style={styles.vsContainer}>
+            <View style={[styles.vsContainer, IS_WEB_MOBILE && styles.vsContainerWebMobile]}>
               <Text style={styles.vsText}>VS</Text>
             </View>
             <TeamScoreCard
               team={teams.teamB}
               isMyTeam={selectedTeam?.trim() === "Team B"}
               buzzedTeam={buzzedTeam?.trim() === "Team B"}
+              compact={IS_WEB_MOBILE}
             />
           </View>
 
@@ -2914,6 +2922,11 @@ const TeamSelectScreen = ({
         )}
       </View>
 
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.teamSelectScrollContent}
+        showsVerticalScrollIndicator={Platform.OS === "web"}
+      >
       <View style={styles.nameInputContainer}>
         <View style={styles.playerNameDisplay}>
           <MaterialCommunityIcons
@@ -3068,6 +3081,7 @@ const TeamSelectScreen = ({
             <Text style={styles.waitingText}>At least 1 player is needed on each team to begin.</Text>
           )}
       </View>
+      </ScrollView>
 
       {/* Leave Game Confirmation Modal (Team Select Phase) */}
       <Modal visible={showLeaveGameModal} transparent animationType="fade">
@@ -3365,7 +3379,7 @@ const styles = StyleSheet.create({
     width: "100%",
     ...Platform.select({
       web: {
-        maxWidth: 1200,
+        maxWidth: IS_WEB_MOBILE ? "100%" : 1200,
         alignSelf: "center",
         marginHorizontal: "auto",
       },
@@ -3391,7 +3405,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 900, // Wider fixed width for web
+        maxWidth: IS_WEB_MOBILE ? "100%" : 900,
         alignSelf: "center",
         marginHorizontal: "auto",
       },
@@ -3408,7 +3422,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 900, // Wider fixed width for web
+        maxWidth: IS_WEB_MOBILE ? "100%" : 900,
         alignSelf: "center",
         marginHorizontal: "auto",
       },
@@ -3474,8 +3488,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(148, 163, 184, 0.35)",
-    padding: 20,
-    marginHorizontal: 20,
+    padding: IS_WEB_NARROW ? 14 : 20,
+    marginHorizontal: IS_WEB_NARROW ? 12 : 20,
     shadowColor: "#0f172a",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
@@ -3484,7 +3498,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 700,
+        maxWidth: IS_WEB_MOBILE ? "100%" : 700,
         alignSelf: "center",
       },
       default: {},
@@ -3542,17 +3556,21 @@ const styles = StyleSheet.create({
   // Team select screen styles
   teamSelectContainer: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: IS_WEB_NARROW ? 12 : 20,
     paddingBottom: 16,
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 900,
+        maxWidth: IS_WEB_MOBILE ? "100%" : 900,
         marginHorizontal: "auto",
         alignSelf: "center",
       },
       default: {},
     }),
+  },
+  teamSelectScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 12,
   },
   teamsContainer: {
     flexDirection: "row",
@@ -3560,9 +3578,10 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     ...Platform.select({
       web: {
-        maxWidth: 900, // Increased from 800px
+        maxWidth: IS_WEB_MOBILE ? "100%" : 900,
         marginHorizontal: "auto",
         justifyContent: "center",
+        flexDirection: IS_WEB_MOBILE ? "column" : "row",
       },
       default: {},
     }),
@@ -3582,8 +3601,11 @@ const styles = StyleSheet.create({
     elevation: 3,
     ...Platform.select({
       web: {
-        minWidth: 400, // Increased from 300px
-        maxWidth: "45%",
+        minWidth: 0,
+        width: IS_WEB_MOBILE ? "100%" : undefined,
+        maxWidth: IS_WEB_MOBILE ? "100%" : "45%",
+        padding: IS_WEB_NARROW ? 14 : 20,
+        minHeight: IS_WEB_NARROW ? 170 : 200,
       },
       default: {},
     }),
@@ -3595,7 +3617,7 @@ const styles = StyleSheet.create({
 
   // Question container styles
   questionContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: IS_WEB_NARROW ? 12 : 20,
     marginBottom: 16,
     ...Platform.select({
       web: {
@@ -3627,7 +3649,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     ...Platform.select({
       web: {
-        maxWidth: 900, // Increased from 700px
+        maxWidth: IS_WEB_MOBILE ? "100%" : 900,
         marginHorizontal: "auto",
       },
       default: {},
@@ -3658,14 +3680,14 @@ const styles = StyleSheet.create({
   // Team scores section
   scoresContainer: {
     flexDirection: "row",
-    paddingHorizontal: 20,
+    paddingHorizontal: IS_WEB_NARROW ? 10 : 20,
     paddingVertical: 12,
     alignItems: "center",
     ...Platform.select({
       web: {
-        maxWidth: 900, // Wider container
+        maxWidth: IS_WEB_MOBILE ? "100%" : 900,
         marginHorizontal: "auto",
-        paddingHorizontal: 0, // Remove padding on web to maximize width
+        paddingHorizontal: IS_WEB_NARROW ? 8 : 0,
       },
       android: {
         paddingHorizontal: 12,
@@ -3673,6 +3695,11 @@ const styles = StyleSheet.create({
       },
       default: {},
     }),
+  },
+  scoresContainerWebMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
   },
 
   // Modal styles
@@ -3880,9 +3907,11 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 900,
+        maxWidth: IS_WEB_MOBILE ? "100%" : 900,
         marginHorizontal: "auto",
         alignSelf: "center",
+        flexWrap: IS_WEB_MOBILE ? "wrap" : "nowrap",
+        rowGap: IS_WEB_MOBILE ? 8 : 0,
       },
       default: {},
     }),
@@ -3890,13 +3919,15 @@ const styles = StyleSheet.create({
   gameHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: IS_WEB_NARROW ? 12 : 20,
     paddingVertical: 16,
     ...Platform.select({
       web: {
         width: "100%",
-        maxWidth: 900,
+        maxWidth: IS_WEB_MOBILE ? "100%" : 900,
         marginHorizontal: "auto",
+        flexWrap: IS_WEB_MOBILE ? "wrap" : "nowrap",
+        rowGap: IS_WEB_MOBILE ? 8 : 0,
       },
       default: {},
     }),
@@ -4467,7 +4498,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: "#000",
     color: "#f8fafc",
-    fontSize: 20,
+    fontSize: IS_WEB_NARROW ? 16 : 20,
     fontWeight: "bold",
     marginLeft: 16,
     flex: 1,
@@ -4483,7 +4514,7 @@ const styles = StyleSheet.create({
   },
   roundContainer: {
     backgroundColor: "rgba(245, 158, 11, 0.9)",
-    paddingHorizontal: 12,
+    paddingHorizontal: IS_WEB_NARROW ? 10 : 12,
     paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
@@ -4530,8 +4561,9 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
     ...Platform.select({
       web: {
-        minWidth: 400, // Wider team cards
-        padding: 16, // Larger padding for better visual
+        minWidth: 0,
+        width: IS_WEB_MOBILE ? "100%" : undefined,
+        padding: IS_WEB_NARROW ? 10 : 16,
       },
       android: {
         padding: 8,
@@ -4582,7 +4614,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     ...Platform.select({
       web: {
-        fontSize: 32, // Larger score text on web
+        fontSize: IS_WEB_NARROW ? 24 : 32,
       },
       android: {
         fontSize: 20,
@@ -4621,13 +4653,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...Platform.select({
       web: {
-        marginHorizontal: 20, // More spacing between teams on web
+        marginHorizontal: IS_WEB_NARROW ? 8 : 20,
       },
       android: {
         marginHorizontal: 8,
       },
       default: {},
     }),
+  },
+  vsContainerWebMobile: {
+    marginVertical: 2,
+    marginHorizontal: 0,
   },
   vsText: {
     color: "#ffffff",
@@ -4684,10 +4720,10 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     ...Platform.select({
       web: {
-        fontSize: 30, // Keep larger font size for web
+        fontSize: IS_WEB_NARROW ? 22 : 30,
         maxWidth: "90%",
         marginHorizontal: "auto",
-        lineHeight: 42,
+        lineHeight: IS_WEB_NARROW ? 32 : 42,
       },
       default: {},
     }),
@@ -4705,9 +4741,10 @@ const styles = StyleSheet.create({
     borderColor: "rgba(74, 124, 89, 0.2)",
     ...Platform.select({
       web: {
-        width: 600, // Fixed width for web platforms
+        width: "100%",
+        maxWidth: IS_WEB_MOBILE ? "100%" : 600,
         minHeight: 60,
-        paddingHorizontal: 16,
+        paddingHorizontal: IS_WEB_NARROW ? 12 : 16,
         marginHorizontal: "auto", // Center the button
       },
       default: {},

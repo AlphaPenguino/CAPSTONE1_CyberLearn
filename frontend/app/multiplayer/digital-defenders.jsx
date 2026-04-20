@@ -43,6 +43,10 @@ if (IS_UNSUPPORTED_PLATFORM) {
 }
 
 const { width: screenWidth } = Dimensions.get("window");
+const WEB_VIEWPORT_WIDTH =
+  Platform.OS === "web" ? Dimensions.get("window").width : screenWidth;
+const IS_WEB_MOBILE = Platform.OS === "web" && WEB_VIEWPORT_WIDTH <= 900;
+const IS_WEB_NARROW = Platform.OS === "web" && WEB_VIEWPORT_WIDTH <= 520;
 
 const PREMIUM_GRADIENT = ["#caf1c8", "#5fd2cd"];
 const DEFENDERS_BG = require("../../assets/images/defendersbg.png");
@@ -251,6 +255,7 @@ function DigitalDefenders() {
   const isWebPortraitGameplay =
       Platform.OS === "web" && viewportHeight >= viewportWidth && viewportWidth <= 620;
   const isWebMobileViewport = Platform.OS === "web" && viewportWidth <= 900;
+  const isWebMobileEditorModal = Platform.OS === "web" && viewportWidth <= 520;
   const portraitFitScale = Math.min(viewportWidth / 480, viewportHeight / 760);
   const shouldScaleGameplay = isWebPortraitGameplay && viewportWidth <= 430;
   const gameplayScale = shouldScaleGameplay
@@ -3284,34 +3289,42 @@ function DigitalDefenders() {
         <>
           {renderImportDocsModal?.()}
           {renderActionsMenuModal?.()}
-          <View style={styles.editorHeader}>
+          <View style={[styles.editorHeader, isWebMobileEditorModal && styles.editorHeaderMobile]}>
             <TouchableOpacity
-                style={styles.closeButton}
+                style={[styles.closeButton, isWebMobileEditorModal && styles.closeButtonMobile]}
                 onPress={() => setShowInstructorEditor(false)}
             >
               <MaterialCommunityIcons
                   name="close"
-                  size={24}
+                  size={isWebMobileEditorModal ? 20 : 24}
                   color={COLORS.textPrimary}
               />
             </TouchableOpacity>
-            <View style={styles.editorTitleBlock}>
-              <Text style={styles.editorTitle}>Edit Cards</Text>
-              <Text style={styles.editorSubtitle}>Digital Defenders Question Manager</Text>
+            <View style={[styles.editorTitleBlock, isWebMobileEditorModal && styles.editorTitleBlockMobile]}>
+              <Text style={[styles.editorTitle, isWebMobileEditorModal && styles.editorTitleMobile]}>Edit Cards</Text>
+              <Text
+                style={[styles.editorSubtitle, isWebMobileEditorModal && styles.editorSubtitleMobile]}
+                numberOfLines={isWebMobileEditorModal ? 1 : 2}
+              >
+                Digital Defenders Question Manager
+              </Text>
             </View>
             <TouchableOpacity
-                style={styles.moreMenuButton}
+                style={[styles.moreMenuButton, isWebMobileEditorModal && styles.moreMenuButtonMobile]}
                 onPress={() => setShowActionsMenu(true)}
             >
               <MaterialCommunityIcons
                   name="dots-vertical"
-                  size={26}
+                  size={isWebMobileEditorModal ? 22 : 26}
                   color={COLORS.textPrimary}
               />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.editorContent}>
+          <ScrollView
+            style={[styles.editorContent, isWebMobileEditorModal && styles.editorContentMobile]}
+            contentContainerStyle={isWebMobileEditorModal ? styles.editorContentContainerMobile : undefined}
+          >
             <Text style={styles.editorSectionTitle}>
               Question Cards by Wave
             </Text>
@@ -3330,18 +3343,18 @@ function DigitalDefenders() {
 
               return (
                   <View key={`wave-${waveNumber}`} style={styles.waveSection}>
-                    <View style={styles.waveSectionHeader}>
-                      <Text style={styles.waveSectionTitle}>
+                    <View style={[styles.waveSectionHeader, isWebMobileEditorModal && styles.waveSectionHeaderMobile]}>
+                      <Text style={[styles.waveSectionTitle, isWebMobileEditorModal && styles.waveSectionTitleMobile]}>
                         🌊 Wave {waveNumber}
                       </Text>
-                      <Text style={styles.waveSectionCounter}>
+                      <Text style={[styles.waveSectionCounter, isWebMobileEditorModal && styles.waveSectionCounterMobile]}>
                         {waveQuestions.length}/5 questions
                       </Text>
                     </View>
 
                     {waveQuestions.length < 5 && (
                         <TouchableOpacity
-                            style={styles.createCardButton}
+                            style={[styles.createCardButton, isWebMobileEditorModal && styles.createCardButtonMobile]}
                             onPress={() => openCreateForm("question", waveNumber)}
                         >
                           <MaterialCommunityIcons
@@ -3349,7 +3362,7 @@ function DigitalDefenders() {
                               size={20}
                               color="#2acde6"
                           />
-                          <Text style={styles.createCardButtonText}>
+                          <Text style={[styles.createCardButtonText, isWebMobileEditorModal && styles.createCardButtonTextMobile]}>
                             Add Question to Wave {waveNumber}
                           </Text>
                         </TouchableOpacity>
@@ -3383,9 +3396,9 @@ function DigitalDefenders() {
                           <Text style={styles.editorCardMeta}>
                             Difficulty: {getDifficultyLabel(card.difficulty)}
                           </Text>
-                          <View style={styles.cardActionButtons}>
+                          <View style={[styles.cardActionButtons, isWebMobileEditorModal && styles.cardActionButtonsMobile]}>
                             <TouchableOpacity
-                                style={styles.editCardButton}
+                                style={[styles.editCardButton, isWebMobileEditorModal && styles.cardActionButtonMobile]}
                                 onPress={() => openEditForm(card)}
                             >
                               <MaterialCommunityIcons
@@ -3396,7 +3409,7 @@ function DigitalDefenders() {
                               <Text style={styles.editCardButtonText}>Edit</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={styles.deleteCardButton}
+                                style={[styles.deleteCardButton, isWebMobileEditorModal && styles.cardActionButtonMobile]}
                                 onPress={() => handleDeleteCard(card, "question")}
                             >
                               <MaterialCommunityIcons
@@ -3468,12 +3481,15 @@ function DigitalDefenders() {
             onRequestClose={() => setShowInstructorEditor(false)}
         >
           {Platform.OS === "web" ? (
-              <View style={styles.editorWebModalOverlay}>
+              <View style={[styles.editorWebModalOverlay, isWebMobileEditorModal && styles.editorWebModalOverlayMobile]}>
                 <TouchableWithoutFeedback onPress={() => setShowInstructorEditor(false)}>
                   <View style={styles.editorWebModalBackdrop} />
                 </TouchableWithoutFeedback>
 
-                <LinearGradient colors={PREMIUM_GRADIENT} style={styles.editorWebModalCard}>
+                <LinearGradient
+                  colors={PREMIUM_GRADIENT}
+                  style={[styles.editorWebModalCard, isWebMobileEditorModal && styles.editorWebModalCardMobile]}
+                >
                   <SafeAreaView style={styles.safeArea}>{editorBody}</SafeAreaView>
                 </LinearGradient>
               </View>
@@ -3976,7 +3992,7 @@ const styles = StyleSheet.create({
     width: "100%",
     ...Platform.select({
       web: {
-        maxWidth: 1200,
+        maxWidth: IS_WEB_MOBILE ? "100%" : 1200,
         alignSelf: "center",
       },
       default: {},
@@ -4057,12 +4073,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   lobbyScrollContent: {
-    padding: 20,
-    paddingTop: 20,
+    padding: IS_WEB_NARROW ? 12 : 20,
+    paddingTop: IS_WEB_NARROW ? 12 : 20,
     paddingBottom: 40,
     alignSelf: Platform.OS === "web" ? "center" : undefined,
     width: "100%",
-    maxWidth: Platform.OS === "web" ? 800 : "100%",
+    maxWidth: Platform.OS === "web" ? (IS_WEB_MOBILE ? "100%" : 800) : "100%",
   },
   logoContainer: {
     alignItems: "center",
@@ -4268,6 +4284,12 @@ const styles = StyleSheet.create({
   joinRoomContainer: {
     flexDirection: "row",
     gap: 10,
+    ...Platform.select({
+      web: {
+        flexDirection: IS_WEB_NARROW ? "column" : "row",
+      },
+      default: {},
+    }),
   },
   roomIdInput: {
     flex: 1,
@@ -4284,6 +4306,12 @@ const styles = StyleSheet.create({
   joinRoomButton: {
     backgroundColor: PREMIUM_ACCENT_DARK,
     paddingHorizontal: 20,
+    ...Platform.select({
+      web: {
+        width: IS_WEB_NARROW ? "100%" : undefined,
+      },
+      default: {},
+    }),
   },
   // soloPlayContainer, orText, soloPlayButton removed (Play Solo feature deprecated)
 
@@ -4358,15 +4386,15 @@ const styles = StyleSheet.create({
   // Gameplay Styles
   gameplayContainer: {
     flex: 1,
-    padding: 15,
+    padding: IS_WEB_NARROW ? 10 : 15,
     alignSelf: Platform.OS === "web" ? "center" : undefined,
     width: "100%",
-    maxWidth: Platform.OS === "web" ? 800 : "100%",
+    maxWidth: Platform.OS === "web" ? (IS_WEB_MOBILE ? "100%" : 800) : "100%",
   },
   gameplayContainerCompact: {
     width: "100%",
-    maxWidth: 560,
-    padding: 10,
+    maxWidth: IS_WEB_NARROW ? "100%" : 560,
+    padding: IS_WEB_NARROW ? 8 : 10,
     alignSelf: "stretch",
   },
   gameHeader: {
@@ -4503,7 +4531,7 @@ const styles = StyleSheet.create({
     padding: 25,
     minHeight: 150,
     width: Platform.OS === "web" ? "100%" : screenWidth - 60,
-    maxWidth: 700,
+    maxWidth: IS_WEB_MOBILE ? "100%" : 700,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
@@ -4684,8 +4712,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 15,
     marginRight: 10,
-    width: 140,
-    minHeight: 180, // Increased height for vertical rectangle
+    width: IS_WEB_NARROW ? 116 : 140,
+    minHeight: IS_WEB_NARROW ? 150 : 180, // Increased height for vertical rectangle
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 1)",
     position: "relative", // Enable z-index layering
@@ -4809,7 +4837,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: IS_WEB_NARROW ? 12 : 20,
     borderRadius: 12,
     gap: 8,
     flex: 1,
@@ -4828,7 +4856,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: "#ffffff",
     fontWeight: "bold",
-    fontSize: 14,
+    fontSize: IS_WEB_NARROW ? 12 : 14,
   },
   actionButtonTextCompact: {
     fontSize: 13,
@@ -5086,6 +5114,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 18,
   },
+  editorWebModalOverlayMobile: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
   editorWebModalBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(2, 6, 23, 0.6)",
@@ -5105,6 +5137,11 @@ const styles = StyleSheet.create({
     shadowRadius: 26,
     elevation: 10,
   },
+  editorWebModalCardMobile: {
+    height: "96%",
+    maxHeight: "96%",
+    borderRadius: 14,
+  },
   editorHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -5115,15 +5152,26 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(15, 23, 42, 0.1)",
     backgroundColor: PREMIUM_SURFACE_ALT,
   },
+  editorHeaderMobile: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
   closeButton: {
     padding: 8,
     borderRadius: 12,
     backgroundColor: "rgba(15, 23, 42, 0.08)",
   },
+  closeButtonMobile: {
+    padding: 6,
+    borderRadius: 10,
+  },
   editorTitleBlock: {
     flex: 1,
     alignItems: "center",
     paddingHorizontal: 8,
+  },
+  editorTitleBlockMobile: {
+    paddingHorizontal: 6,
   },
   editorTitle: {
     fontSize: 24,
@@ -5131,17 +5179,30 @@ const styles = StyleSheet.create({
     color: PREMIUM_TEXT,
     letterSpacing: 0.2,
   },
+  editorTitleMobile: {
+    fontSize: 19,
+  },
   editorSubtitle: {
     fontSize: 12,
     marginTop: 2,
     color: PREMIUM_MUTED,
     fontWeight: "600",
   },
+  editorSubtitleMobile: {
+    fontSize: 10,
+  },
   editorContent: {
     flex: 1,
     padding: 20,
     width: Platform.OS === "web" ? 900 : "100%",
     alignSelf: Platform.OS === "web" ? "center" : undefined,
+  },
+  editorContentMobile: {
+    width: "100%",
+    padding: 10,
+  },
+  editorContentContainerMobile: {
+    paddingBottom: 18,
   },
   editorSectionTitle: {
     fontSize: 20,
@@ -5242,15 +5303,33 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     gap: 8,
   },
+  createCardButtonMobile: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
   createCardButtonText: {
     color: PREMIUM_ACCENT_DARK,
     fontSize: 14,
     fontWeight: "800",
   },
+  createCardButtonTextMobile: {
+    fontSize: 12,
+    textAlign: "center",
+    flexShrink: 1,
+  },
   cardActionButtons: {
     flexDirection: "row",
     gap: 10,
     marginTop: 10,
+  },
+  cardActionButtonsMobile: {
+    flexDirection: "column",
+    gap: 8,
+  },
+  cardActionButtonMobile: {
+    alignSelf: "stretch",
+    justifyContent: "center",
   },
   deleteCardButton: {
     flexDirection: "row",
@@ -5983,10 +6062,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(15, 23, 42, 0.1)",
   },
+  waveSectionHeaderMobile: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 6,
+  },
   waveSectionTitle: {
     fontSize: 20,
     fontWeight: "800",
     color: PREMIUM_TEXT,
+  },
+  waveSectionTitleMobile: {
+    fontSize: 17,
   },
   waveSectionCounter: {
     fontSize: 14,
@@ -5997,6 +6084,9 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     overflow: "hidden",
     fontWeight: "700",
+  },
+  waveSectionCounterMobile: {
+    alignSelf: "flex-start",
   },
   waveFullNotice: {
     flexDirection: "row",
@@ -6222,6 +6312,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     borderWidth: 1,
     borderColor: "rgba(15, 23, 42, 0.12)",
+  },
+  moreMenuButtonMobile: {
+    padding: 6,
+    borderRadius: 10,
+    marginLeft: 4,
   },
   actionsMenuOverlay: {
     flex: 1,
