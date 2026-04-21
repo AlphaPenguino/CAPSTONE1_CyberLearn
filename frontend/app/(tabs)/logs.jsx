@@ -61,11 +61,16 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
   const [filters, setFilters] = useState({
     userSearch: "",
     category: "all",
+    startDate: "",
+    endDate: "",
   });
   const [summary, setSummary] = useState(null);
   const [availableCategories, setAvailableCategories] = useState(["all", ...Object.keys(CATEGORY_LABELS).filter((key) => key !== "all")]);
   const [showFilters, setShowFilters] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showDateFilterModal, setShowDateFilterModal] = useState(false);
+  const [tempStartDate, setTempStartDate] = useState("");
+  const [tempEndDate, setTempEndDate] = useState("");
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [loadingSubjectDetails, setLoadingSubjectDetails] = useState(false);
@@ -151,6 +156,38 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
     [token]
   );
 
+  const toApiDateTime = (value) => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "";
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? trimmed : parsed.toISOString();
+  };
+
+  const buildLogQueryParams = useCallback(
+    ({ includePaging = true, pageNumber = 1 } = {}) => {
+      const params = new URLSearchParams();
+
+      if (includePaging) {
+        params.set("page", String(pageNumber));
+        params.set("limit", "20");
+      }
+
+      if (filters.userSearch?.trim()) {
+        params.set("userSearch", filters.userSearch.trim());
+      }
+
+      params.set("category", filters.category || "all");
+
+      const normalizedStart = toApiDateTime(filters.startDate);
+      const normalizedEnd = toApiDateTime(filters.endDate);
+      if (normalizedStart) params.set("startDate", normalizedStart);
+      if (normalizedEnd) params.set("endDate", normalizedEnd);
+
+      return params;
+    },
+    [filters]
+  );
+
   const fetchLogs = useCallback(
     async (reset = false) => {
       if (!token) return;
@@ -159,10 +196,9 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
           setLoading(true);
           setPage(1);
         }
-        const params = new URLSearchParams({
-          page: reset ? "1" : page.toString(),
-          limit: "20",
-          ...filters,
+        const params = buildLogQueryParams({
+          includePaging: true,
+          pageNumber: reset ? 1 : page,
         });
         const response = await fetch(`${API_URL}/admin/audit-logs?${params}`, {
           headers: {
@@ -240,7 +276,7 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
         setRefreshing(false);
       }
     },
-    [token, page, filters, fetchSubjectName]
+    [token, page, fetchSubjectName, buildLogQueryParams]
   );
 
   useEffect(() => {
@@ -263,7 +299,7 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
     if (!token) return;
 
     try {
-      const params = new URLSearchParams(filters);
+      const params = buildLogQueryParams({ includePaging: false });
 
       const response = await fetch(
         `${API_URL}/admin/audit-logs/export?${params}`,
@@ -512,6 +548,53 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
       </select>
     );
   };
+
+  const openDateFilterModal = () => {
+    setTempStartDate(filters.startDate || "");
+    setTempEndDate(filters.endDate || "");
+    setShowDateFilterModal(true);
+  };
+
+  const applyDateFilter = () => {
+    const start = parseDateValue(tempStartDate);
+    const end = parseDateValue(tempEndDate);
+    if (start && end && start.getTime() > end.getTime()) {
+      Alert.alert("Invalid date range", "Start date must be earlier than or equal to end date.");
+      return;
+    }
+
+    setFilters((prev) => ({
+      ...prev,
+      startDate: tempStartDate.trim(),
+      endDate: tempEndDate.trim(),
+    }));
+    setShowDateFilterModal(false);
+  };
+
+  const clearDateFilter = () => {
+    setTempStartDate("");
+    setTempEndDate("");
+    setFilters((prev) => ({
+      ...prev,
+      startDate: "",
+      endDate: "",
+    }));
+    setShowDateFilterModal(false);
+  };
+
+  const parseDateValue = (value) => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return null;
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const startDateValue = parseDateValue(tempStartDate);
+  const endDateValue = parseDateValue(tempEndDate);
+  const isDateRangeInvalid =
+    Boolean(startDateValue) &&
+    Boolean(endDateValue) &&
+    startDateValue.getTime() > endDateValue.getTime();
 
   const renderSubjectModal = () => (
     <Modal
@@ -876,6 +959,143 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
     </Modal>
   );
 
+  const renderDateFilterModal = () => (
+    <Modal
+      visible={showDateFilterModal}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setShowDateFilterModal(false)}
+    >
+      <View style={styles.categoryModalOverlay}>
+        <Pressable
+          style={styles.categoryModalBackdrop}
+          onPress={() => setShowDateFilterModal(false)}
+        />
+
+        <View
+          style={[
+            styles.categoryModalCard,
+            {
+              backgroundColor: categoryModalSurface,
+              borderColor: categoryModalBorder,
+            },
+          ]}
+        >
+          <Text style={[styles.categoryModalTitle, { color: colors.text }]}>Date Range</Text>
+
+          <View style={styles.dateFilterRow}>
+            <View style={styles.dateFieldGroup}>
+              <Text style={[styles.filterLabel, { color: colors.text }]}>Start Date & Time</Text>
+              {Platform.OS === "web" ? (
+                <input
+                  type="datetime-local"
+                  value={tempStartDate}
+                  onChange={(e) => setTempStartDate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    minHeight: 46,
+                    padding: "10px 12px",
+                    boxSizing: "border-box",
+                    borderRadius: 6,
+                    border: `1px solid ${glassBorder}`,
+                    backgroundColor: glassInput,
+                    color: colors.text,
+                    fontSize: 14,
+                  }}
+                />
+              ) : (
+                <TextInput
+                  style={[
+                    styles.dateInput,
+                    {
+                      backgroundColor: glassInput,
+                      color: colors.text,
+                      borderColor: glassBorder,
+                    },
+                  ]}
+                  placeholder="YYYY-MM-DD HH:mm"
+                  placeholderTextColor={colors.textSecondary}
+                  value={tempStartDate}
+                  onChangeText={setTempStartDate}
+                />
+              )}
+            </View>
+
+            <View style={styles.dateFieldGroup}>
+              <Text style={[styles.filterLabel, { color: colors.text }]}>End Date & Time</Text>
+              {Platform.OS === "web" ? (
+                <input
+                  type="datetime-local"
+                  value={tempEndDate}
+                  onChange={(e) => setTempEndDate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    minHeight: 46,
+                    padding: "10px 12px",
+                    boxSizing: "border-box",
+                    borderRadius: 6,
+                    border: `1px solid ${glassBorder}`,
+                    backgroundColor: glassInput,
+                    color: colors.text,
+                    fontSize: 14,
+                  }}
+                />
+              ) : (
+                <TextInput
+                  style={[
+                    styles.dateInput,
+                    {
+                      backgroundColor: glassInput,
+                      color: colors.text,
+                      borderColor: glassBorder,
+                    },
+                  ]}
+                  placeholder="YYYY-MM-DD HH:mm"
+                  placeholderTextColor={colors.textSecondary}
+                  value={tempEndDate}
+                  onChangeText={setTempEndDate}
+                />
+              )}
+            </View>
+          </View>
+
+          {isDateRangeInvalid && (
+            <Text style={[styles.dateValidationText, { color: colors.error || "#EF4444" }]}>
+              Start date cannot be later than end date.
+            </Text>
+          )}
+
+          <View style={styles.dateFilterActionsRow}>
+            <TouchableOpacity
+              style={[styles.dateActionButton, { borderColor: glassBorder }]}
+              onPress={clearDateFilter}
+            >
+              <Text style={[styles.dateActionButtonText, { color: colors.textSecondary }]}>Clear</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.dateActionButton,
+                isDateRangeInvalid && styles.disabledActionButton,
+                { backgroundColor: colors.primary, borderColor: colors.primary },
+              ]}
+              disabled={isDateRangeInvalid}
+              onPress={() => {
+                if (isDateRangeInvalid) {
+                  Alert.alert("Invalid date range", "Start date must be earlier than or equal to end date.");
+                  return;
+                }
+                applyDateFilter();
+              }}
+            >
+              <Text style={[styles.dateActionButtonText, { color: colors.background }]}>Apply</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   const renderCategoryModal = () => (
     <Modal
       visible={showCategoryModal}
@@ -1017,8 +1237,46 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={[
+                  styles.dateFilterButton,
+                  {
+                    borderColor: glassBorder,
+                    backgroundColor:
+                      filters.startDate || filters.endDate
+                        ? colors.primary
+                        : glassSurface,
+                  },
+                ]}
+                onPress={openDateFilterModal}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={18}
+                  color={
+                    filters.startDate || filters.endDate
+                      ? colors.background
+                      : colors.primary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.dateFilterButtonText,
+                    {
+                      color:
+                        filters.startDate || filters.endDate
+                          ? colors.background
+                          : colors.primary,
+                    },
+                  ]}
+                >
+                  Date
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
                   styles.filterButton,
                   {
+                    borderColor: glassBorder,
                     backgroundColor: showFilters
                       ? colors.primary
                       : glassSurface,
@@ -1173,6 +1431,7 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
       </SafeAreaView>
     </LinearGradient>
       {renderCategoryModal()}
+      {renderDateFilterModal()}
       {renderSubjectModal()}
     </>
   );
@@ -1224,7 +1483,22 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
     gap: 8,
+  },
+  dateFilterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  dateFilterButtonText: {
+    fontWeight: "600",
+    fontSize: 13,
   },
   filterButton: {
     padding: 8,
@@ -1272,6 +1546,50 @@ const styles = StyleSheet.create({
     flex: 1,
     zIndex: 21,
     elevation: 21,
+  },
+  dateFilterRow: {
+    flexDirection: Platform.OS === "web" ? "row" : "column",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 12,
+  },
+  dateFieldGroup: {
+    flex: 1,
+    minWidth: 0,
+  },
+  dateInput: {
+    padding: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    minHeight: 48,
+    fontSize: 14,
+  },
+  dateFilterActionsRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  dateActionButton: {
+    minWidth: 86,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dateActionButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  disabledActionButton: {
+    opacity: 0.6,
+  },
+  dateValidationText: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 10,
   },
   filterLabel: {
     fontSize: 14,
