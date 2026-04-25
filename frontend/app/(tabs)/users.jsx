@@ -70,6 +70,7 @@ export default function UsersScreen({ hideHeader = false }) {
     fullName: "",
     email: "",
     password: "",
+    section: "",
     role: "student", // Default role
   });
   const [sendAccountNotification, setSendAccountNotification] = useState(false);
@@ -335,10 +336,19 @@ export default function UsersScreen({ hideHeader = false }) {
       return;
     }
 
+    if (newUser.role === "student" && !String(newUser.section || "").trim()) {
+      Alert.alert("Validation Error", "Please provide section for students");
+      return;
+    }
+
     try {
       setLoading(true);
       const payload = {
         ...newUser,
+        section:
+          newUser.role === "student"
+            ? String(newUser.section || "").trim()
+            : "no_section",
         sendAccountNotification,
       };
 
@@ -366,6 +376,7 @@ export default function UsersScreen({ hideHeader = false }) {
         fullName: "",
         email: "",
         password: "",
+        section: "",
         role: "student",
       });
       setSendAccountNotification(false);
@@ -600,6 +611,7 @@ export default function UsersScreen({ hideHeader = false }) {
         username: userItem?.username || "N/A",
         fullName: userItem?.fullName || userItem?.username || "N/A",
         email: userItem?.email || "N/A",
+        section: userItem?.section || userItem?.student?.section || "",
         profileImage: userItem?.profileImage || userItem?.profilePicture || null,
         role: baseRole,
       },
@@ -716,6 +728,7 @@ export default function UsersScreen({ hideHeader = false }) {
           username: fetchedUser?.username || "N/A",
           fullName: fetchedUser?.fullName || fetchedUser?.username || "N/A",
           email: fetchedUser?.email || "N/A",
+          section: fetchedUser?.section || fetchedUser?.student?.section || "",
           profileImage: fetchedUser?.profileImage || fetchedUser?.profilePicture || null,
           role,
         },
@@ -1245,6 +1258,17 @@ export default function UsersScreen({ hideHeader = false }) {
                     setNewUser({ ...newUser, username: text })
                   }
                 />
+                {newUser.role === "student" && (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Section"
+                    placeholderTextColor={colors.textSecondary}
+                    value={newUser.section}
+                    onChangeText={(text) =>
+                      setNewUser({ ...newUser, section: text })
+                    }
+                  />
+                )}
                 <View style={styles.notificationToggleRow}>
                   <View style={styles.notificationToggleTextWrap}>
                     <Text style={styles.notificationToggleTitle}>
@@ -1286,6 +1310,7 @@ export default function UsersScreen({ hideHeader = false }) {
                         setNewUser({
                           ...newUser,
                           role,
+                          section: role === "student" ? newUser.section : "",
                         })
                       }
                     >
@@ -1772,6 +1797,17 @@ export default function UsersScreen({ hideHeader = false }) {
                           {selectedProfileData.basic.role}
                         </Text>
                       </View>
+                      {selectedProfileData.basic.role === "student" && (
+                        <>
+                          <View style={styles.profileInfoDivider} />
+                          <View style={styles.profileInfoRow}>
+                            <Text style={styles.profileInfoLabel}>Section</Text>
+                            <Text style={styles.profileInfoValue}>
+                              {selectedProfileData.basic.section || "N/A"}
+                            </Text>
+                          </View>
+                        </>
+                      )}
                     </View>
 
                     {selectedProfileData.student && (

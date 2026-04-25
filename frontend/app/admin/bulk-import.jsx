@@ -395,7 +395,7 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
       const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
       const requiredHeaders = shouldSendAccountNotification
         ? ["username", "email"]
-        : ["username", "email", "password"]; // section removed
+        : ["username", "email", "password"];
 
       for (const required of requiredHeaders) {
         if (!headers.includes(required)) {
@@ -483,7 +483,16 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
         rowData.role = (rowData.role || "student").toLowerCase();
         rowData.fullName =
           rowData.fullname || rowData.fullName || rowData.username;
-        // section column removed
+        rowData.section = String(rowData.section || "").trim();
+
+        if (rowData.role === "student" && !rowData.section) {
+          validationErrors.push(`Row ${i + 1}: Section is required for students`);
+          continue;
+        }
+
+        if (rowData.role !== "student") {
+          rowData.section = "no_section";
+        }
 
         data.push(rowData);
       }
@@ -573,6 +582,10 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
         throw new Error(
           `Row ${index + 2}: Password must be at least 8 characters`
         );
+      }
+
+      if (processed.role === "student" && !String(processed.section || "").trim()) {
+        throw new Error(`Row ${index + 2}: Section is required for students`);
       }
 
       return processed;
@@ -703,14 +716,14 @@ export default function BulkImport({ embedded = false, onClose = null } = {}) {
 
   const loadSampleData = () => {
     const sampleCsv = sendAccountNotification
-      ? `username,email,role,fullName
-student6,student6@example.com,student,Student Six
-student7,student7@example.com,student,Student Seven
-instructor2,instructor2@example.com,instructor,Instructor Two`
-      : `username,email,password,role,fullName
-student6,student6@example.com,password123,student,Student Six
-student7,student7@example.com,password123,student,Student Seven
-instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
+      ? `username,email,role,fullName,section
+student6,student6@example.com,student,Student Six,STEM-A
+student7,student7@example.com,student,Student Seven,STEM-B
+instructor2,instructor2@example.com,instructor,Instructor Two,no_section`
+      : `username,email,password,role,fullName,section
+student6,student6@example.com,password123,student,Student Six,STEM-A
+student7,student7@example.com,password123,student,Student Seven,STEM-B
+instructor2,instructor2@example.com,instructor123,instructor,Instructor Two,no_section`;
 
     try {
       const parsedData = parseCsvText(sampleCsv, {
@@ -729,8 +742,8 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
 
   const downloadSampleCsv = async () => {
     const sampleCsv = sendAccountNotification
-      ? `username,email,role,fullName\nstudent6,student6@example.com,student,Student Six\nstudent7,student7@example.com,student,Student Seven\ninstructor2,instructor2@example.com,instructor,Instructor Two`
-      : `username,email,password,role,fullName\nstudent6,student6@example.com,password123,student,Student Six\nstudent7,student7@example.com,password123,student,Student Seven\ninstructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
+      ? `username,email,role,fullName,section\nstudent6,student6@example.com,student,Student Six,STEM-A\nstudent7,student7@example.com,student,Student Seven,STEM-B\ninstructor2,instructor2@example.com,instructor,Instructor Two,no_section`
+      : `username,email,password,role,fullName,section\nstudent6,student6@example.com,password123,student,Student Six,STEM-A\nstudent7,student7@example.com,password123,student,Student Seven,STEM-B\ninstructor2,instructor2@example.com,instructor123,instructor,Instructor Two,no_section`;
     try {
       if (Platform.OS === "web") {
         const blob = new Blob([sampleCsv], { type: "text/csv" });
@@ -814,6 +827,7 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
           <Text style={styles.instructionText}>
             1. Prepare your CSV file with required columns: username and email
             {sendAccountNotification ? "" : ", plus password"}
+            . Include section for student rows.
           </Text>
 
           {sendAccountNotification && (
@@ -832,16 +846,16 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
             <Text style={styles.exampleText}>
               Example CSV format:{"\n"}
               {sendAccountNotification
-                ? "username,email,role,fullName"
-                : "username,email,password,role,fullName"}
+                ? "username,email,role,fullName,section"
+                : "username,email,password,role,fullName,section"}
               {"\n"}
               {sendAccountNotification
-                ? "student1,student1@example.com,student,Student One"
-                : "student1,student1@example.com,password123,student,Student One"}
+                ? "student1,student1@example.com,student,Student One,STEM-A"
+                : "student1,student1@example.com,password123,student,Student One,STEM-A"}
               {"\n"}
               {sendAccountNotification
-                ? "instructor1,instructor1@example.com,instructor,Instructor One"
-                : "instructor1,instructor1@example.com,instructor123,instructor,Instructor One"}
+                ? "instructor1,instructor1@example.com,instructor,Instructor One,no_section"
+                : "instructor1,instructor1@example.com,instructor123,instructor,Instructor One,no_section"}
             </Text>
           </View>
         </View>
@@ -961,7 +975,7 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
             {results.success && results.success.length > 0 && (
               <View style={styles.resultSection}>
                 <Text style={[styles.resultSectionTitle, styles.successTitle]}>
-                  Successfully Created ({results.success.length})
+                  Successfully Processed ({results.success.length})
                 </Text>
                 {results.success.map((user, index) => (
                   <Text
@@ -969,6 +983,7 @@ instructor2,instructor2@example.com,instructor123,instructor,Instructor Two`;
                     style={[styles.resultItem, styles.resultText]}
                   >
                     • {user.username} ({user.email}) - {user.role}
+                    {user.action === "updated" ? " [updated section]" : " [created]"}
                   </Text>
                 ))}
               </View>

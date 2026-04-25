@@ -1061,6 +1061,8 @@ router.post(
       const resolvedPassword = shouldSendAccountNotification
         ? generateTemporaryPassword()
         : password;
+      const privilege = role || "student"; // Map role to privilege for consistency
+      const normalizedSection = String(section || "").trim();
 
       // Validation
       if (!username || !fullName || !email || !resolvedPassword) {
@@ -1068,6 +1070,13 @@ router.post(
           success: false,
           message:
             "Please provide all required fields (username, fullName, email, password)",
+        });
+      }
+
+      if (privilege === "student" && !normalizedSection) {
+        return res.status(400).json({
+          success: false,
+          message: "Section is required for students",
         });
       }
 
@@ -1129,8 +1138,7 @@ router.post(
         imageFilename ||
         `https://api.dicebear.com/9.x/bottts/svg?seed=${username}`;
       const userSection =
-        section !== undefined && section !== "" ? section : "no_section"; // Use consistent field naming with authRoutes
-      const privilege = role || "student"; // Map role to privilege for consistency
+        privilege === "student" ? normalizedSection : "no_section";
 
       // Create new user
       const newUser = new User({

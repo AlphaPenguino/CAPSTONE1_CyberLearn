@@ -13,8 +13,9 @@ import {
 
 import { useRouter } from "expo-router";
 import styles from "../../assets/styles/login.styles.js";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { AudioContext } from "react-native-audio-api";
 import COLORS from "../../constants/custom-colors.js";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore.js";
@@ -25,9 +26,64 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
 
+  const audioContextRef = useRef(null);
+  const loginMusicRef = useRef(null);
+
   const { isLoading, login, sayHello } = useAuthStore();
   const { colors } = useTheme();
   const router = useRouter();
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const startLoginMusic = async () => {
+      try {
+        const audioContext = new AudioContext();
+        audioContextRef.current = audioContext;
+
+        const audioBuffer = await audioContext.decodeAudioData(
+          require("../../assets/sounds/login-page.mp3")
+        );
+
+        if (isCancelled) {
+          await audioContext.close();
+          return;
+        }
+
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.loop = true;
+        source.connect(audioContext.destination);
+        source.start(audioContext.currentTime);
+        loginMusicRef.current = source;
+      } catch (error) {
+        console.warn("Login music failed to start:", error);
+      }
+    };
+
+    startLoginMusic();
+
+    return () => {
+      isCancelled = true;
+
+      try {
+        loginMusicRef.current?.stop();
+        loginMusicRef.current?.disconnect();
+      } catch {
+        // Ignore cleanup errors if source already stopped or detached.
+      }
+
+      const contextToClose = audioContextRef.current;
+      audioContextRef.current = null;
+      loginMusicRef.current = null;
+
+      if (contextToClose) {
+        contextToClose.close().catch(() => {
+          // Ignore close errors during teardown.
+        });
+      }
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (!privacyChecked) {

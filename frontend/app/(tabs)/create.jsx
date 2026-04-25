@@ -3638,6 +3638,8 @@ export default function Create() {
     const [selectedStudents, setSelectedStudents] = useState([]);
     const [assignedStudents, setAssignedStudents] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
+    const [selectedStudentSectionFilter, setSelectedStudentSectionFilter] =
+      useState("all");
     const [loading, setLoading] = useState(false);
     const [loadingStudents, setLoadingStudents] = useState(false);
     const [loadingSubjects, setLoadingSubjects] = useState(false);
@@ -3886,15 +3888,44 @@ export default function Create() {
       }
       // Also clear selected students when switching subjects
       setSelectedStudents([]);
+      setSelectedStudentSectionFilter("all");
     }, [selectedSubjectId, fetchAvailableStudents]);
 
     // Filter available students based on search query
+    const getStudentSectionValue = (student) => {
+      const rawSection = String(student?.section || "").trim();
+      return rawSection || "no_section";
+    };
+
+    const formatStudentSectionLabel = (sectionValue) => {
+      if (!sectionValue || sectionValue === "no_section") return "No Section";
+      return sectionValue;
+    };
+
+    const sectionFilterOptions = [
+      "all",
+      ...Array.from(new Set(allStudents.map((student) => getStudentSectionValue(student)))).sort(),
+    ];
+
     const availableStudents = allStudents.filter(
       (student) =>
         !selectedStudents.some((selected) => selected._id === student._id) &&
+        (selectedStudentSectionFilter === "all" ||
+          getStudentSectionValue(student) === selectedStudentSectionFilter) &&
         (student.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           student.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           student.username?.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+
+    const groupedAvailableStudents = availableStudents.reduce((acc, student) => {
+      const sectionKey = getStudentSectionValue(student);
+      if (!acc[sectionKey]) acc[sectionKey] = [];
+      acc[sectionKey].push(student);
+      return acc;
+    }, {});
+
+    const groupedAvailableEntries = Object.entries(groupedAvailableStudents).sort(
+      ([a], [b]) => a.localeCompare(b)
     );
 
     const addStudent = (student) => {
@@ -3902,10 +3933,26 @@ export default function Create() {
       setSearchQuery("");
     };
 
+    const addAllFilteredStudents = () => {
+      if (availableStudents.length === 0) return;
+      setSelectedStudents((prev) => {
+        const selectedIds = new Set(prev.map((student) => student._id));
+        const toAdd = availableStudents.filter(
+          (student) => !selectedIds.has(student._id)
+        );
+        return [...prev, ...toAdd];
+      });
+      setSearchQuery("");
+    };
+
     const removeStudent = (studentId) => {
       setSelectedStudents(
         selectedStudents.filter((student) => student._id !== studentId)
       );
+    };
+
+    const deselectAllStudents = () => {
+      setSelectedStudents([]);
     };
 
     // Remove student from assigned subject using subjects service
@@ -4944,6 +4991,50 @@ export default function Create() {
                       <>
                         {/* Search and Add Students */}
                         <View style={styles.studentSearchContainer}>
+                          <View style={styles.sectionFilterRow}>
+                            <Text
+                              style={[styles.sectionFilterLabel, { color: colors.textSecondary }]}
+                            >
+                              Select Section:
+                            </Text>
+                            <ScrollView
+                              horizontal
+                              showsHorizontalScrollIndicator={false}
+                              contentContainerStyle={styles.sectionFilterChips}
+                            >
+                              {sectionFilterOptions.map((sectionOption) => {
+                                const isActive =
+                                  selectedStudentSectionFilter === sectionOption;
+                                return (
+                                  <TouchableOpacity
+                                    key={`section-filter-${sectionOption}`}
+                                    style={[
+                                      styles.sectionFilterChip,
+                                      isActive && {
+                                        backgroundColor: colors.primary,
+                                        borderColor: colors.primary,
+                                      },
+                                    ]}
+                                    onPress={() =>
+                                      setSelectedStudentSectionFilter(sectionOption)
+                                    }
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.sectionFilterChipText,
+                                        isActive && { color: colors.background },
+                                      ]}
+                                    >
+                                      {sectionOption === "all"
+                                        ? "All"
+                                        : formatStudentSectionLabel(sectionOption)}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </ScrollView>
+                          </View>
+
                           <TextInput
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -4980,14 +5071,41 @@ export default function Create() {
                               { backgroundColor: colors.surface },
                             ]}
                           >
-                            <Text
-                              style={[
-                                styles.availableStudentsTitle,
-                                { color: colors.primary },
-                              ]}
-                            >
-                              Available Students ({availableStudents.length})
-                            </Text>
+                            <View style={styles.availableStudentsHeader}>
+                              <Text
+                                style={[
+                                  styles.availableStudentsTitle,
+                                  { color: colors.primary },
+                                ]}
+                              >
+                                Available Students ({availableStudents.length})
+                              </Text>
+                              <TouchableOpacity
+                                style={[
+                                  styles.selectAllButton,
+                                  {
+                                    backgroundColor: colors.primary,
+                                    opacity: availableStudents.length > 0 ? 1 : 0.6,
+                                  },
+                                ]}
+                                onPress={addAllFilteredStudents}
+                                disabled={availableStudents.length === 0}
+                              >
+                                <Ionicons
+                                  name="checkmark-done"
+                                  size={14}
+                                  color={colors.background}
+                                />
+                                <Text
+                                  style={[
+                                    styles.selectAllButtonText,
+                                    { color: colors.background },
+                                  ]}
+                                >
+                                  Select All
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
                             {availableStudents.length > 0 ? (
                               <>
                                 <ScrollView
@@ -4995,9 +5113,19 @@ export default function Create() {
                                   showsVerticalScrollIndicator={true}
                                   nestedScrollEnabled={true}
                                 >
-                                  {availableStudents
+                                  {groupedAvailableEntries
                                     .slice(0, STUDENT_LIST_PREVIEW_COUNT)
-                                    .map((student) => (
+                                    .map(([sectionGroup, sectionStudents]) => (
+                                      <View key={`group-${sectionGroup}`}>
+                                        <Text
+                                          style={[
+                                            styles.availableSectionHeader,
+                                            { color: colors.textSecondary },
+                                          ]}
+                                        >
+                                          {formatStudentSectionLabel(sectionGroup)}
+                                        </Text>
+                                        {sectionStudents.map((student) => (
                                       <TouchableOpacity
                                         key={student._id}
                                         style={styles.studentDropdownItem}
@@ -5050,9 +5178,11 @@ export default function Create() {
                                           color={colors.success}
                                         />
                                       </TouchableOpacity>
+                                        ))}
+                                      </View>
                                     ))}
                                 </ScrollView>
-                                {availableStudents.length >
+                                {groupedAvailableEntries.length >
                                   STUDENT_LIST_PREVIEW_COUNT && (
                                   <TouchableOpacity
                                     style={styles.viewMoreButton}
@@ -5067,9 +5197,9 @@ export default function Create() {
                                       ]}
                                     >
                                       View More (
-                                      {availableStudents.length -
+                                      {groupedAvailableEntries.length -
                                         STUDENT_LIST_PREVIEW_COUNT}{" "}
-                                      more)
+                                      sections)
                                     </Text>
                                     <Ionicons
                                       name="chevron-down"
@@ -5110,92 +5240,133 @@ export default function Create() {
                             { backgroundColor: colors.surface },
                           ]}
                         >
-                          {selectedStudents.map((student) => (
-                            <View
-                              key={student._id}
-                              style={styles.selectedStudentItem}
+                          <View style={styles.selectedStudentsHeaderRow}>
+                            <Text
+                              style={[
+                                styles.availableStudentsTitle,
+                                { color: colors.primary, marginBottom: 0 },
+                              ]}
                             >
-                              <View style={styles.studentInfo}>
-                                <View
-                                  style={[
-                                    styles.studentAvatar,
-                                    { backgroundColor: colors.primary },
-                                  ]}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.studentInitial,
-                                      { color: colors.background },
-                                    ]}
-                                  >
-                                    {(
-                                      student.fullName ||
-                                      student.username ||
-                                      "U"
-                                    )
-                                      .charAt(0)
-                                      .toUpperCase()}
-                                  </Text>
-                                </View>
-                                <View style={styles.studentDetails}>
-                                  <Text
-                                    style={[
-                                      styles.studentName,
-                                      { color: colors.text },
-                                    ]}
-                                  >
-                                    {student.fullName ||
-                                      student.username ||
-                                      "Unknown User"}
-                                  </Text>
-                                  <Text
-                                    style={[
-                                      styles.studentEmail,
-                                      { color: colors.textSecondary },
-                                    ]}
-                                  >
-                                    {student.email}
-                                  </Text>
-                                </View>
-                              </View>
-                              <TouchableOpacity
-                                style={styles.removeButton}
-                                onPress={() => removeStudent(student._id)}
-                              >
-                                <Ionicons
-                                  name="close-circle"
-                                  size={24}
-                                  color={colors.error}
-                                />
-                              </TouchableOpacity>
-                            </View>
-                          ))}
-
-                          {selectedStudents.length === 0 && (
-                            <View style={styles.emptyStudentList}>
+                              Selected Students ({selectedStudents.length})
+                            </Text>
+                            <TouchableOpacity
+                              style={[
+                                styles.deselectAllButton,
+                                {
+                                  borderColor: colors.error,
+                                  opacity: selectedStudents.length > 0 ? 1 : 0.5,
+                                },
+                              ]}
+                              onPress={deselectAllStudents}
+                              disabled={selectedStudents.length === 0}
+                            >
                               <Ionicons
-                                name="people-outline"
-                                size={48}
-                                color={colors.textSecondary}
+                                name="close-circle-outline"
+                                size={14}
+                                color={colors.error}
                               />
                               <Text
                                 style={[
-                                  styles.emptyText,
-                                  { color: colors.textSecondary },
+                                  styles.deselectAllButtonText,
+                                  { color: colors.error },
                                 ]}
                               >
-                                No students assigned yet
+                                Deselect All
                               </Text>
-                              <Text
-                                style={[
-                                  styles.emptySubtext,
-                                  { color: colors.textSecondary },
-                                ]}
+                            </TouchableOpacity>
+                          </View>
+                          <ScrollView
+                            style={styles.selectedStudentsScroll}
+                            showsVerticalScrollIndicator={true}
+                            nestedScrollEnabled={true}
+                          >
+                            {selectedStudents.map((student) => (
+                              <View
+                                key={student._id}
+                                style={styles.selectedStudentItem}
                               >
-                                Search and add students to this subject
-                              </Text>
-                            </View>
-                          )}
+                                <View style={styles.studentInfo}>
+                                  <View
+                                    style={[
+                                      styles.studentAvatar,
+                                      { backgroundColor: colors.primary },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.studentInitial,
+                                        { color: colors.background },
+                                      ]}
+                                    >
+                                      {(
+                                        student.fullName ||
+                                        student.username ||
+                                        "U"
+                                      )
+                                        .charAt(0)
+                                        .toUpperCase()}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.studentDetails}>
+                                    <Text
+                                      style={[
+                                        styles.studentName,
+                                        { color: colors.text },
+                                      ]}
+                                    >
+                                      {student.fullName ||
+                                        student.username ||
+                                        "Unknown User"}
+                                    </Text>
+                                    <Text
+                                      style={[
+                                        styles.studentEmail,
+                                        { color: colors.textSecondary },
+                                      ]}
+                                    >
+                                      {student.email}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <TouchableOpacity
+                                  style={styles.removeButton}
+                                  onPress={() => removeStudent(student._id)}
+                                >
+                                  <Ionicons
+                                    name="close-circle"
+                                    size={24}
+                                    color={colors.error}
+                                  />
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+
+                            {selectedStudents.length === 0 && (
+                              <View style={styles.emptyStudentList}>
+                                <Ionicons
+                                  name="people-outline"
+                                  size={48}
+                                  color={colors.textSecondary}
+                                />
+                                <Text
+                                  style={[
+                                    styles.emptyText,
+                                    { color: colors.textSecondary },
+                                  ]}
+                                >
+                                  No students assigned yet
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.emptySubtext,
+                                    { color: colors.textSecondary },
+                                  ]}
+                                >
+                                  Search and add students to this subject
+                                </Text>
+                              </View>
+                            )}
+                          </ScrollView>
                         </View>
 
                         {allStudents.length === 0 && (
@@ -6029,9 +6200,33 @@ export default function Create() {
               style={[styles.modalContent, { backgroundColor: colors.surface }]}
             >
               <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: colors.primary }]}>
-                  Available Students ({availableStudents.length})
-                </Text>
+                <View style={styles.modalHeaderContentGrow}>
+                  <Text style={[styles.modalTitle, { color: colors.primary }]}> 
+                    Available Students ({availableStudents.length})
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.selectAllButton,
+                      {
+                        backgroundColor: colors.primary,
+                        opacity: availableStudents.length > 0 ? 1 : 0.6,
+                      },
+                    ]}
+                    onPress={addAllFilteredStudents}
+                    disabled={availableStudents.length === 0}
+                  >
+                    <Ionicons
+                      name="checkmark-done"
+                      size={14}
+                      color={colors.background}
+                    />
+                    <Text
+                      style={[styles.selectAllButtonText, { color: colors.background }]}
+                    >
+                      Select All
+                    </Text>
+                  </TouchableOpacity>
+                </View>
                 <TouchableOpacity
                   onPress={() => setAvailableStudentsModalVisible(false)}
                   style={styles.modalCloseButton}
@@ -6039,57 +6234,68 @@ export default function Create() {
                   <Ionicons name="close" size={24} color={colors.primary} />
                 </TouchableOpacity>
               </View>
-              <FlatList
-                data={availableStudents}
-                keyExtractor={(item) => item._id}
-                style={styles.modalList}
-                renderItem={({ item: student }) => (
-                  <TouchableOpacity
-                    style={styles.studentDropdownItem}
-                    onPress={() => {
-                      addStudent(student);
-                    }}
-                  >
-                    <View
-                      style={[
-                        styles.studentAvatar,
-                        { backgroundColor: colors.primary },
-                      ]}
-                    >
+              <ScrollView style={styles.modalList}>
+                {groupedAvailableEntries.length > 0 ? (
+                  groupedAvailableEntries.map(([sectionGroup, sectionStudents]) => (
+                    <View key={`modal-group-${sectionGroup}`}>
                       <Text
                         style={[
-                          styles.studentInitial,
-                          { color: colors.background },
-                        ]}
-                      >
-                        {(student.fullName || student.username || "U")
-                          .charAt(0)
-                          .toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.studentDetails}>
-                      <Text
-                        style={[styles.studentName, { color: colors.text }]}
-                      >
-                        {student.fullName || student.username || "Unknown User"}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.studentEmail,
+                          styles.availableSectionHeader,
                           { color: colors.textSecondary },
                         ]}
                       >
-                        {student.email}
+                        {formatStudentSectionLabel(sectionGroup)}
                       </Text>
+                      {sectionStudents.map((student) => (
+                        <TouchableOpacity
+                          key={student._id}
+                          style={styles.studentDropdownItem}
+                          onPress={() => {
+                            addStudent(student);
+                          }}
+                        >
+                          <View
+                            style={[
+                              styles.studentAvatar,
+                              { backgroundColor: colors.primary },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.studentInitial,
+                                { color: colors.background },
+                              ]}
+                            >
+                              {(student.fullName || student.username || "U")
+                                .charAt(0)
+                                .toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={styles.studentDetails}>
+                            <Text
+                              style={[styles.studentName, { color: colors.text }]}
+                            >
+                              {student.fullName || student.username || "Unknown User"}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.studentEmail,
+                                { color: colors.textSecondary },
+                              ]}
+                            >
+                              {student.email}
+                            </Text>
+                          </View>
+                          <Ionicons
+                            name="add-circle"
+                            size={24}
+                            color={colors.success}
+                          />
+                        </TouchableOpacity>
+                      ))}
                     </View>
-                    <Ionicons
-                      name="add-circle"
-                      size={24}
-                      color={colors.success}
-                    />
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={
+                  ))
+                ) : (
                   <View style={styles.noResultsContainer}>
                     <Text
                       style={[
@@ -6100,8 +6306,8 @@ export default function Create() {
                       No available students found
                     </Text>
                   </View>
-                }
-              />
+                )}
+              </ScrollView>
             </SafeAreaView>
           </View>
         </Modal>
@@ -7568,6 +7774,31 @@ const styles = StyleSheet.create({
     position: "relative",
     marginBottom: 16,
   },
+  sectionFilterRow: {
+    marginBottom: 10,
+    gap: 8,
+  },
+  sectionFilterLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  sectionFilterChips: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  sectionFilterChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.35)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+  },
+  sectionFilterChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4a7c59",
+  },
   studentDropdown: {
     position: "absolute",
     top: "100%",
@@ -7598,10 +7829,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#0F172A",
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  availableStudentsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 8,
   },
   availableStudentsList: {
     height: 300,
+  },
+  availableSectionHeader: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 8,
+    marginBottom: 6,
+    textTransform: "uppercase",
+  },
+  selectAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  selectAllButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  modalHeaderContentGrow: {
+    flex: 1,
+    gap: 8,
   },
   studentDropdownItem: {
     flexDirection: "row",
@@ -7622,6 +7883,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     height: 300,
+    overflow: "hidden",
+  },
+  selectedStudentsHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 10,
+  },
+  deselectAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "rgba(255,255,255,0.85)",
+  },
+  deselectAllButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  selectedStudentsScroll: {
+    flex: 1,
   },
   selectedStudentItem: {
     flexDirection: "row",

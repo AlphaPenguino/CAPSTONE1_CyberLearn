@@ -159,6 +159,7 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
   const toApiDateTime = (value) => {
     const trimmed = String(value || "").trim();
     if (!trimmed) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
     const parsed = new Date(trimmed);
     return Number.isNaN(parsed.getTime()) ? trimmed : parsed.toISOString();
   };
@@ -985,10 +986,10 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
 
           <View style={styles.dateFilterRow}>
             <View style={styles.dateFieldGroup}>
-              <Text style={[styles.filterLabel, { color: colors.text }]}>Start Date & Time</Text>
+              <Text style={[styles.filterLabel, { color: colors.text }]}>Start Date</Text>
               {Platform.OS === "web" ? (
                 <input
-                  type="datetime-local"
+                  type="date"
                   value={tempStartDate}
                   onChange={(e) => setTempStartDate(e.target.value)}
                   style={{
@@ -1013,7 +1014,7 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
                       borderColor: glassBorder,
                     },
                   ]}
-                  placeholder="YYYY-MM-DD HH:mm"
+                  placeholder="YYYY-MM-DD"
                   placeholderTextColor={colors.textSecondary}
                   value={tempStartDate}
                   onChangeText={setTempStartDate}
@@ -1022,10 +1023,10 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
             </View>
 
             <View style={styles.dateFieldGroup}>
-              <Text style={[styles.filterLabel, { color: colors.text }]}>End Date & Time</Text>
+              <Text style={[styles.filterLabel, { color: colors.text }]}>End Date</Text>
               {Platform.OS === "web" ? (
                 <input
-                  type="datetime-local"
+                  type="date"
                   value={tempEndDate}
                   onChange={(e) => setTempEndDate(e.target.value)}
                   style={{
@@ -1050,7 +1051,7 @@ export default function LogsScreen({ useDashboardGradient = false } = {}) {
                       borderColor: glassBorder,
                     },
                   ]}
-                  placeholder="YYYY-MM-DD HH:mm"
+                  placeholder="YYYY-MM-DD"
                   placeholderTextColor={colors.textSecondary}
                   value={tempEndDate}
                   onChangeText={setTempEndDate}

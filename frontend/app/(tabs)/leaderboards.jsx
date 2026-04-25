@@ -316,6 +316,7 @@ export default function Leaderboards() {
           username: userItem?.username || "N/A",
           fullName: userItem?.fullName || userItem?.username || "N/A",
           email: userItem?.email || "N/A",
+          section: userItem?.section || userItem?.student?.section || "",
           profileImage: userItem?.profileImage || userItem?.profilePicture || null,
           role: baseRole,
         },
@@ -413,6 +414,7 @@ export default function Leaderboards() {
             username: fetched?.username || "N/A",
             fullName: fetched?.fullName || fetched?.username || "N/A",
             email: fetched?.email || "N/A",
+            section: fetched?.section || fetched?.student?.section || "",
             profileImage: fetched?.profileImage || fetched?.profilePicture || null,
             role,
           },
@@ -896,6 +898,17 @@ export default function Leaderboards() {
                     <Text style={styles.profileInfoLabel}>Role</Text>
                     <Text style={styles.profileInfoValue}>{selectedProfileData.basic.role}</Text>
                   </View>
+                  {selectedProfileData.basic.role === "student" && (
+                    <>
+                      <View style={styles.profileInfoDivider} />
+                      <View style={styles.profileInfoRow}>
+                        <Text style={styles.profileInfoLabel}>Section</Text>
+                        <Text style={styles.profileInfoValue}>
+                          {selectedProfileData.basic.section || "N/A"}
+                        </Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 {selectedProfileData.student && (

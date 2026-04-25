@@ -211,6 +211,7 @@ export default function InstructorDashboard() {
                 userItem?.username ||
                 "N/A",
             email: userItem?.email || userItem?.student?.email || "N/A",
+            section: userItem?.section || userItem?.student?.section || "",
             profileImage:
                 userItem?.profileImage ||
                 userItem?.profilePicture ||
@@ -345,6 +346,7 @@ export default function InstructorDashboard() {
                   userItem?.studentName ||
                   "N/A",
               email: fetchedUser?.email || fetchedUser?.student?.email || userItem?.email || "N/A",
+              section: fetchedUser?.section || fetchedUser?.student?.section || "",
               profileImage:
                   fetchedUser?.profileImage ||
                   fetchedUser?.profilePicture ||
@@ -741,9 +743,9 @@ export default function InstructorDashboard() {
                         }}
                     >
                       <MaterialCommunityIcons
-                          name="close"
-                          size={22}
-                          color={colors.text}
+                        name="close"
+                        size={22}
+                        color={colors.text}
                       />
                     </TouchableOpacity>
                   </View>
@@ -858,6 +860,26 @@ export default function InstructorDashboard() {
                             </Text>
                           </View>
                           <View style={styles.profileInfoDivider} />
+                          {selectedProfileData.basic.role === "student" && (
+                            <>
+                              <View style={styles.profileInfoDivider} />
+                              <View style={styles.profileInfoRow}>
+                                <Text
+                                  style={[
+                                    styles.profileInfoLabel,
+                                    { color: colors.textSecondary },
+                                  ]}
+                                >
+                                  Section
+                                </Text>
+                                <Text
+                                  style={[styles.profileInfoValue, { color: colors.text }]}
+                                >
+                                  {selectedProfileData.basic.section || "N/A"}
+                                </Text>
+                              </View>
+                            </>
+                          )}
                           <View style={styles.profileInfoRow}>
                             <Text
                                 style={[styles.profileInfoLabel, { color: colors.textSecondary }]}
