@@ -36,27 +36,25 @@ const BACKUP_SCOPE_COLLECTIONS = {
     "sections",
     "cyberquests",
     "knowledgerelayquestions",
-    "digitaldefendersquestions",
+    "quizshowdownquestions",
+    "digitaldefendercards",
   ],
 };
 
 const normalizeExtendedJson = (value) => {
   if (Array.isArray(value)) {
-    return value.map(normalizeExtendedJson);
+    return value.map((item) => normalizeExtendedJson(item));
   }
 
   if (!value || typeof value !== "object") {
     return value;
   }
 
-  const keys = Object.keys(value);
-  if (keys.length === 1 && keys[0] === "$oid" && typeof value.$oid === "string") {
-    return mongoose.Types.ObjectId.isValid(value.$oid)
-      ? new mongoose.Types.ObjectId(value.$oid)
-      : value.$oid;
+  if (typeof value.$oid === "string" && mongoose.Types.ObjectId.isValid(value.$oid)) {
+    return new mongoose.Types.ObjectId(value.$oid);
   }
 
-  if (keys.length === 1 && keys[0] === "$date") {
+  if (value.$date) {
     const parsedDate = new Date(value.$date);
     return Number.isNaN(parsedDate.getTime()) ? value.$date : parsedDate;
   }
@@ -242,14 +240,16 @@ router.get(
       // Recent activity (last 7 days)
       const lastWeek = new Date();
       lastWeek.setDate(lastWeek.getDate() - 7);
-
-      const recentUsers = await User.find({
-        createdAt: { $gte: lastWeek },
-      }).countDocuments();
-
-      const recentModules = await Module.find({
-        createdAt: { $gte: lastWeek },
-      }).countDocuments();
+      const recentUsers = await User.find({ createdAt: { $gte: lastWeek } })
+        .select("username privilege createdAt")
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean();
+      const recentModules = await Module.find({ createdAt: { $gte: lastWeek } })
+        .select("title createdAt")
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean();
 
       res.json({
         success: true,
@@ -259,13 +259,13 @@ router.get(
           quizzes: quizStats,
           sections: sectionStats,
           progress: progressStats,
-          recent: {
+          recentActivity: {
             newUsers: recentUsers,
             newModules: recentModules,
           },
           systemHealth: {
             status: "healthy",
-            lastBackup: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+            lastBackup: new Date(Date.now() - 2 * 60 * 60 * 1000),
             uptime: process.uptime(),
           },
         },
@@ -340,12 +340,14 @@ router.post(
           // Bulk check for existing users
           const existingUsers = await User.find({
             $or: [{ username: { $in: usernames } }, { email: { $in: emails } }],
-          }).select("username email");
+          }).select("_id username email fullName privilege section");
 
-          const existingUsernames = new Set(
-            existingUsers.map((u) => u.username)
+          const existingUsernames = new Map(
+            existingUsers.map((u) => [String(u.username || "").toLowerCase(), u])
           );
-          const existingEmails = new Set(existingUsers.map((u) => u.email));
+          const existingEmails = new Map(
+            existingUsers.map((u) => [String(u.email || "").toLowerCase(), u])
+          );
 
           // Prepare users for bulk creation
           const usersToCreate = [];
@@ -359,18 +361,54 @@ router.post(
               role = "student",
               fullName,
               profileImage,
+              section,
             } = userData;
 
-            // Check if user exists
-            if (
-              existingUsernames.has(username.toLowerCase()) ||
-              existingEmails.has(email.toLowerCase())
-            ) {
-              results.skipped.push({
-                username,
-                email,
-                reason: "User already exists",
-              });
+            const normalizedUsername = String(username || "").toLowerCase();
+            const normalizedEmail = String(email || "").toLowerCase();
+            const normalizedRole = String(role || "student").toLowerCase();
+            const normalizedSection = String(section || "").trim();
+
+            const existingUser =
+              existingUsernames.get(normalizedUsername) ||
+              existingEmails.get(normalizedEmail);
+
+            // Existing users: for students, always treat as section update.
+            if (existingUser) {
+              if (normalizedRole === "student" && !normalizedSection) {
+                results.errors.push({
+                  row: userData,
+                  error: "Section is required for students",
+                });
+                continue;
+              }
+
+              if (existingUser.privilege === "student" && normalizedRole === "student") {
+                const currentSection = String(existingUser.section || "").trim();
+                await User.updateOne(
+                  { _id: existingUser._id },
+                  { $set: { section: normalizedSection } }
+                );
+
+                results.success.push({
+                  username: existingUser.username,
+                  email: existingUser.email,
+                  role: existingUser.privilege,
+                  action: "updated",
+                  note:
+                    currentSection === normalizedSection
+                      ? "Student section already matched; treated as updated"
+                      : "Existing student section updated",
+                  section: normalizedSection,
+                  emailed: false,
+                });
+              } else {
+                results.skipped.push({
+                  username: existingUser.username,
+                  email: existingUser.email,
+                  reason: "User already exists",
+                });
+              }
               continue;
             }
 
@@ -388,17 +426,26 @@ router.post(
               continue;
             }
 
+            if (normalizedRole === "student" && !normalizedSection) {
+              results.errors.push({
+                row: userData,
+                error: "Section is required for students",
+              });
+              continue;
+            }
+
             // Hash password before bulk insert (since insertMany doesn't trigger pre-save middleware)
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(resolvedPassword, salt);
 
             usersToCreate.push({
               _id: userId,
-              username: username.toLowerCase(),
+              username: normalizedUsername,
               fullName: fullName || username,
-              email: email.toLowerCase(),
+              email: normalizedEmail,
               password: hashedPassword, // Use hashed password
-              privilege: role,
+              privilege: normalizedRole,
+              section: normalizedRole === "student" ? normalizedSection : "no_section",
               profileImage:
                 profileImage ||
                 `https://api.dicebear.com/9.x/bottts/svg?seed=${username}`,
@@ -406,9 +453,11 @@ router.post(
             newUserIds.push(userId);
 
             results.success.push({
-              username: username.toLowerCase(),
-              email: email.toLowerCase(),
-              role: role,
+              username: normalizedUsername,
+              email: normalizedEmail,
+              fullName: fullName || username,
+              role: normalizedRole,
+              action: "created",
               emailed: !shouldSendAccountNotification,
             });
 
@@ -426,7 +475,7 @@ router.post(
             await bulkInitializeUserProgress(newUserIds);
 
             if (shouldSendAccountNotification) {
-              for (const createdUser of results.success) {
+              for (const createdUser of results.success.filter((u) => u.action === "created")) {
                 try {
                   await sendNewAccountEmail({
                     to: createdUser.email,
@@ -470,7 +519,7 @@ router.post(
 
       res.json({
         success: true,
-        message: `Bulk import completed. ${results.success.length} users created, ${results.skipped.length} skipped, ${results.errors.length} errors.`,
+        message: `Bulk import completed. ${results.success.length} rows processed, ${results.skipped.length} skipped, ${results.errors.length} errors.`,
         results,
       });
     } catch (error) {
@@ -1555,10 +1604,56 @@ async function sequentialUserProcessing(
         fullname,
         fullName,
         profileImage,
+        section,
       } = userData;
+
+      const normalizedUsername = String(username || "").toLowerCase();
+      const normalizedEmail = String(email || "").toLowerCase();
+      const normalizedRole = String(role || "student").toLowerCase();
+      const normalizedSection = String(section || "").trim();
 
       // Handle both fullName and fullname (case variations)
       const userFullName = fullName || fullname || username;
+
+      // Existing-user branch first: section updates should not require password.
+      const existingUser = await User.findOne({
+        $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
+      });
+
+      if (existingUser) {
+        if (normalizedRole === "student" && !normalizedSection) {
+          results.errors.push({
+            row: userData,
+            error: "Section is required for students",
+          });
+          continue;
+        }
+
+        if (existingUser.privilege === "student" && normalizedRole === "student") {
+          const currentSection = String(existingUser.section || "").trim();
+          existingUser.section = normalizedSection;
+          await existingUser.save();
+          results.success.push({
+            username: existingUser.username,
+            email: existingUser.email,
+            role: existingUser.privilege,
+            action: "updated",
+            note:
+              currentSection === normalizedSection
+                ? "Student section already matched; treated as updated"
+                : "Existing student section updated",
+            section: normalizedSection,
+            emailed: false,
+          });
+        } else {
+          results.skipped.push({
+            username: existingUser.username,
+            email: existingUser.email,
+            reason: "User already exists",
+          });
+        }
+        continue;
+      }
 
       // Validation
       const resolvedPassword = sendAccountNotification
@@ -1581,30 +1676,22 @@ async function sequentialUserProcessing(
         continue;
       }
 
-      // Check if user already exists
-      const existingUser = await User.findOne({
-        $or: [
-          { email: email.toLowerCase() },
-          { username: username.toLowerCase() },
-        ],
-      });
-
-      if (existingUser) {
-        results.skipped.push({
-          username,
-          email,
-          reason: "User already exists",
+      if (normalizedRole === "student" && !normalizedSection) {
+        results.errors.push({
+          row: userData,
+          error: "Section is required for students",
         });
         continue;
       }
 
       // Create new user
       const newUser = new User({
-        username: username.toLowerCase(),
+        username: normalizedUsername,
         fullName: userFullName,
-        email: email.toLowerCase(),
+        email: normalizedEmail,
         password: resolvedPassword, // Will be hashed by the User model middleware
-        privilege: role,
+        privilege: normalizedRole,
+        section: normalizedRole === "student" ? normalizedSection : "no_section",
         profileImage:
           profileImage ||
           `https://api.dicebear.com/9.x/bottts/svg?seed=${username}`,
@@ -1619,6 +1706,7 @@ async function sequentialUserProcessing(
         username: newUser.username,
         email: newUser.email,
         role: newUser.privilege,
+        action: "created",
         emailed: !sendAccountNotification,
       });
 
@@ -1649,7 +1737,7 @@ async function sequentialUserProcessing(
 
   return res.json({
     success: true,
-    message: `Bulk import completed. ${results.success.length} users created, ${results.skipped.length} skipped, ${results.errors.length} errors.`,
+    message: `Bulk import completed. ${results.success.length} rows processed, ${results.skipped.length} skipped, ${results.errors.length} errors.`,
     results,
   });
 }
