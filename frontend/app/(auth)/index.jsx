@@ -16,9 +16,12 @@ import styles from "../../assets/styles/login.styles.js";
 import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { AudioContext } from "react-native-audio-api";
+import * as Animatable from "react-native-animatable";
 import COLORS from "../../constants/custom-colors.js";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore.js";
+
+const AnimatedRobotImage = Animatable.createAnimatableComponent(Image);
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -139,13 +142,26 @@ export default function Login() {
             <View style={styles.brandContainer}>
               <Text style={styles.brandTitle}>CyberLearn</Text>
             </View>
-            <View style={styles.topIllustration}>
-              <Image
-                source={require("../../assets/images/robot4.png")}
-                style={styles.illustrationImage}
-                resizeMode="contain"
-              />
-            </View>
+            <Animatable.View
+              style={styles.topIllustration}
+              animation="fadeInDown"
+              duration={900}
+              useNativeDriver
+            >
+              <Animatable.View
+                animation="pulse"
+                duration={2400}
+                iterationCount="infinite"
+                easing="ease-in-out"
+                useNativeDriver
+              >
+                <AnimatedRobotImage
+                  source={require("../../assets/images/robot4.png")}
+                  style={styles.illustrationImage}
+                  resizeMode="contain"
+                />
+              </Animatable.View>
+            </Animatable.View>
 
             <View style={styles.card}>
               <View style={styles.formContainer}>

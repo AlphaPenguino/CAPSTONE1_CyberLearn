@@ -1,12 +1,12 @@
 import { Slot, usePathname, useRouter, useSegments } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "@/store/authStore";
 import { PaperProvider } from "react-native-paper";
 import { ThemeProvider, useTheme } from "../contexts/ThemeContext";
-import { SettingsProvider } from "../contexts/SettingsContext";
+import { SettingsProvider, useSettings } from "../contexts/SettingsContext";
 import { NotificationProvider } from "../contexts/NotificationContext";
 
 const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
@@ -50,11 +50,28 @@ function AppContent() {
   const pathname = usePathname();
   const segments = useSegments();
   const { checkAuth, logout, user, token } = useAuthStore();
+  const { playSound } = useSettings();
   const { isDarkMode } = useTheme();
   const activityTimeoutRef = useRef(null);
   const lastActivityRef = useRef(Date.now());
   const appStateRef = useRef(AppState.currentState);
   const loggingOutRef = useRef(false);
+  const lastInteractionSoundRef = useRef(0);
+  const nativeTouchStartRef = useRef({ x: 0, y: 0, at: 0 });
+  const nativeTouchMovedRef = useRef(false);
+  const isInGameInteractionRoute = useMemo(() => {
+    if (!pathname) return false;
+
+    return (
+      pathname.startsWith("/module/game/") ||
+      pathname === "/knowledge-relay" ||
+      pathname === "/multiplayer/knowledge-relay" ||
+      pathname === "/quick-play" ||
+      pathname === "/arcade/quick-play" ||
+      pathname === "/quiz-showdown" ||
+      pathname === "/multiplayer/quiz-showdown"
+    );
+  }, [pathname]);
 
   const clearActivityTimer = useCallback(() => {
     if (activityTimeoutRef.current) {
@@ -89,6 +106,38 @@ function AppContent() {
       scheduleLogout();
     }
   }, [scheduleLogout, token, user]);
+
+  const playInteractionSound = useCallback(() => {
+    const now = Date.now();
+    if (now - lastInteractionSoundRef.current < 120) {
+      return;
+    }
+    lastInteractionSoundRef.current = now;
+    playSound(isInGameInteractionRoute ? "ingame" : "click");
+  }, [isInGameInteractionRoute, playSound]);
+
+  const handleNativeTouchStart = useCallback((event) => {
+    markActivity();
+    const { pageX = 0, pageY = 0 } = event?.nativeEvent ?? {};
+    nativeTouchStartRef.current = { x: pageX, y: pageY, at: Date.now() };
+    nativeTouchMovedRef.current = false;
+  }, [markActivity]);
+
+  const handleNativeTouchMove = useCallback((event) => {
+    const { pageX = 0, pageY = 0 } = event?.nativeEvent ?? {};
+    const { x, y } = nativeTouchStartRef.current;
+    if (Math.hypot(pageX - x, pageY - y) > 10) {
+      nativeTouchMovedRef.current = true;
+    }
+  }, []);
+
+  const handleNativeTouchEnd = useCallback(() => {
+    const duration = Date.now() - nativeTouchStartRef.current.at;
+    const isTapLike = !nativeTouchMovedRef.current && duration <= 500;
+    if (isTapLike) {
+      playInteractionSound();
+    }
+  }, [playInteractionSound]);
 
   useEffect(() => {
     let isActive = true;
@@ -150,6 +199,25 @@ function AppContent() {
   }, [authReady, markActivity, mounted, token, triggerLogout, user]);
 
   useEffect(() => {
+    if (!mounted || !authReady || Platform.OS !== "web") return;
+
+    const handleWebClick = () => playInteractionSound();
+    const handleWebKeydown = (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        playInteractionSound();
+      }
+    };
+
+    window.addEventListener("click", handleWebClick, true);
+    window.addEventListener("keydown", handleWebKeydown, true);
+
+    return () => {
+      window.removeEventListener("click", handleWebClick, true);
+      window.removeEventListener("keydown", handleWebKeydown, true);
+    };
+  }, [authReady, mounted, playInteractionSound]);
+
+  useEffect(() => {
     // Don't run redirect logic until the component is mounted AND auth is ready
     if (!mounted || !authReady) return;
 
@@ -184,7 +252,9 @@ function AppContent() {
     <>
       <View
         style={{ flex: 1 }}
-        onTouchStart={Platform.OS === "web" ? undefined : markActivity}
+        onTouchStart={Platform.OS === "web" ? undefined : handleNativeTouchStart}
+        onTouchMove={Platform.OS === "web" ? undefined : handleNativeTouchMove}
+        onTouchEnd={Platform.OS === "web" ? undefined : handleNativeTouchEnd}
       >
         <Slot />
       </View>

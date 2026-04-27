@@ -1,6 +1,14 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform, Vibration } from "react-native";
+import { AudioContext } from "react-native-audio-api";
 import { useNotifications } from "./NotificationContext";
 import { GameNotificationService } from "@/services/gameNotificationService";
 
@@ -16,6 +24,12 @@ export const useSettings = () => {
 
 export const SettingsProvider = ({ children }) => {
   const { showNotification } = useNotifications();
+  const clickAudioContextRef = useRef(null);
+  const clickAudioBufferRef = useRef(null);
+  const clickAudioLoadPromiseRef = useRef(null);
+  const ingameAudioContextRef = useRef(null);
+  const ingameAudioBufferRef = useRef(null);
+  const ingameAudioLoadPromiseRef = useRef(null);
   const [settings, setSettings] = useState({
     notifications: true,
     darkMode: false,
@@ -59,21 +73,127 @@ export const SettingsProvider = ({ children }) => {
     }
   };
 
-  const playSound = async (soundName) => {
+  const loadClickAudioBuffer = useCallback(async () => {
+    if (clickAudioBufferRef.current) return clickAudioBufferRef.current;
+
+    if (!clickAudioLoadPromiseRef.current) {
+      clickAudioLoadPromiseRef.current = (async () => {
+        const audioContext = new AudioContext();
+        try {
+          const audioBuffer = await audioContext.decodeAudioData(
+            require("../assets/sounds/click-sound-effect.wav")
+          );
+          clickAudioContextRef.current = audioContext;
+          clickAudioBufferRef.current = audioBuffer;
+          return audioBuffer;
+        } catch (error) {
+          clickAudioContextRef.current = null;
+          clickAudioBufferRef.current = null;
+          await audioContext.close().catch(() => {
+            // Best effort cleanup when decoding fails.
+          });
+          throw error;
+        }
+      })().finally(() => {
+        clickAudioLoadPromiseRef.current = null;
+      });
+    }
+
+    return clickAudioLoadPromiseRef.current;
+  }, []);
+
+  const loadIngameAudioBuffer = useCallback(async () => {
+    if (ingameAudioBufferRef.current) return ingameAudioBufferRef.current;
+
+    if (!ingameAudioLoadPromiseRef.current) {
+      ingameAudioLoadPromiseRef.current = (async () => {
+        const audioContext = new AudioContext();
+        try {
+          const audioBuffer = await audioContext.decodeAudioData(
+            require("../assets/sounds/ingame-click-sound-effect.wav")
+          );
+          ingameAudioContextRef.current = audioContext;
+          ingameAudioBufferRef.current = audioBuffer;
+          return audioBuffer;
+        } catch (error) {
+          ingameAudioContextRef.current = null;
+          ingameAudioBufferRef.current = null;
+          await audioContext.close().catch(() => {
+            // Best effort cleanup when decoding fails.
+          });
+          throw error;
+        }
+      })().finally(() => {
+        ingameAudioLoadPromiseRef.current = null;
+      });
+    }
+
+    return ingameAudioLoadPromiseRef.current;
+  }, []);
+
+  const playSound = useCallback(async (soundName = "click") => {
     if (!settings.soundEffects) return;
 
     try {
-      // Simple console log for now - you can integrate proper sound library later
-      console.log(`Playing sound: ${soundName}`);
+      if (soundName === "ingame") {
+        await loadIngameAudioBuffer();
+      } else {
+        await loadClickAudioBuffer();
+      }
 
-      // For now, we'll use a simple vibration as audio feedback
+      const audioContext =
+        soundName === "ingame"
+          ? ingameAudioContextRef.current
+          : clickAudioContextRef.current;
+      const audioBuffer =
+        soundName === "ingame"
+          ? ingameAudioBufferRef.current
+          : clickAudioBufferRef.current;
+      if (!audioContext || !audioBuffer) return;
+
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+      source.onended = () => {
+        source.disconnect();
+      };
+      source.start(audioContext.currentTime);
+
       if (Platform.OS !== "web" && settings.hapticFeedback) {
-        Vibration.vibrate(50);
+        Vibration.vibrate(20);
       }
     } catch (error) {
       console.error("Error playing sound:", error);
     }
-  };
+  }, [
+    loadClickAudioBuffer,
+    loadIngameAudioBuffer,
+    settings.hapticFeedback,
+    settings.soundEffects,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      const clickAudioContext = clickAudioContextRef.current;
+      const ingameAudioContext = ingameAudioContextRef.current;
+      clickAudioContextRef.current = null;
+      clickAudioBufferRef.current = null;
+      clickAudioLoadPromiseRef.current = null;
+      ingameAudioContextRef.current = null;
+      ingameAudioBufferRef.current = null;
+      ingameAudioLoadPromiseRef.current = null;
+      if (clickAudioContext) {
+        clickAudioContext.close().catch(() => {
+          // Ignore cleanup errors while unmounting provider.
+        });
+      }
+      if (ingameAudioContext) {
+        ingameAudioContext.close().catch(() => {
+          // Ignore cleanup errors while unmounting provider.
+        });
+      }
+    };
+  }, []);
 
   const triggerHaptic = (type = "light") => {
     if (!settings.hapticFeedback) return;

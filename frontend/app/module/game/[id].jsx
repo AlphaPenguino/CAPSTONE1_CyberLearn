@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import COLORS from "@/constants/custom-colors";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AudioContext } from "react-native-audio-api";
+import * as Animatable from "react-native-animatable";
 import CharacterSprite from "../../../components/CharacterSprite.jsx";
 import {
   cyborg_sprites,
@@ -37,6 +39,33 @@ const battlefieldImages = [
   require("../../../assets/backgrounds/slum.png"),
   require("../../../assets/backgrounds/Battleground4.png"),
 ];
+
+const AnimatableOptionButton =
+  Animatable.createAnimatableComponent(TouchableOpacity);
+
+const CYBERQUEST_SFX = {
+  questWin: require("../../../assets/sounds/cyberquest/quest-win-bg.mp3"),
+  questLose: require("../../../assets/sounds/cyberquest/quest-lose-bg.wav"),
+  playerHurt: require("../../../assets/sounds/cyberquest/player-hurt-sound.wav"),
+  playerAttack: require("../../../assets/sounds/cyberquest/player-attack-sound.mp3"),
+  easyMediumMonsterAttack: require("../../../assets/sounds/cyberquest/easymedium-monster-attack.wav"),
+  easyMediumMonsterHurt: require("../../../assets/sounds/cyberquest/easymedium-monster-hurt.wav"),
+  hardMonsterAttack: require("../../../assets/sounds/cyberquest/hard-monster-hitting.wav"),
+  hardMonsterHurt: require("../../../assets/sounds/cyberquest/hard-monster-hurt.wav"),
+};
+
+const CYBERQUEST_SFX_VOLUME = {
+  questWin: 0.45,
+  questLose: 0.48,
+  playerHurt: 0.3,
+  playerAttack: 0.42,
+  easyMediumMonsterAttack: 0.38,
+  easyMediumMonsterHurt: 0.28,
+  hardMonsterAttack: 0.4,
+  hardMonsterHurt: 0.32,
+};
+
+const CYBERQUEST_BG_MUSIC_VOLUME = 0.34;
 
 // 🔧 DEVELOPMENT TOGGLE - Set to true to use dummy data for testing
 const USE_DUMMY_GAME_DATA = false;
@@ -124,6 +153,7 @@ export default function ModuleGameQuest() {
   const [enemyAction, setEnemyAction] = useState("idle");
   const [battleMessage, setBattleMessage] = useState("");
   const [answerLocked, setAnswerLocked] = useState(false); // Lock answers after selection
+  const [selectedChoiceKey, setSelectedChoiceKey] = useState(null);
 
   // Death animations and completion states
   const [showDeathAnimation, setShowDeathAnimation] = useState(false);
@@ -180,6 +210,125 @@ export default function ModuleGameQuest() {
   const enemyImpactPulse = useRef(new Animated.Value(0)).current;
   const playerShake = useRef(new Animated.Value(0)).current;
   const enemyShake = useRef(new Animated.Value(0)).current;
+  const bgMusicContextRef = useRef(null);
+  const bgMusicSourceRef = useRef(null);
+  const bgMusicGainRef = useRef(null);
+  const sfxContextRef = useRef(null);
+  const sfxBufferCacheRef = useRef({});
+  const sfxLoadPromiseRef = useRef({});
+  const outcomeSfxPlayedRef = useRef(null);
+  const optionAnimRefs = useRef({});
+  const playerSpriteAnimRef = useRef(null);
+  const enemySpriteAnimRef = useRef(null);
+  const playerHealthBarAnimRef = useRef(null);
+  const enemyHealthBarAnimRef = useRef(null);
+  const streakMeterAnimRef = useRef(null);
+
+  const enemyDifficulty = useMemo(() => {
+    const difficulty = (module?.difficulty || "easy").toLowerCase();
+    if (difficulty === "hard") return "hard";
+    if (difficulty === "medium") return "medium";
+    return "easy";
+  }, [module?.difficulty]);
+
+  const stopBackgroundMusic = useCallback(() => {
+    const source = bgMusicSourceRef.current;
+    bgMusicSourceRef.current = null;
+    if (source) {
+      try {
+        source.stop();
+      } catch {
+        // Ignore stop errors if source already ended.
+      }
+      try {
+        source.disconnect();
+      } catch {
+        // Ignore disconnect errors during teardown.
+      }
+    }
+
+    const gainNode = bgMusicGainRef.current;
+    bgMusicGainRef.current = null;
+    if (gainNode) {
+      try {
+        gainNode.disconnect();
+      } catch {
+        // Ignore gain node disconnect errors during teardown.
+      }
+    }
+
+    const context = bgMusicContextRef.current;
+    bgMusicContextRef.current = null;
+    if (context) {
+      context.close().catch(() => {
+        // Ignore close errors during teardown.
+      });
+    }
+  }, []);
+
+  const playSfx = useCallback(async (soundKey) => {
+    const soundAsset = CYBERQUEST_SFX[soundKey];
+    if (!soundAsset) return;
+
+    try {
+      let audioContext = sfxContextRef.current;
+      if (!audioContext) {
+        audioContext = new AudioContext();
+        sfxContextRef.current = audioContext;
+      }
+
+      let audioBuffer = sfxBufferCacheRef.current[soundKey];
+      if (!audioBuffer) {
+        if (!sfxLoadPromiseRef.current[soundKey]) {
+          sfxLoadPromiseRef.current[soundKey] = audioContext
+            .decodeAudioData(soundAsset)
+            .then((decodedBuffer) => {
+              sfxBufferCacheRef.current[soundKey] = decodedBuffer;
+              return decodedBuffer;
+            })
+            .finally(() => {
+              delete sfxLoadPromiseRef.current[soundKey];
+            });
+        }
+        audioBuffer = await sfxLoadPromiseRef.current[soundKey];
+      }
+
+      if (!audioBuffer || !sfxContextRef.current) return;
+
+      const source = sfxContextRef.current.createBufferSource();
+      const gainNode = sfxContextRef.current.createGain?.();
+      const volume = CYBERQUEST_SFX_VOLUME[soundKey] ?? 0.35;
+      source.buffer = audioBuffer;
+
+      if (gainNode) {
+        gainNode.gain.value = volume;
+        source.connect(gainNode);
+        gainNode.connect(sfxContextRef.current.destination);
+      } else {
+        source.connect(sfxContextRef.current.destination);
+      }
+
+      source.onended = () => {
+        source.disconnect();
+        if (gainNode) {
+          gainNode.disconnect();
+        }
+      };
+      source.start(sfxContextRef.current.currentTime);
+    } catch (sfxError) {
+      console.warn(`Failed to play SFX (${soundKey}):`, sfxError);
+    }
+  }, []);
+
+  const playOutcomeSfxOnce = useCallback(
+    (didWin) => {
+      const key = didWin ? "questWin" : "questLose";
+      if (outcomeSfxPlayedRef.current === key) return;
+      outcomeSfxPlayedRef.current = key;
+      playSfx(key);
+    },
+    [playSfx]
+  );
 
   const triggerBattleImpact = useCallback(
     (attacker, defender) => {
@@ -236,6 +385,18 @@ export default function ModuleGameQuest() {
       duration: 450,
       useNativeDriver: false,
     }).start();
+
+    if (playerHealthBarAnimRef.current?.animate) {
+      const healthFeedback =
+        playerHealth <= 25
+          ? "flash"
+          : {
+              0: { scale: 1 },
+              0.4: { scale: 1.04 },
+              1: { scale: 1 },
+            };
+      playerHealthBarAnimRef.current.animate(healthFeedback, 420);
+    }
   }, [animatedPlayerHealth, playerHealth]);
 
   useEffect(() => {
@@ -244,6 +405,18 @@ export default function ModuleGameQuest() {
       duration: 450,
       useNativeDriver: false,
     }).start();
+
+    if (enemyHealthBarAnimRef.current?.animate) {
+      const healthFeedback =
+        enemyHealth <= 25
+          ? "flash"
+          : {
+              0: { scale: 1 },
+              0.4: { scale: 1.04 },
+              1: { scale: 1 },
+            };
+      enemyHealthBarAnimRef.current.animate(healthFeedback, 420);
+    }
   }, [animatedEnemyHealth, enemyHealth]);
 
   useEffect(() => {
@@ -252,7 +425,47 @@ export default function ModuleGameQuest() {
       duration: 250,
       useNativeDriver: false,
     }).start();
+
+    if (streakMeterAnimRef.current?.animate) {
+      streakMeterAnimRef.current.animate(
+        correctStreak > 0 ? "pulse" : "fadeIn",
+        320
+      );
+    }
   }, [MAX_HINT_STREAK, animatedStreakFill, correctStreak]);
+
+  useEffect(() => {
+    if (!gameStarted || gameCompleted) {
+      return;
+    }
+
+    const playerAnim =
+      playerAction === "attack"
+        ? "rubberBand"
+        : playerAction === "hurt"
+        ? "shake"
+        : "pulse";
+    playerSpriteAnimRef.current?.animate(playerAnim, 460);
+  }, [gameCompleted, gameStarted, playerAction]);
+
+  useEffect(() => {
+    if (!gameStarted || gameCompleted) {
+      return;
+    }
+
+    const enemyAnim =
+      enemyAction === "attack"
+        ? "rubberBand"
+        : enemyAction === "hurt"
+        ? "shake"
+        : "pulse";
+    enemySpriteAnimRef.current?.animate(enemyAnim, 460);
+  }, [enemyAction, gameCompleted, gameStarted]);
+
+  useEffect(() => {
+    setSelectedChoiceKey(null);
+    optionAnimRefs.current = {};
+  }, [currentQuestionIndex, currentQuizIndex]);
 
   useEffect(() => {
     if (isHintReady) {
@@ -333,9 +546,7 @@ export default function ModuleGameQuest() {
 
   // Helper function to get enemy sprites based on difficulty
   const getEnemySprites = () => {
-    const difficulty = module?.difficulty || "easy";
-
-    switch (difficulty.toLowerCase()) {
+    switch (enemyDifficulty) {
       case "hard":
         return {
           sprites: enemy_hard_sprites,
@@ -357,6 +568,103 @@ export default function ModuleGameQuest() {
         };
     }
   };
+
+  useEffect(() => {
+    const shouldPlayMusic =
+      gameStarted &&
+      !gameCompleted &&
+      !completionInProgress &&
+      !showDeathAnimation &&
+      !loading &&
+      !error;
+
+    if (!shouldPlayMusic) {
+      stopBackgroundMusic();
+      return;
+    }
+
+    let isCancelled = false;
+
+    const playBackgroundMusic = async () => {
+      try {
+        stopBackgroundMusic();
+
+        const musicAsset =
+          enemyDifficulty === "hard"
+            ? require("../../../assets/sounds/cyberquest/hard-monster-bg.mp3")
+            : enemyDifficulty === "medium"
+            ? require("../../../assets/sounds/cyberquest/medium-monster-bg.mp3")
+            : require("../../../assets/sounds/cyberquest/easy-monster-bg.mp3");
+
+        const audioContext = new AudioContext();
+        const audioBuffer = await audioContext.decodeAudioData(musicAsset);
+
+        if (isCancelled) {
+          await audioContext.close().catch(() => {
+            // Ignore close errors during cancellation.
+          });
+          return;
+        }
+
+        const source = audioContext.createBufferSource();
+        const gainNode = audioContext.createGain?.();
+        source.buffer = audioBuffer;
+        source.loop = true;
+        if (gainNode) {
+          gainNode.gain.value = CYBERQUEST_BG_MUSIC_VOLUME;
+          source.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+        } else {
+          source.connect(audioContext.destination);
+        }
+        source.start(audioContext.currentTime);
+
+        bgMusicContextRef.current = audioContext;
+        bgMusicSourceRef.current = source;
+        bgMusicGainRef.current = gainNode;
+      } catch (musicError) {
+        console.warn("Failed to start gameplay background music:", musicError);
+        stopBackgroundMusic();
+      }
+    };
+
+    playBackgroundMusic();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    completionInProgress,
+    enemyDifficulty,
+    error,
+    gameCompleted,
+    gameStarted,
+    loading,
+    showDeathAnimation,
+    stopBackgroundMusic,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      stopBackgroundMusic();
+    };
+  }, [stopBackgroundMusic]);
+
+  useEffect(() => {
+    return () => {
+      const sfxContext = sfxContextRef.current;
+      sfxContextRef.current = null;
+      sfxBufferCacheRef.current = {};
+      sfxLoadPromiseRef.current = {};
+      outcomeSfxPlayedRef.current = null;
+
+      if (sfxContext) {
+        sfxContext.close().catch(() => {
+          // Ignore teardown errors while closing SFX context.
+        });
+      }
+    };
+  }, []);
 
   // Helper function to trigger death animations
   const triggerDeathAnimation = useCallback(
@@ -821,6 +1129,7 @@ function hashPassword(password) {
   }, [currentQuizIndex, currentQuestionIndex, quizzes]);
 
   const startQuest = () => {
+    outcomeSfxPlayedRef.current = null;
     setGameStarted(true);
     setAnswerLocked(false); // Ensure answers are unlocked when starting
     setBattleMessage("The quest begins! Prepare for battle!");
@@ -888,6 +1197,10 @@ function hashPassword(password) {
 
     // Battle animations and health changes
     if (isCorrect) {
+      playSfx("playerAttack");
+      playSfx(
+        enemyDifficulty === "hard" ? "hardMonsterHurt" : "easyMediumMonsterHurt"
+      );
       setPlayerAction("attack");
       setPlayerAttackAnim(true);
       setBattleMessage("🗡️ Critical Hit! You damaged the enemy!");
@@ -952,6 +1265,12 @@ function hashPassword(password) {
         return; // Stop processing the normal flow
       }
     } else {
+      playSfx(
+        enemyDifficulty === "hard"
+          ? "hardMonsterAttack"
+          : "easyMediumMonsterAttack"
+      );
+      playSfx("playerHurt");
       setEnemyAction("attack");
       setEnemyAttackAnim(true);
       setBattleMessage("💥 Enemy strikes back! You took damage!");
@@ -979,6 +1298,7 @@ function hashPassword(password) {
         // Trigger player death animation immediately
         setTimeout(() => {
           console.log("🎭 Calling triggerDeathAnimation for player death...");
+          playOutcomeSfxOnce(false);
           triggerDeathAnimation(true, false);
 
           // Wait for death animation to complete before showing defeat screen
@@ -1054,6 +1374,33 @@ function hashPassword(password) {
       }
     }, 1500);
   };
+
+  const handleChoicePress = useCallback(
+    (option, index) => {
+      if (answerLocked || showDeathAnimation) {
+        return;
+      }
+
+      const choiceKey = `${currentQuizIndex}-${currentQuestionIndex}-${index}`;
+      setSelectedChoiceKey(choiceKey);
+
+      const selectedOptionRef = optionAnimRefs.current[choiceKey];
+      if (selectedOptionRef?.animate) {
+        selectedOptionRef.animate("wobble", 700);
+      }
+
+      setTimeout(() => {
+        handleAnswer(option);
+      }, 120);
+    },
+    [
+      answerLocked,
+      currentQuestionIndex,
+      currentQuizIndex,
+      handleAnswer,
+      showDeathAnimation,
+    ]
+  );
 
   // Handle answers for different question types
   const handleCodeMissingAnswer = (answer) => {
@@ -1312,6 +1659,7 @@ function hashPassword(password) {
     }
 
     if (playerSurvived) {
+      playOutcomeSfxOnce(true);
       // Player wins - enemy dies
       setBattleMessage(
         playerHealth === 100
@@ -1350,6 +1698,7 @@ function hashPassword(password) {
         }, 300);
       }, 2500);
     } else {
+      playOutcomeSfxOnce(false);
       // Player loses - player dies
       setBattleMessage(
         "💀 Defeat! You have been overwhelmed by the darkness..."
@@ -2242,43 +2591,45 @@ function hashPassword(password) {
         <View style={styles.battleArena}>
           {/* Player Character - Cyborg */}
           <View style={styles.playerStreakWrapper}>
-            <Animated.View
-              style={[
-                styles.streakMeterContainer,
-                isHintReady && styles.streakMeterReady,
-                {
-                  opacity: streakGlowAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.92, 1],
-                  }),
-                  transform: [
-                    {
-                      scale: streakGlowAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [1, 1.04],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={styles.streakMeterLabel}>
-                {Math.min(correctStreak, MAX_HINT_STREAK)}/{MAX_HINT_STREAK}
-              </Text>
-              <View style={styles.streakMeterTrack}>
-                <Animated.View
-                  style={[
-                    styles.streakMeterFill,
-                    {
-                      height: animatedStreakFill.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ["0%", "100%"],
-                      }),
-                    },
-                  ]}
-                />
-              </View>
-            </Animated.View>
+            <Animatable.View ref={streakMeterAnimRef}>
+              <Animated.View
+                style={[
+                  styles.streakMeterContainer,
+                  isHintReady && styles.streakMeterReady,
+                  {
+                    opacity: streakGlowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.92, 1],
+                    }),
+                    transform: [
+                      {
+                        scale: streakGlowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1, 1.04],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <Text style={styles.streakMeterLabel}>
+                  {Math.min(correctStreak, MAX_HINT_STREAK)}/{MAX_HINT_STREAK}
+                </Text>
+                <View style={styles.streakMeterTrack}>
+                  <Animated.View
+                    style={[
+                      styles.streakMeterFill,
+                      {
+                        height: animatedStreakFill.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ["0%", "100%"],
+                        }),
+                      },
+                    ]}
+                  />
+                </View>
+              </Animated.View>
+            </Animatable.View>
 
           <Animated.View
             style={[
@@ -2302,19 +2653,22 @@ function hashPassword(password) {
               },
             ]}
           >
-            <CharacterSprite
-              spriteSet={cyborg_sprites}
-              frames={cyborg_frames}
-              action={playerAction}
-              size={Platform.OS === "web" ? 96 : 120}
-              flipped={false}
-              speed={150}
-              style={[
-                styles.characterSprite,
-                { alignSelf: "center", marginLeft: -10 },
-              ]}
-            />
-            <View style={styles.healthBarContainer}>
+            <Animatable.View ref={playerSpriteAnimRef}>
+              <CharacterSprite
+                spriteSet={cyborg_sprites}
+                frames={cyborg_frames}
+                action={playerAction}
+                size={Platform.OS === "web" ? 96 : 120}
+                flipped={false}
+                speed={150}
+                style={[
+                  styles.characterSprite,
+                  { alignSelf: "center", marginLeft: -10 },
+                ]}
+              />
+            </Animatable.View>
+            <Animatable.View ref={playerHealthBarAnimRef}>
+              <View style={styles.healthBarContainer}>
               <Text style={styles.healthLabel}>Player</Text>
               <View style={styles.healthBar}>
                 <Animated.View
@@ -2331,7 +2685,8 @@ function hashPassword(password) {
                 />
               </View>
               <Text style={styles.healthPoints}>{playerHealth}/100</Text>
-            </View>
+              </View>
+            </Animatable.View>
           </Animated.View>
           </View>
 
@@ -2358,19 +2713,22 @@ function hashPassword(password) {
               },
             ]}
           >
-            <CharacterSprite
-              spriteSet={getEnemySprites().sprites}
-              frames={getEnemySprites().frames}
-              action={enemyAction}
-              size={Platform.OS === "web" ? 96 : 120}
-              flipped={true}
-              speed={150}
-              style={[
-                styles.characterSprite,
-                { alignSelf: "center", marginLeft: 10 },
-              ]}
-            />
-            <View style={styles.healthBarContainer}>
+            <Animatable.View ref={enemySpriteAnimRef}>
+              <CharacterSprite
+                spriteSet={getEnemySprites().sprites}
+                frames={getEnemySprites().frames}
+                action={enemyAction}
+                size={Platform.OS === "web" ? 96 : 120}
+                flipped={true}
+                speed={150}
+                style={[
+                  styles.characterSprite,
+                  { alignSelf: "center", marginLeft: 10 },
+                ]}
+              />
+            </Animatable.View>
+            <Animatable.View ref={enemyHealthBarAnimRef}>
+              <View style={styles.healthBarContainer}>
               <Text style={styles.healthLabel}>{getEnemySprites().name}</Text>
               <View style={styles.healthBar}>
                 <Animated.View
@@ -2387,7 +2745,8 @@ function hashPassword(password) {
                 />
               </View>
               <Text style={styles.healthPoints}>{enemyHealth}/100</Text>
-            </View>
+              </View>
+            </Animatable.View>
           </Animated.View>
         </View>
 
@@ -2464,14 +2823,25 @@ function hashPassword(password) {
                   >
                     <View style={styles.optionsContainer}>
                       {currentQuestion.options.map((option, index) => (
-                        <TouchableOpacity
+                        <AnimatableOptionButton
                           key={index}
+                          ref={(ref) => {
+                            const optionKey = `${currentQuizIndex}-${currentQuestionIndex}-${index}`;
+                            if (ref) {
+                              optionAnimRefs.current[optionKey] = ref;
+                            } else {
+                              delete optionAnimRefs.current[optionKey];
+                            }
+                          }}
                           style={[
                             styles.optionButton,
+                            selectedChoiceKey ===
+                              `${currentQuizIndex}-${currentQuestionIndex}-${index}` &&
+                              styles.optionButtonSelected,
                             (answerLocked || showDeathAnimation) &&
                               styles.optionButtonDisabled,
                           ]}
-                          onPress={() => handleAnswer(option)}
+                          onPress={() => handleChoicePress(option, index)}
                           activeOpacity={
                             answerLocked || showDeathAnimation ? 1 : 0.8
                           }
@@ -2510,7 +2880,7 @@ function hashPassword(password) {
                               {option.text}
                             </Text>
                           </LinearGradient>
-                        </TouchableOpacity>
+                        </AnimatableOptionButton>
                       ))}
                     </View>
                   </ScrollView>
@@ -3394,6 +3764,9 @@ const styles = {
   optionButton: {
     borderRadius: 8,
     overflow: "hidden",
+  },
+  optionButtonSelected: {
+    transform: [{ scale: 1.02 }],
   },
   optionButtonDisabled: {
     opacity: 0.6,

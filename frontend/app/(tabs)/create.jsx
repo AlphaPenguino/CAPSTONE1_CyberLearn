@@ -313,7 +313,7 @@ export default function Create() {
     const [questData, setQuestData] = useState({
       title: "",
       description: "",
-      selectedSubject: null,
+       selectedSubject: null,
       difficulty: "medium",
       level: 1,
       questions: [],
