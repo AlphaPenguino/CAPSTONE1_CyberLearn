@@ -574,7 +574,17 @@ router.get("/completed-quizzes", protectRoute, async (req, res) => {
  */
 router.post("/complete-module", protectRoute, async (req, res) => {
   try {
-    const { moduleId, score, questType = "module" } = req.body;
+
+
+    const {
+      moduleId,
+      score,
+      questType = "module",
+      timeLeftSeconds,
+      totalTimeSeconds,
+      correctAnswers,
+      totalQuestions,
+    } = req.body;
 
     console.log("📝 Module completion received:", {
       moduleId,
@@ -582,6 +592,10 @@ router.post("/complete-module", protectRoute, async (req, res) => {
       userPrivilege: req.user.privilege,
       score: score,
       questType: questType,
+      timeLeftSeconds,
+      totalTimeSeconds,
+      correctAnswers,
+      totalQuestions,
     });
 
     // Check if user is instructor
@@ -608,21 +622,35 @@ router.post("/complete-module", protectRoute, async (req, res) => {
     let levelUp = false;
 
     if (user) {
-      // Calculate XP based on module difficulty and performance
-      const difficultyMultiplier = {
-        easy: 1.0,
-        medium: 1.5,
-        hard: 2.0,
-      };
+      // XP is based on performance + remaining time; module difficulty is cosmetic.
+      const normalizedScore = Math.max(0, Math.min(100, Number(score) || 0));
+      const normalizedCorrectAnswers = Number.isFinite(Number(correctAnswers))
+        ? Math.max(0, Math.round(Number(correctAnswers)))
+        : null;
+      const normalizedTotalQuestions = Number.isFinite(Number(totalQuestions))
+        ? Math.max(1, Math.round(Number(totalQuestions)))
+        : null;
+      const normalizedTimeLeft = Number.isFinite(Number(timeLeftSeconds))
+        ? Math.max(0, Math.round(Number(timeLeftSeconds)))
+        : 0;
+      const normalizedTotalTime = Number.isFinite(Number(totalTimeSeconds))
+        ? Math.max(1, Math.round(Number(totalTimeSeconds)))
+        : null;
 
-      const difficulty = module.difficulty || "medium";
-      const baseXP = questType === "cyber-quest" ? 100 : 80; // More XP for cyber quests
-      const scoreBonus = Math.floor((score || 0) * 2); // 2 XP per point scored
-      const completionBonus = 50; // Bonus for completing module
+      const baseXP = questType === "cyber-quest" ? 90 : 70;
+      const scoreBonus = Math.floor(normalizedScore * 1.5);
+      const accuracyBonus =
+        normalizedCorrectAnswers !== null
+          ? normalizedCorrectAnswers * 18
+          : Math.floor(normalizedScore * 0.6);
+      const timeLeftRatio = normalizedTotalTime
+        ? Math.min(1, normalizedTimeLeft / normalizedTotalTime)
+        : 0;
+      const timeLeftBonus = Math.floor(timeLeftRatio * 120);
+      const completionBonus = 40;
 
       xpEarned = Math.floor(
-        (baseXP + scoreBonus + completionBonus) *
-          difficultyMultiplier[difficulty]
+        baseXP + scoreBonus + accuracyBonus + timeLeftBonus + completionBonus
       );
 
       // Add XP to user's total

@@ -15,6 +15,21 @@ import { trackGameCompletion } from "../middleware/analytics.middleware.js";
 
 const router = express.Router();
 
+const DEFAULT_QUEST_COUNTDOWN_SECONDS = 300;
+const MIN_QUEST_COUNTDOWN_SECONDS = 30;
+const MAX_QUEST_COUNTDOWN_SECONDS = 3600;
+
+const normalizeCountdownSeconds = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_QUEST_COUNTDOWN_SECONDS;
+  }
+  return Math.max(
+    MIN_QUEST_COUNTDOWN_SECONDS,
+    Math.min(MAX_QUEST_COUNTDOWN_SECONDS, Math.round(parsed))
+  );
+};
+
 /**
  * @route   GET /api/all-cyber-quests
  * @desc    Get all cyber quests from all sections (for instructors/admins)
@@ -191,6 +206,7 @@ router.get("/quickplay/questions", protectRoute, async (req, res) => {
     const quests = await CyberQuest.find({
       isActive: true,
       subject: { $in: accessibleSubjectIds },
+      questType: { $ne: "lesson" },
     })
       .select("questions difficulty title")
       .lean();
@@ -465,8 +481,16 @@ router.post(
   async (req, res) => {
     try {
       const { id: sectionId } = req.params;
-      const { title, description, questions, difficulty, level, subject } =
-        req.body;
+      const {
+        title,
+        description,
+        questions,
+        lessons,
+        questType,
+        countdownSeconds,
+        level,
+        subject,
+      } = req.body;
 
       // Resolve subjectId from either legacy path param (sectionId) or body.subject
       const subjectId = subject || sectionId;
@@ -492,11 +516,13 @@ router.post(
         });
       }
 
+      const normalizedQuestType = questType === "lesson" ? "lesson" : "quiz";
+
       // Validate required fields
-      if (!title || !questions) {
+      if (!title) {
         return res.status(400).json({
           success: false,
-          message: "Title and questions are required",
+          message: "Title is required",
         });
       }
 
@@ -513,21 +539,23 @@ router.post(
         });
       }
 
-      // Validate questions count
-      if (
-        !Array.isArray(questions) ||
-        questions.length < 1 ||
-        questions.length > 50
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Must provide between 1 and 50 questions",
-        });
-      }
+      const questCountdownSeconds = normalizeCountdownSeconds(countdownSeconds);
 
-      // Validate each question
-      for (let i = 0; i < questions.length; i++) {
-        const question = questions[i];
+      const normalizedQuestions = Array.isArray(questions) ? questions : [];
+      const normalizedLessons = Array.isArray(lessons) ? lessons : [];
+
+      if (normalizedQuestType === "quiz") {
+        // Validate questions count
+        if (normalizedQuestions.length < 1 || normalizedQuestions.length > 50) {
+          return res.status(400).json({
+            success: false,
+            message: "Must provide between 1 and 50 questions",
+          });
+        }
+
+        // Validate each question
+        for (let i = 0; i < normalizedQuestions.length; i++) {
+          const question = normalizedQuestions[i];
 
         if (!question.text || question.text.trim().length === 0) {
           return res.status(400).json({
@@ -754,6 +782,41 @@ router.post(
           // Ensure field exists for consistency
           question.hint = "";
         }
+        }
+      } else {
+        if (normalizedLessons.length < 1 || normalizedLessons.length > 100) {
+          return res.status(400).json({
+            success: false,
+            message: "Lesson quests must have between 1 and 100 lessons",
+          });
+        }
+
+        for (let i = 0; i < normalizedLessons.length; i++) {
+          const lesson = normalizedLessons[i];
+          if (!lesson?.title || !lesson.title.trim()) {
+            return res.status(400).json({
+              success: false,
+              message: `Lesson ${i + 1}: Title is required`,
+            });
+          }
+          if (!lesson?.body || !lesson.body.trim()) {
+            return res.status(400).json({
+              success: false,
+              message: `Lesson ${i + 1}: Body is required`,
+            });
+          }
+
+          const mediaType = lesson.mediaType || "none";
+          if (
+            (mediaType === "image" || mediaType === "video") &&
+            (!lesson.mediaUrl || !lesson.mediaUrl.trim())
+          ) {
+            return res.status(400).json({
+              success: false,
+              message: `Lesson ${i + 1}: Media URL is required for ${mediaType}`,
+            });
+          }
+        }
       }
 
       // Create the cyber quest
@@ -761,9 +824,20 @@ router.post(
         title: title.trim(),
         description: description ? description.trim() : "",
         subject: subjectId,
-        questions,
+        questType: normalizedQuestType,
+        questions: normalizedQuestType === "quiz" ? normalizedQuestions : [],
+        lessons:
+          normalizedQuestType === "lesson"
+            ? normalizedLessons.map((lesson) => ({
+                title: lesson.title.trim(),
+                subheading: lesson.subheading ? lesson.subheading.trim() : "",
+                body: lesson.body.trim(),
+                mediaType: lesson.mediaType || "none",
+                mediaUrl: lesson.mediaUrl ? lesson.mediaUrl.trim() : "",
+              }))
+            : [],
         created_by: req.user.id,
-        difficulty: difficulty || "medium",
+        countdownSeconds: questCountdownSeconds,
         level: questLevel,
       });
 
@@ -771,11 +845,17 @@ router.post(
       console.log("[CQ Create] New CQ subject field:", cyberQuest.subject);
 
       // Additional validation using the model's method
-      const validationErrors = cyberQuest.validateQuestions();
+      const validationErrors =
+        normalizedQuestType === "lesson"
+          ? cyberQuest.validateLessons()
+          : cyberQuest.validateQuestions();
       if (validationErrors) {
         return res.status(400).json({
           success: false,
-          message: "Question validation failed",
+          message:
+            normalizedQuestType === "lesson"
+              ? "Lesson validation failed"
+              : "Question validation failed",
           errors: validationErrors,
         });
       }
@@ -869,8 +949,16 @@ router.put(
   async (req, res) => {
     try {
       const { id } = req.params;
-      const { title, description, questions, difficulty, level, subject } =
-        req.body;
+      const {
+        title,
+        description,
+        questions,
+        lessons,
+        questType,
+        countdownSeconds,
+        level,
+        subject,
+      } = req.body;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(400).json({
@@ -914,6 +1002,16 @@ router.put(
         cyberQuest.description = description.trim();
       }
 
+      if (questType !== undefined) {
+        if (questType !== "quiz" && questType !== "lesson") {
+          return res.status(400).json({
+            success: false,
+            message: "questType must be either 'quiz' or 'lesson'",
+          });
+        }
+        cyberQuest.questType = questType;
+      }
+
       if (level !== undefined) {
         if (typeof level !== "number" || level < 1 || level > 100) {
           return res.status(400).json({
@@ -924,7 +1022,22 @@ router.put(
         cyberQuest.level = level;
       }
 
-      if (questions) {
+      if (countdownSeconds !== undefined) {
+        const parsedCountdown = Number(countdownSeconds);
+        if (
+          !Number.isFinite(parsedCountdown) ||
+          parsedCountdown < MIN_QUEST_COUNTDOWN_SECONDS ||
+          parsedCountdown > MAX_QUEST_COUNTDOWN_SECONDS
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "Countdown timer must be between 30 and 3600 seconds",
+          });
+        }
+        cyberQuest.countdownSeconds = Math.round(parsedCountdown);
+      }
+
+      if (cyberQuest.questType === "quiz" && questions) {
         // Validate questions count
         if (
           !Array.isArray(questions) ||
@@ -1157,8 +1270,53 @@ router.put(
         cyberQuest.questions = questions;
       }
 
-      if (difficulty) {
-        cyberQuest.difficulty = difficulty;
+      if (cyberQuest.questType === "lesson") {
+        const normalizedLessons = Array.isArray(lessons) ? lessons : cyberQuest.lessons;
+
+        if (!Array.isArray(normalizedLessons) || normalizedLessons.length < 1 || normalizedLessons.length > 100) {
+          return res.status(400).json({
+            success: false,
+            message: "Lesson quests must have between 1 and 100 lessons",
+          });
+        }
+
+        for (let i = 0; i < normalizedLessons.length; i++) {
+          const lesson = normalizedLessons[i];
+          if (!lesson?.title || !lesson.title.trim()) {
+            return res.status(400).json({
+              success: false,
+              message: `Lesson ${i + 1}: Title is required`,
+            });
+          }
+          if (!lesson?.body || !lesson.body.trim()) {
+            return res.status(400).json({
+              success: false,
+              message: `Lesson ${i + 1}: Body is required`,
+            });
+          }
+
+          const mediaType = lesson.mediaType || "none";
+          if (
+            (mediaType === "image" || mediaType === "video") &&
+            (!lesson.mediaUrl || !lesson.mediaUrl.trim())
+          ) {
+            return res.status(400).json({
+              success: false,
+              message: `Lesson ${i + 1}: Media URL is required for ${mediaType}`,
+            });
+          }
+        }
+
+        cyberQuest.lessons = normalizedLessons.map((lesson) => ({
+          title: lesson.title.trim(),
+          subheading: lesson.subheading ? lesson.subheading.trim() : "",
+          body: lesson.body.trim(),
+          mediaType: lesson.mediaType || "none",
+          mediaUrl: lesson.mediaUrl ? lesson.mediaUrl.trim() : "",
+        }));
+        cyberQuest.questions = [];
+      } else if (questions !== undefined) {
+        cyberQuest.lessons = [];
       }
 
       // Handle legacy docs missing subject: allow updating subject from body
@@ -1189,11 +1347,17 @@ router.put(
       }
 
       // Additional validation using the model's method
-      const validationErrors = cyberQuest.validateQuestions();
+      const validationErrors =
+        cyberQuest.questType === "lesson"
+          ? cyberQuest.validateLessons()
+          : cyberQuest.validateQuestions();
       if (validationErrors) {
         return res.status(400).json({
           success: false,
-          message: "Question validation failed",
+          message:
+            cyberQuest.questType === "lesson"
+              ? "Lesson validation failed"
+              : "Question validation failed",
           errors: validationErrors,
         });
       }
@@ -1337,7 +1501,7 @@ router.post(
 
     try {
       const { id: questId } = req.params;
-      const { answers } = req.body;
+      const { answers = [], timeLeftSeconds } = req.body;
 
       console.log("Step 1: Validating quest ID");
       if (!mongoose.Types.ObjectId.isValid(questId)) {
@@ -1609,24 +1773,32 @@ router.post(
         });
       }
 
-      console.log("✅ Access granted:", accessReason); // Validate answers format
-      if (
-        !Array.isArray(answers) ||
-        answers.length !== cyberQuest.questions.length
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid answers format",
-        });
-      }
+      console.log("✅ Access granted:", accessReason);
 
-      // Calculate score and validate answers
+      const isLessonQuest = cyberQuest.questType === "lesson";
+      const questCountdownSeconds = normalizeCountdownSeconds(
+        cyberQuest.countdownSeconds
+      );
+      const parsedTimeLeftSeconds = Number(timeLeftSeconds);
+      const normalizedTimeLeftSeconds = Number.isFinite(parsedTimeLeftSeconds)
+        ? Math.max(0, Math.min(questCountdownSeconds, Math.round(parsedTimeLeftSeconds)))
+        : 0;
       const processedAnswers = [];
       let correctCount = 0;
 
-      for (let i = 0; i < cyberQuest.questions.length; i++) {
-        const question = cyberQuest.questions[i];
-        const userAnswer = answers[i];
+      if (!isLessonQuest) {
+        // Validate answers format
+        if (!Array.isArray(answers) || answers.length !== cyberQuest.questions.length) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid answers format",
+          });
+        }
+
+        // Calculate score and validate answers
+        for (let i = 0; i < cyberQuest.questions.length; i++) {
+          const question = cyberQuest.questions[i];
+          const userAnswer = answers[i];
 
         let isCorrect = false;
         let processedAnswer = {};
@@ -1790,13 +1962,23 @@ router.post(
             });
         }
 
-        if (isCorrect) correctCount++;
-        processedAnswers.push(processedAnswer);
+          if (isCorrect) correctCount++;
+          processedAnswers.push(processedAnswer);
+        }
+      } else {
+        const lessonCount = Array.isArray(cyberQuest.lessons)
+          ? cyberQuest.lessons.length
+          : 0;
+        correctCount = Math.max(lessonCount, 1);
       }
 
-      const score = Math.round(
-        (correctCount / cyberQuest.questions.length) * 100
-      );
+      const totalQuestionUnits = isLessonQuest
+        ? Math.max(Array.isArray(cyberQuest.lessons) ? cyberQuest.lessons.length : 0, 1)
+        : cyberQuest.questions.length;
+
+      const score = isLessonQuest
+        ? 100
+        : Math.round((correctCount / cyberQuest.questions.length) * 100);
 
       // Get or create progress record for quest attempts
       const Progress = await import("../models/Progress.js").then(
@@ -1882,11 +2064,8 @@ router.post(
         score,
         {
           correctAnswers: correctCount,
-          incorrectAnswers: Math.max(
-            cyberQuest.questions.length - correctCount,
-            0
-          ),
-          totalQuestions: cyberQuest.questions.length,
+          incorrectAnswers: Math.max(totalQuestionUnits - correctCount, 0),
+          totalQuestions: totalQuestionUnits,
           questLevel: cyberQuest.level,
         }
       );
@@ -1907,22 +2086,16 @@ router.post(
         levelCondition: cyberQuest.level === userLevel.maxLevelReached,
       });
 
-      // Calculate XP based on performance and difficulty
-      const difficultyMultiplier = {
-        easy: 1.0,
-        medium: 1.5,
-        hard: 2.0,
-      };
+      // XP now comes from answer accuracy plus remaining time bonus.
+      const baseAttemptXP = 40;
+      const correctAnswerXP = correctCount * 35;
+      const completionBonus = score >= 34 ? 80 : 0;
+      const timeLeftRatio = questCountdownSeconds
+        ? normalizedTimeLeftSeconds / questCountdownSeconds
+        : 0;
+      const timeLeftBonusXP = Math.floor(timeLeftRatio * 120);
 
-      const difficulty = cyberQuest.difficulty || "medium";
-      const baseXP = 50; // Base XP for attempting
-      const scoreBonus = Math.floor(score * 2); // 2 XP per point scored
-      const completionBonus = score >= 34 ? 100 : 0; // Extra bonus for passing (34% = 1 star minimum)
-
-      xpEarned = Math.floor(
-        (baseXP + scoreBonus + completionBonus) *
-          difficultyMultiplier[difficulty]
-      );
+      xpEarned = baseAttemptXP + correctAnswerXP + completionBonus + timeLeftBonusXP;
 
       // Update the main User model's gamification for leaderboards
       const User = await import("../models/Users.js").then(
@@ -2016,6 +2189,7 @@ router.post(
           totalQuestions: cyberQuest.questions.length,
           attempts: questProgress.totalAttempts,
           xpEarned: xpEarned,
+          timeLeftSeconds: normalizedTimeLeftSeconds,
           completionType: score >= 34 ? "successful" : "attempted",
         },
         success: true,
@@ -2034,6 +2208,7 @@ router.post(
         correctAnswers: correctCount,
         totalQuestions: cyberQuest.questions.length,
         incorrectAnswers: Math.max(cyberQuest.questions.length - correctCount, 0),
+        timeLeftSeconds: normalizedTimeLeftSeconds,
       };
 
       res.json({
@@ -2044,6 +2219,7 @@ router.post(
           totalQuestions: cyberQuest.questions.length,
           passed: score >= 34, // Match the completion threshold (34% = 1 star minimum)
           xpEarned: xpEarned,
+          timeLeftSeconds: normalizedTimeLeftSeconds,
           totalXP: updatedUser ? updatedUser.gamification.totalXP : 0,
           currentLevel: updatedUser ? updatedUser.gamification.level : 1,
           questProgress: {

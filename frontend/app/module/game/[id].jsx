@@ -7,10 +7,13 @@ import {
   Platform,
   ActivityIndicator,
   ImageBackground,
+  Image,
   TextInput,
   ScrollView,
   KeyboardAvoidingView,
   Alert,
+  Linking,
+  useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuthStore } from "@/store/authStore";
@@ -66,6 +69,13 @@ const CYBERQUEST_SFX_VOLUME = {
 };
 
 const CYBERQUEST_BG_MUSIC_VOLUME = 0.34;
+const DEFAULT_QUEST_COUNTDOWN_SECONDS = 300;
+const MIN_QUEST_COUNTDOWN_SECONDS = 5;
+const MAX_QUEST_COUNTDOWN_SECONDS = 3600;
+const MONSTER_VARIANTS = ["easy", "medium", "hard"];
+
+const pickRandomMonsterVariant = () =>
+  MONSTER_VARIANTS[Math.floor(Math.random() * MONSTER_VARIANTS.length)];
 
 // 🔧 DEVELOPMENT TOGGLE - Set to true to use dummy data for testing
 const USE_DUMMY_GAME_DATA = false;
@@ -74,6 +84,9 @@ export default function ModuleGameQuest() {
   const { id, returnSubjectId, returnModuleId } = useLocalSearchParams(); // Module ID + map return context
   const { token } = useAuthStore();
   const router = useRouter();
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const isMobileWeb = Platform.OS === "web" && viewportWidth <= 768;
+  const isLessonCompactLayout = Platform.OS === "android" || isMobileWeb;
   const normalizedReturnSubjectId = Array.isArray(returnSubjectId)
     ? returnSubjectId[0]
     : returnSubjectId;
@@ -169,12 +182,22 @@ export default function ModuleGameQuest() {
   const [correctStreak, setCorrectStreak] = useState(0);
   const MAX_HINT_STREAK = 3;
   const isHintReady = correctStreak >= MAX_HINT_STREAK;
+  const [remainingSeconds, setRemainingSeconds] = useState(
+    DEFAULT_QUEST_COUNTDOWN_SECONDS
+  );
+  const [initialCountdownSeconds, setInitialCountdownSeconds] = useState(
+    DEFAULT_QUEST_COUNTDOWN_SECONDS
+  );
+  const [enemyAppearanceVariant, setEnemyAppearanceVariant] = useState(
+    pickRandomMonsterVariant()
+  );
 
   // XP and Level tracking
   const [xpEarned, setXpEarned] = useState(0);
   const [totalXP, setTotalXP] = useState(0);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [levelUp, setLevelUp] = useState(false);
+  const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
 
   // State for different question types
   const [userInput, setUserInput] = useState(""); // For codeMissing and fillInBlanks
@@ -224,12 +247,47 @@ export default function ModuleGameQuest() {
   const enemyHealthBarAnimRef = useRef(null);
   const streakMeterAnimRef = useRef(null);
 
-  const enemyDifficulty = useMemo(() => {
-    const difficulty = (module?.difficulty || "easy").toLowerCase();
-    if (difficulty === "hard") return "hard";
-    if (difficulty === "medium") return "medium";
-    return "easy";
-  }, [module?.difficulty]);
+  const normalizedCountdownSeconds = useMemo(() => {
+    const parsed = Number(module?.countdownSeconds);
+    if (!Number.isFinite(parsed)) {
+      return DEFAULT_QUEST_COUNTDOWN_SECONDS;
+    }
+    return Math.max(
+      MIN_QUEST_COUNTDOWN_SECONDS,
+      Math.min(MAX_QUEST_COUNTDOWN_SECONDS, Math.round(parsed))
+    );
+  }, [module?.countdownSeconds]);
+
+    const lessonPages = useMemo(() => {
+    return Array.isArray(module?.lessons) ? module.lessons : [];
+    }, [module?.lessons]);
+
+    const lessonContainerStyle = useMemo(() => {
+    const baseStyle = [styles.questionSection, styles.lessonQuestionSection, { flex: 1 }];
+    if (isLessonCompactLayout) {
+      baseStyle.push({
+        maxHeight: Math.round(viewportHeight * 0.82),
+        minHeight: Math.round(viewportHeight * 0.6),
+      });
+    }
+    return baseStyle;
+    }, [isLessonCompactLayout, viewportHeight]);
+
+  const isLessonQuest =
+    module?.type === "cyber-quest" && (module?.questType || "quiz") === "lesson";
+  const isTimedQuest = module?.type === "cyber-quest";
+
+  const openLessonMedia = useCallback(async (url) => {
+    if (!url) return;
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      }
+    } catch (mediaError) {
+      console.warn("Failed to open lesson media URL:", mediaError);
+    }
+  }, []);
 
   const stopBackgroundMusic = useCallback(() => {
     const source = bgMusicSourceRef.current;
@@ -544,9 +602,9 @@ export default function ModuleGameQuest() {
     }
   };
 
-  // Helper function to get enemy sprites based on difficulty
+  // Enemy difficulty is cosmetic only; pick a random variant per encounter.
   const getEnemySprites = () => {
-    switch (enemyDifficulty) {
+    switch (enemyAppearanceVariant) {
       case "hard":
         return {
           sprites: enemy_hard_sprites,
@@ -569,7 +627,7 @@ export default function ModuleGameQuest() {
     }
   };
 
-  useEffect(() => {
+    useEffect(() => {
     const shouldPlayMusic =
       gameStarted &&
       !gameCompleted &&
@@ -589,12 +647,13 @@ export default function ModuleGameQuest() {
       try {
         stopBackgroundMusic();
 
-        const musicAsset =
-          enemyDifficulty === "hard"
-            ? require("../../../assets/sounds/cyberquest/hard-monster-bg.mp3")
-            : enemyDifficulty === "medium"
-            ? require("../../../assets/sounds/cyberquest/medium-monster-bg.mp3")
-            : require("../../../assets/sounds/cyberquest/easy-monster-bg.mp3");
+        const musicAsset = isLessonQuest
+          ? require("../../../assets/sounds/lesson-bg.mp3")
+          : enemyAppearanceVariant === "hard"
+          ? require("../../../assets/sounds/cyberquest/hard-monster-bg.mp3")
+          : enemyAppearanceVariant === "medium"
+          ? require("../../../assets/sounds/cyberquest/medium-monster-bg.mp3")
+          : require("../../../assets/sounds/cyberquest/easy-monster-bg.mp3");
 
         const audioContext = new AudioContext();
         const audioBuffer = await audioContext.decodeAudioData(musicAsset);
@@ -633,16 +692,17 @@ export default function ModuleGameQuest() {
     return () => {
       isCancelled = true;
     };
-  }, [
+    }, [
     completionInProgress,
-    enemyDifficulty,
+    enemyAppearanceVariant,
     error,
     gameCompleted,
     gameStarted,
+    isLessonQuest,
     loading,
     showDeathAnimation,
     stopBackgroundMusic,
-  ]);
+    ]);
 
   useEffect(() => {
     return () => {
@@ -874,8 +934,11 @@ function hashPassword(password) {
                 title: cyberQuest.title,
                 description:
                   cyberQuest.description || "A challenging cyber quest awaits!",
-                difficulty: cyberQuest.difficulty || "medium",
                 type: "cyber-quest",
+                questType: cyberQuest.questType || "quiz",
+                lessons: Array.isArray(cyberQuest.lessons) ? cyberQuest.lessons : [],
+                countdownSeconds: cyberQuest.countdownSeconds,
+                level: cyberQuest.level || 1,
               };
 
               // Transform cyber-quest questions to quiz format
@@ -952,11 +1015,10 @@ function hashPassword(password) {
                   }
                 }),
                 isUnlocked: true,
-                difficulty: cyberQuest.difficulty || "medium",
               };
 
               setModule(moduleData);
-              setQuizzes([quizData]);
+              setQuizzes(moduleData.questType === "lesson" ? [] : [quizData]);
               setLoading(false);
               return;
             }
@@ -1130,6 +1192,10 @@ function hashPassword(password) {
 
   const startQuest = () => {
     outcomeSfxPlayedRef.current = null;
+    setCurrentLessonIndex(0);
+    setRemainingSeconds(normalizedCountdownSeconds);
+    setInitialCountdownSeconds(normalizedCountdownSeconds);
+    setEnemyAppearanceVariant(pickRandomMonsterVariant());
     setGameStarted(true);
     setAnswerLocked(false); // Ensure answers are unlocked when starting
     setBattleMessage("The quest begins! Prepare for battle!");
@@ -1199,7 +1265,7 @@ function hashPassword(password) {
     if (isCorrect) {
       playSfx("playerAttack");
       playSfx(
-        enemyDifficulty === "hard" ? "hardMonsterHurt" : "easyMediumMonsterHurt"
+        enemyAppearanceVariant === "hard" ? "hardMonsterHurt" : "easyMediumMonsterHurt"
       );
       setPlayerAction("attack");
       setPlayerAttackAnim(true);
@@ -1266,7 +1332,7 @@ function hashPassword(password) {
       }
     } else {
       playSfx(
-        enemyDifficulty === "hard"
+        enemyAppearanceVariant === "hard"
           ? "hardMonsterAttack"
           : "easyMediumMonsterAttack"
       );
@@ -1322,6 +1388,7 @@ function hashPassword(password) {
               incorrectAnswers: Math.max(totalQuestions - correctAnswers, 0),
               totalQuestions,
               questLevel: module?.level || module?.questLevel || 1,
+              timeLeftSeconds: remainingSeconds,
             });
             setGameCompleted(true);
           }, 2500);
@@ -1600,7 +1667,7 @@ function hashPassword(password) {
     resetQuestionStates();
   }, [currentQuizIndex, currentQuestionIndex, resetQuestionStates]);
 
-  const completeQuest = async (answersToUse = null) => {
+  const completeQuest = async (answersToUse = null, options = {}) => {
     if (gameCompleted || completionInProgress || showDeathAnimation) return;
 
     setCompletionInProgress(true);
@@ -1648,8 +1715,15 @@ function hashPassword(password) {
     // Update quest progress to show completion
     setQuestProgress(100);
 
-    // Player wins if they have 50% or more health, defeated if below 50%
-    const playerSurvived = playerHealth >= 50;
+    const resolutionReason = options?.resolutionReason || "normal";
+    const isTimeoutResolution = resolutionReason === "timeout";
+
+    // On timeout, result is based on score threshold; otherwise keep health-based battle result.
+    const playerSurvived = isTimeoutResolution
+      ? finalScore >= 50
+      : playerHealth >= 50;
+
+    setIsPlayerDefeated(!playerSurvived);
 
     // On final resolution, always set the loser's health bar to zero.
     if (playerSurvived) {
@@ -1662,7 +1736,9 @@ function hashPassword(password) {
       playOutcomeSfxOnce(true);
       // Player wins - enemy dies
       setBattleMessage(
-        playerHealth === 100
+        isTimeoutResolution
+          ? "⏰ Time's up! Victory secured with a passing score!"
+          : playerHealth === 100
           ? "🎉 Flawless Victory! No damage taken!"
           : playerHealth > 75
           ? "🎉 Excellent Victory! Minimal damage sustained!"
@@ -1690,6 +1766,7 @@ function hashPassword(password) {
             incorrectAnswers,
             totalQuestions,
             questLevel: module?.level || module?.questLevel || 1,
+            timeLeftSeconds: remainingSeconds,
           });
 
           // Hide loading and show completion screen
@@ -1701,9 +1778,10 @@ function hashPassword(password) {
       playOutcomeSfxOnce(false);
       // Player loses - player dies
       setBattleMessage(
-        "💀 Defeat! You have been overwhelmed by the darkness..."
+        isTimeoutResolution
+          ? "⏰ Time's up! Defeat - score was below 50%."
+          : "💀 Defeat! You have been overwhelmed by the darkness..."
       );
-      setIsPlayerDefeated(true);
 
       // Trigger player death animation
       triggerDeathAnimation(true, false);
@@ -1724,6 +1802,7 @@ function hashPassword(password) {
             incorrectAnswers,
             totalQuestions,
             questLevel: module?.level || module?.questLevel || 1,
+            timeLeftSeconds: remainingSeconds,
           });
 
           // Hide loading and show completion screen
@@ -1785,6 +1864,9 @@ function hashPassword(password) {
         console.log("User answers object:", finalAnswers);
         const questLevel =
           attemptSummary?.questLevel || module?.level || module?.questLevel || 1;
+        const timeLeftSeconds = Number.isFinite(attemptSummary?.timeLeftSeconds)
+          ? Math.max(0, Math.round(attemptSummary.timeLeftSeconds))
+          : Math.max(0, Math.round(remainingSeconds));
         const correctAnswers =
           attemptSummary?.correctAnswers ??
           Object.values(finalAnswers).filter((answer) => answer.isCorrect).length;
@@ -1799,6 +1881,50 @@ function hashPassword(password) {
         if (moduleId.includes("dummy-")) {
           console.log("Dummy cyber-quest detected, skipping API submission");
           return; // Don't make API calls for dummy data
+        }
+
+        if ((module?.questType || "quiz") === "lesson") {
+          const response = await fetch(
+            `${API_URL}/cyber-quests/${module._id}/submit`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                answers: [],
+                correctAnswers,
+                incorrectAnswers,
+                questLevel,
+                totalQuestions,
+                timeLeftSeconds,
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(
+              `Failed to submit lesson quest: ${response.status} - ${errorText}`
+            );
+          }
+
+          const result = await response.json();
+          if (result.success && result.result) {
+            const {
+              xpEarned: earned,
+              totalXP: total,
+              currentLevel: level,
+              levelProgression,
+            } = result.result;
+
+            setXpEarned(earned || 0);
+            setTotalXP(total || 0);
+            setCurrentLevel(level || 1);
+            setLevelUp(Boolean(levelProgression?.levelProgressed));
+          }
+          return;
         }
 
         // Submit cyber-quest attempt
@@ -1976,6 +2102,7 @@ function hashPassword(password) {
               incorrectAnswers,
               questLevel,
               totalQuestions,
+              timeLeftSeconds,
             }),
           }
         );
@@ -2054,6 +2181,14 @@ function hashPassword(password) {
             moduleId,
             score,
             questType: "module",
+            timeLeftSeconds: Number.isFinite(attemptSummary?.timeLeftSeconds)
+              ? Math.max(0, Math.round(attemptSummary.timeLeftSeconds))
+              : undefined,
+            totalTimeSeconds: Number.isFinite(initialCountdownSeconds)
+              ? Math.max(0, Math.round(initialCountdownSeconds))
+              : undefined,
+            correctAnswers: attemptSummary?.correctAnswers,
+            totalQuestions: attemptSummary?.totalQuestions,
           }),
         });
 
@@ -2084,6 +2219,69 @@ function hashPassword(password) {
     }
   };
 
+    const handleLessonAdvance = useCallback(async () => {
+    if (!isLessonQuest || completionInProgress) {
+      return;
+    }
+
+    const totalLessons = Math.max(lessonPages.length, 1);
+    const isLastLesson = currentLessonIndex >= totalLessons - 1;
+
+    if (!isLastLesson) {
+      const nextLessonIndex = currentLessonIndex + 1;
+      setCurrentLessonIndex(nextLessonIndex);
+      setQuestProgress(((nextLessonIndex + 1) / totalLessons) * 100);
+      return;
+    }
+
+    try {
+      setCompletionInProgress(true);
+      setQuestProgress(100);
+      playOutcomeSfxOnce(true);
+      await markModuleCompleted(id, 100, {}, {
+        correctAnswers: totalLessons,
+        incorrectAnswers: 0,
+        totalQuestions: totalLessons,
+        questLevel: module?.level || module?.questLevel || 1,
+        timeLeftSeconds: remainingSeconds,
+      });
+      setGameCompleted(true);
+    } finally {
+      setCompletionInProgress(false);
+    }
+    }, [
+    completionInProgress,
+    currentLessonIndex,
+    id,
+    isLessonQuest,
+    lessonPages.length,
+    markModuleCompleted,
+    module?.level,
+    module?.questLevel,
+    playOutcomeSfxOnce,
+    remainingSeconds,
+    ]);
+
+    const handleLessonPrevious = useCallback(() => {
+    if (!isLessonQuest || completionInProgress) {
+      return;
+    }
+
+    const totalLessons = Math.max(lessonPages.length, 1);
+    if (currentLessonIndex <= 0) {
+      return;
+    }
+
+    const previousLessonIndex = currentLessonIndex - 1;
+    setCurrentLessonIndex(previousLessonIndex);
+    setQuestProgress(((previousLessonIndex + 1) / totalLessons) * 100);
+    }, [
+    completionInProgress,
+    currentLessonIndex,
+    isLessonQuest,
+    lessonPages.length,
+    ]);
+
   const getCurrentQuestion = useCallback(() => {
     if (!quizzes[currentQuizIndex]) return null;
     return quizzes[currentQuizIndex].questions[currentQuestionIndex];
@@ -2108,6 +2306,73 @@ function hashPassword(password) {
       1;
     return `${currentPosition}/${totalQuestions}`;
   };
+
+  const formatTimeLabel = useCallback((secondsValue) => {
+    const safeSeconds = Math.max(0, Number(secondsValue) || 0);
+    const minutes = Math.floor(safeSeconds / 60)
+      .toString()
+      .padStart(2, "0");
+    const seconds = Math.floor(safeSeconds % 60)
+      .toString()
+      .padStart(2, "0");
+    return `${minutes}:${seconds}`;
+  }, []);
+
+  useEffect(() => {
+    if (!gameStarted || gameCompleted || completionInProgress || showDeathAnimation) {
+      return;
+    }
+
+    if (!isTimedQuest) {
+      return;
+    }
+
+    if (remainingSeconds <= 0) {
+      return;
+    }
+
+    const timerId = setInterval(() => {
+      setRemainingSeconds((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, [
+    completionInProgress,
+    gameCompleted,
+    gameStarted,
+    isTimedQuest,
+    remainingSeconds,
+    showDeathAnimation,
+  ]);
+
+  useEffect(() => {
+    if (!gameStarted || gameCompleted || completionInProgress || showDeathAnimation) {
+      return;
+    }
+
+    if (!isTimedQuest || remainingSeconds > 0) {
+      return;
+    }
+
+    if (isLessonQuest) {
+      setBattleMessage("⏰ Time's up! Completing lesson quest...");
+      handleLessonAdvance();
+      return;
+    }
+
+    setBattleMessage("⏰ Time's up! Finalizing your quest score...");
+    completeQuest(null, { resolutionReason: "timeout" });
+  }, [
+    completeQuest,
+    completionInProgress,
+    gameCompleted,
+    gameStarted,
+    handleLessonAdvance,
+    isLessonQuest,
+    isTimedQuest,
+    remainingSeconds,
+    showDeathAnimation,
+  ]);
 
   if (loading) {
     return (
@@ -2164,13 +2429,24 @@ function hashPassword(password) {
                   color="#FF9800"
                 />
                 <Text style={styles.statText}>
-                  {quizzes.reduce(
-                    (acc, quiz) => acc + quiz.questions.length,
-                    0
-                  )}{" "}
-                  Challenges
+                  {isLessonQuest
+                    ? lessonPages.length
+                    : quizzes.reduce(
+                        (acc, quiz) => acc + quiz.questions.length,
+                        0
+                      )}{" "}
+                  {isLessonQuest ? "Lessons" : "Challenges"}
                 </Text>
               </View>
+
+              {isTimedQuest && (
+                <View style={styles.statItem}>
+                  <MaterialCommunityIcons name="timer" size={24} color="#4FC3F7" />
+                  <Text style={styles.statText}>
+                    Timer: {formatTimeLabel(normalizedCountdownSeconds)}
+                  </Text>
+                </View>
+              )}
 
             </View>
 
@@ -2183,7 +2459,9 @@ function hashPassword(password) {
                 style={styles.buttonGradient}
               >
                 <MaterialCommunityIcons name="play" size={24} color="#ffffff" />
-                <Text style={styles.startQuestText}>Begin Epic Quest</Text>
+                <Text style={styles.startQuestText}>
+                  {isLessonQuest ? "Begin Lesson Quest" : "Begin Epic Quest"}
+                </Text>
               </LinearGradient>
             </TouchableOpacity>
 
@@ -2204,24 +2482,25 @@ function hashPassword(password) {
     console.log("📋 userAnswers object:", userAnswers);
     console.log("📋 userAnswers count:", Object.keys(userAnswers).length);
 
-    const correctAnswers = Object.values(userAnswers).filter(
-      (answer) => answer.isCorrect
-    ).length;
-    const totalQuestions = quizzes.reduce(
-      (acc, quiz) => acc + quiz.questions.length,
-      0
-    );
+    const totalQuestions = isLessonQuest
+      ? Math.max(lessonPages.length, 1)
+      : quizzes.reduce((acc, quiz) => acc + quiz.questions.length, 0);
+    const correctAnswers = isLessonQuest
+      ? totalQuestions
+      : Object.values(userAnswers).filter((answer) => answer.isCorrect).length;
 
     console.log(
       `📊 Score Calculation: ${correctAnswers} correct / ${totalQuestions} total questions`
     );
 
-    const finalScore = Math.round((correctAnswers / totalQuestions) * 100);
+    const finalScore = isLessonQuest
+      ? 100
+      : Math.round((correctAnswers / totalQuestions) * 100);
 
     console.log(`🎯 FINAL SCORE FOR DISPLAY: ${finalScore}%`);
 
     // Calculate stars based on finalScore (matching main screen: 34/65/90)
-    const displayStars = calculateStarRating(finalScore);
+    const displayStars = isLessonQuest ? 3 : calculateStarRating(finalScore);
 
     // Render star icons
     const renderStars = () => {
@@ -2252,6 +2531,8 @@ function hashPassword(password) {
               name={
                 isPlayerDefeated
                   ? "skull"
+                  : isLessonQuest
+                  ? "book-open-variant"
                   : starRating === 3
                   ? "trophy"
                   : starRating >= 1
@@ -2262,6 +2543,8 @@ function hashPassword(password) {
               color={
                 isPlayerDefeated
                   ? "#FF4444"
+                  : isLessonQuest
+                  ? "#4FC3F7"
                   : starRating === 3
                   ? "#FFD700"
                   : starRating >= 1
@@ -2274,6 +2557,8 @@ function hashPassword(password) {
             <Text style={styles.questCompleteTitle}>
               {isPlayerDefeated
                 ? "Defeated!"
+                : isLessonQuest
+                ? "Lesson Complete!"
                 : starRating === 3
                 ? "Perfect Victory!"
                 : starRating === 2
@@ -2291,7 +2576,8 @@ function hashPassword(password) {
               {isPlayerDefeated ? "Score: 0%" : `Score: ${finalScore}%`}
             </Text>
             <Text style={styles.questCompleteStats}>
-              {correctAnswers}/{totalQuestions} challenges conquered
+              {correctAnswers}/{totalQuestions}{" "}
+              {isLessonQuest ? "lessons completed" : "challenges conquered"}
             </Text>
 
             {/* Progress Bar showing final progress */}
@@ -2491,6 +2777,151 @@ function hashPassword(password) {
     );
   }
 
+  if (isLessonQuest) {
+    const activeLesson = lessonPages[currentLessonIndex] || null;
+    const totalLessons = Math.max(lessonPages.length, 1);
+
+    if (!activeLesson) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading lesson content...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ImageBackground source={currentBackground} style={styles.container}>
+        <LinearGradient
+          colors={["rgba(0,0,0,0.75)", "rgba(0,0,0,0.55)"]}
+          style={styles.overlay}
+        >
+          <View style={styles.battleHeader}>
+            <View style={styles.progressSection}>
+              <Text style={styles.questProgressText}>
+                Lesson {currentLessonIndex + 1} of {totalLessons}
+              </Text>
+              {isTimedQuest && (
+                <Text style={styles.questProgressText}>
+                  Time Left: {formatTimeLabel(remainingSeconds)}
+                </Text>
+              )}
+              <View style={styles.progressBar}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: `${((currentLessonIndex + 1) / totalLessons) * 100}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.exitButton} onPress={handleExitPress}>
+              <MaterialCommunityIcons name="close" size={24} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={lessonContainerStyle}>
+            <ScrollView
+              style={styles.questionScrollContainer}
+              showsVerticalScrollIndicator
+            >
+              <View style={styles.questionHeader}>
+                <MaterialCommunityIcons
+                  name="book-open-page-variant"
+                  size={24}
+                  color={COLORS.primary}
+                />
+                <Text style={styles.currentQuizTitle}>{module?.title}</Text>
+              </View>
+
+              <Text style={styles.questionText}>{activeLesson.title}</Text>
+
+              {!!activeLesson.subheading && (
+                <Text style={[styles.helperText, { marginBottom: 12 }]}>
+                  {activeLesson.subheading}
+                </Text>
+              )}
+
+              <Text style={styles.optionText}>{activeLesson.body}</Text>
+
+              {activeLesson.mediaType === "image" && !!activeLesson.mediaUrl && (
+                <Image
+                  source={{ uri: activeLesson.mediaUrl }}
+                  resizeMode="contain"
+                  style={{
+                    width: "100%",
+                    height: Platform.OS === "web" ? 240 : 180,
+                    marginTop: 16,
+                    borderRadius: 12,
+                    backgroundColor: "rgba(255,255,255,0.08)",
+                  }}
+                />
+              )}
+
+              {activeLesson.mediaType === "video" && !!activeLesson.mediaUrl && (
+                <TouchableOpacity
+                  style={[styles.submitButton, { marginTop: 16 }]}
+                  onPress={() => openLessonMedia(activeLesson.mediaUrl)}
+                >
+                  <Text style={styles.submitButtonText}>Open Lesson Video</Text>
+                </TouchableOpacity>
+              )}
+
+              <View style={styles.lessonNavigationRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.continueButton,
+                    styles.lessonNavButton,
+                    currentLessonIndex <= 0 && styles.lessonNavButtonDisabled,
+                  ]}
+                  onPress={handleLessonPrevious}
+                  disabled={completionInProgress || currentLessonIndex <= 0}
+                >
+                  <MaterialCommunityIcons
+                    name="arrow-left"
+                    size={20}
+                    color="#ffffff"
+                  />
+                  <Text style={styles.continueButtonText}>previous</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.continueButton,
+                    styles.lessonNavButton,
+                    completionInProgress && styles.lessonNavButtonDisabled,
+                  ]}
+                  onPress={handleLessonAdvance}
+                  disabled={completionInProgress}
+                >
+                  <MaterialCommunityIcons
+                    name={
+                      currentLessonIndex + 1 >= totalLessons
+                        ? "check-circle"
+                        : "arrow-right"
+                    }
+                    size={20}
+                    color="#ffffff"
+                  />
+                  <Text style={styles.continueButtonText}>
+                    {currentLessonIndex + 1 >= totalLessons
+                      ? completionInProgress
+                        ? "Completing..."
+                        : "Finish Lesson Quest"
+                      : "next"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </LinearGradient>
+      </ImageBackground>
+    );
+  }
+
   const currentQuestion = getCurrentQuestion();
 
   // If we've finished all questions but game isn't marked complete yet, trigger completion
@@ -2562,6 +2993,11 @@ function hashPassword(password) {
             <Text style={styles.questProgressText}>
               Quest Progress: {formatProgress()}
             </Text>
+            {isTimedQuest && (
+              <Text style={styles.questProgressText}>
+                Time Left: {formatTimeLabel(remainingSeconds)}
+              </Text>
+            )}
             {module?.type === "cyber-quest" && (
               <Text style={styles.questProgressText}>
                 Correct: {correctAnswerCount} • Incorrect: {incorrectAnswerCount}
@@ -3697,7 +4133,7 @@ const styles = {
     minHeight: 40,
     minWidth: 200,
   },
-  questionSection: {
+    questionSection: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
     borderRadius: 12,
@@ -3710,7 +4146,23 @@ const styles = {
       alignSelf: "center",
       width: "100%",
     }),
-  },
+    },
+    lessonQuestionSection: {
+    maxHeight: "75%",
+    },
+    lessonNavigationRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 20,
+    },
+    lessonNavButton: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    },
+    lessonNavButtonDisabled: {
+    opacity: 0.6,
+    },
   questionScrollContainer: {
     flex: 1,
   },

@@ -189,6 +189,42 @@ const questionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const lessonSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: [true, "Lesson title is required"],
+      trim: true,
+      minlength: [2, "Lesson title must be at least 2 characters"],
+      maxlength: [120, "Lesson title cannot exceed 120 characters"],
+    },
+    subheading: {
+      type: String,
+      trim: true,
+      maxlength: [160, "Lesson subheading cannot exceed 160 characters"],
+      default: "",
+    },
+    body: {
+      type: String,
+      required: [true, "Lesson body is required"],
+      trim: true,
+      minlength: [5, "Lesson body must be at least 5 characters"],
+      maxlength: [5000, "Lesson body cannot exceed 5000 characters"],
+    },
+    mediaType: {
+      type: String,
+      enum: ["none", "image", "video"],
+      default: "none",
+    },
+    mediaUrl: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
 const cyberQuestSchema = new mongoose.Schema(
   {
     title: {
@@ -214,14 +250,37 @@ const cyberQuestSchema = new mongoose.Schema(
       required: [true, "Subject is required"],
     },
 
+    questType: {
+      type: String,
+      enum: ["quiz", "lesson"],
+      default: "quiz",
+    },
+
     questions: {
       type: [questionSchema],
-      required: true,
+      default: [],
       validate: {
         validator: function (questions) {
+          if (this.questType === "lesson") {
+            return true;
+          }
           return questions.length >= 1 && questions.length <= 50;
         },
         message: "A Cyber Quest must have between 1 and 50 questions",
+      },
+    },
+
+    lessons: {
+      type: [lessonSchema],
+      default: [],
+      validate: {
+        validator: function (lessons) {
+          if (this.questType !== "lesson") {
+            return true;
+          }
+          return Array.isArray(lessons) && lessons.length >= 1 && lessons.length <= 100;
+        },
+        message: "A lesson quest must have between 1 and 100 lessons",
       },
     },
 
@@ -240,6 +299,13 @@ const cyberQuestSchema = new mongoose.Schema(
       type: String,
       enum: ["easy", "medium", "hard"],
       default: "medium",
+    },
+
+    countdownSeconds: {
+      type: Number,
+      min: [30, "Countdown timer must be at least 30 seconds"],
+      max: [3600, "Countdown timer cannot exceed 3600 seconds"],
+      default: 300,
     },
 
     level: {
@@ -268,6 +334,10 @@ cyberQuestSchema.virtual("questionCount").get(function () {
   return this.questions.length;
 });
 
+cyberQuestSchema.virtual("lessonCount").get(function () {
+  return this.lessons.length;
+});
+
 // Static method to find quests by subject (renamed from section)
 cyberQuestSchema.statics.findBySubject = function (subjectId) {
   return this.find({ subject: subjectId, isActive: true })
@@ -290,6 +360,10 @@ cyberQuestSchema.statics.findByInstructor = function (instructorId) {
 
 // Instance method to validate all questions
 cyberQuestSchema.methods.validateQuestions = function () {
+  if (this.questType === "lesson") {
+    return null;
+  }
+
   const errors = [];
 
   this.questions.forEach((question, index) => {
@@ -439,6 +513,37 @@ cyberQuestSchema.methods.validateQuestions = function () {
           `Question ${index + 1}: Unknown question type "${question.type}"`
         );
         break;
+    }
+  });
+
+  return errors.length === 0 ? null : errors;
+};
+
+cyberQuestSchema.methods.validateLessons = function () {
+  if (this.questType !== "lesson") {
+    return null;
+  }
+
+  const errors = [];
+
+  if (!Array.isArray(this.lessons) || this.lessons.length < 1) {
+    errors.push("At least one lesson is required");
+    return errors;
+  }
+
+  this.lessons.forEach((lesson, index) => {
+    if (!lesson.title || lesson.title.trim().length < 2) {
+      errors.push(`Lesson ${index + 1}: Title is required`);
+    }
+    if (!lesson.body || lesson.body.trim().length < 5) {
+      errors.push(`Lesson ${index + 1}: Body is required`);
+    }
+    if (
+      lesson.mediaType &&
+      lesson.mediaType !== "none" &&
+      (!lesson.mediaUrl || lesson.mediaUrl.trim().length === 0)
+    ) {
+      errors.push(`Lesson ${index + 1}: Media URL is required for ${lesson.mediaType}`);
     }
   });
 

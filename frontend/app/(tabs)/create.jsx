@@ -71,15 +71,15 @@ export default function Create() {
   const { colors, isDarkMode } = useTheme();
   // Use dark blue in light mode instead of yellow for text & icon accents
   const highlightColor = isDarkMode ? colors.primary : "#1976d2";
-  console.log("🚀 ~ Create ~ edit:", edit);
+  console.log(" ~ Create ~ edit:", edit);
   const { user, token } = useAuthStore();
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   // Debug logging
-  console.log("🔍 Create Component - Edit param:", edit);
-  console.log("🔍 Create Component - Type of edit:", typeof edit);
+  console.log(" Create Component - Edit param:", edit);
+  console.log(" Create Component - Type of edit:", typeof edit);
 
     // Simply check: if we have edit param, we're in edit mode
     // If user clicks Create tab directly, they can click "Create New" to start fresh
@@ -91,20 +91,20 @@ export default function Create() {
     : focusModuleId;
     const openedFromInstructorTools = fromSource === "instructor-tools";
     const openedFromIndex = fromSource === "index";
-    console.log("🔍 Create Component - isEditMode:", isEditMode);
+    console.log(" Create Component - isEditMode:", isEditMode);
 
   // Internal UI state to track which creator is active
   const [activeCreator, setActiveCreator] = useState(() => {
     // If we have edit param, show editor by default
     const initialState = edit ? "cyber-quest-map" : "";
-    console.log("🔍 Create Component - Initial activeCreator:", initialState);
+    console.log(" Create Component - Initial activeCreator:", initialState);
     return initialState;
   });
   const questMenuControlRef = useRef(null);
 
     // Function to clear edit mode and show options
     const resetToCreateMode = useCallback(() => {
-    console.log("🔍 Resetting to create mode");
+    console.log(" Resetting to create mode");
     setActiveCreator("");
     // Clear URL parameters by replacing the current route
     router.replace("/create");
@@ -176,18 +176,18 @@ export default function Create() {
 
   // Handle URL parameter changes
   useEffect(() => {
-    console.log("🔍 Create Component - useEffect triggered, edit:", edit);
+    console.log(" Create Component - useEffect triggered, edit:", edit);
 
     if (edit) {
       // If edit parameter exists, go to editor
       console.log(
-        "🔍 Create Component - Setting activeCreator to cyber-quest-map"
+        " Create Component - Setting activeCreator to cyber-quest-map"
       );
       setActiveCreator("cyber-quest-map");
     } else {
       // If no edit parameter, show create options
       console.log(
-        "🔍 Create Component - Setting activeCreator to empty (show options)"
+        " Create Component - Setting activeCreator to empty (show options)"
       );
       setActiveCreator("");
     }
@@ -285,7 +285,7 @@ export default function Create() {
         onPress={() => {
           // Clear any edit parameters when creating new
           console.log(
-            "🔍 Cyber Quest Map clicked - setting activeCreator to cyber-quest-map"
+            " Cyber Quest Map clicked - setting activeCreator to cyber-quest-map"
           );
           setActiveCreator("cyber-quest-map");
         }}
@@ -314,10 +314,16 @@ export default function Create() {
       title: "",
       description: "",
        selectedSubject: null,
-      difficulty: "medium",
+      selectedSection: null,
+      questType: "quiz",
+      countdownSeconds: 300,
       level: 1,
       questions: [],
+      lessons: [],
     });
+
+    const MIN_COUNTDOWN_SECONDS = 30;
+    const MAX_COUNTDOWN_SECONDS = 3600;
 
     const [loadingSubjects, setLoadingSubjects] = useState(false);
     const [availableSubjects, setAvailableSubjects] = useState([]);
@@ -448,23 +454,6 @@ export default function Create() {
       },
     ];
 
-    const difficulties = [
-      {
-        value: "easy",
-        label: "Easy Quest",
-        color: CREATOR_COLORS.success,
-      },
-      {
-        value: "medium",
-        label: "Medium Quest",
-        color: CREATOR_COLORS.warning,
-      },
-      {
-        value: "hard",
-        label: "Hard Quest",
-        color: CREATOR_COLORS.error,
-      },
-    ];
 
     // Load instructor's subjects
     useEffect(() => {
@@ -513,16 +502,20 @@ export default function Create() {
               description: quest.description,
               // Prefer new subject field; fallback to legacy if present
               selectedSection: quest.subject || quest.section_id,
-              difficulty: quest.difficulty,
+              questType: quest.questType || "quiz",
+              countdownSeconds: quest.countdownSeconds || 300,
               level: quest.level || 1,
               questions: migratedQuestions,
+              lessons: Array.isArray(quest.lessons) ? quest.lessons : [],
             });
             setLoadedQuizSnapshot({
               title: quest.title || "",
               description: quest.description || "",
-              difficulty: quest.difficulty || "medium",
+              questType: quest.questType || "quiz",
+              countdownSeconds: quest.countdownSeconds || 300,
               level: quest.level || 1,
               questions: migratedQuestions,
+              lessons: Array.isArray(quest.lessons) ? quest.lessons : [],
             });
           }
         } else {
@@ -544,9 +537,11 @@ export default function Create() {
           title: "",
           description: "",
           selectedSection: null,
-          difficulty: "medium",
+          questType: "quiz",
+          countdownSeconds: 300,
           level: 1,
           questions: [],
+          lessons: [],
         });
         setLoadedQuizSnapshot(null);
         setIsEditing(false);
@@ -613,7 +608,7 @@ export default function Create() {
     const buildQuizBankPayload = (source = questData) => ({
       title: source?.title || "Untitled Quiz Bank",
       description: source?.description || "",
-      difficulty: source?.difficulty || "medium",
+      countdownSeconds: source?.countdownSeconds || 300,
       level: source?.level || 1,
       questions: migrateSortingItems(Array.isArray(source?.questions) ? source.questions : []),
     });
@@ -745,7 +740,7 @@ export default function Create() {
           ...questData,
           title: jsonData.title || "",
           description: jsonData.description || "",
-          difficulty: jsonData.difficulty || "medium",
+          countdownSeconds: jsonData.countdownSeconds || 300,
           level: jsonData.level || 1,
           questions: jsonData.questions || [],
         });
@@ -774,7 +769,7 @@ export default function Create() {
           title: "Fundamentals of Cyber Safety",
           description:
             "Intro quest covering passwords, hardware vs software, and basic coding awareness.",
-          difficulty: "medium",
+          countdownSeconds: 300,
           level: 1,
           questions: [
             {
@@ -969,6 +964,50 @@ export default function Create() {
         });
         setShowQuestionTypes(false);
       }
+    };
+
+    const addLesson = () => {
+      setQuestData((prev) => ({
+        ...prev,
+        lessons: [
+          ...(Array.isArray(prev.lessons) ? prev.lessons : []),
+          {
+            title: "",
+            subheading: "",
+            body: "",
+            mediaType: "none",
+            mediaUrl: "",
+          },
+        ],
+      }));
+    };
+
+    const updateLesson = (lessonIndex, field, value) => {
+      setQuestData((prev) => {
+        const lessons = [...(Array.isArray(prev.lessons) ? prev.lessons : [])];
+        if (!lessons[lessonIndex]) return prev;
+
+        lessons[lessonIndex] = {
+          ...lessons[lessonIndex],
+          [field]: value,
+        };
+
+        if (field === "mediaType" && value === "none") {
+          lessons[lessonIndex].mediaUrl = "";
+        }
+
+        return {
+          ...prev,
+          lessons,
+        };
+      });
+    };
+
+    const removeLesson = (lessonIndex) => {
+      setQuestData((prev) => ({
+        ...prev,
+        lessons: (prev.lessons || []).filter((_, index) => index !== lessonIndex),
+      }));
     };
 
     const removeQuestion = (index) => {
@@ -1301,7 +1340,7 @@ export default function Create() {
                   ]}
                 >
                   <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                    📚 Multiple Choice Question Examples
+                     Multiple Choice Question Examples
                   </Text>
 
                   <View style={styles.exampleItem}>
@@ -1453,7 +1492,7 @@ export default function Create() {
                   ]}
                 >
                   <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                    📚 Code Missing Question Examples
+                     Code Missing Question Examples
                   </Text>
 
                   <View style={styles.exampleItem}>
@@ -1603,7 +1642,7 @@ export default function Create() {
                   ]}
                 >
                   <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                    📚 Fill in Blanks Question Examples
+                     Fill in Blanks Question Examples
                   </Text>
 
                   <View style={styles.exampleItem}>
@@ -1765,7 +1804,7 @@ export default function Create() {
                   ]}
                 >
                   <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                    📚 Code Ordering Question Examples
+                     Code Ordering Question Examples
                   </Text>
 
                 <View style={styles.exampleItem}>
@@ -2044,7 +2083,7 @@ export default function Create() {
                   ]}
                 >
                   <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                    📚 Sorting Question Examples
+                     Sorting Question Examples
                   </Text>
 
                 <View style={styles.exampleItem}>
@@ -2264,7 +2303,7 @@ export default function Create() {
                   ]}
                 >
                   <Text style={[styles.examplesTitle, { color: colors.primary }]}>
-                    💡 Cipher Question Examples
+                     Cipher Question Examples
                   </Text>
 
                 <View style={styles.exampleItem}>
@@ -2372,6 +2411,35 @@ export default function Create() {
       if (!questData.title.trim()) return false;
       if (!questData.description.trim()) return false;
       if (!questData.selectedSection) return false;
+      if (
+        typeof questData.countdownSeconds !== "number" ||
+        questData.countdownSeconds < MIN_COUNTDOWN_SECONDS ||
+        questData.countdownSeconds > MAX_COUNTDOWN_SECONDS
+      ) {
+        return false;
+      }
+
+      if (questData.questType === "lesson") {
+        if (!Array.isArray(questData.lessons) || questData.lessons.length < 1) {
+          return false;
+        }
+
+        return questData.lessons.every((lesson) => {
+          if (!lesson?.title?.trim()) return false;
+          if (!lesson?.body?.trim()) return false;
+
+          const mediaType = lesson.mediaType || "none";
+          if (
+            (mediaType === "image" || mediaType === "video") &&
+            !lesson?.mediaUrl?.trim()
+          ) {
+            return false;
+          }
+
+          return true;
+        });
+      }
+
       // Minimum question count reduced to 1 (previously 3)
       if (questData.questions.length < 1) return false;
 
@@ -2443,6 +2511,37 @@ export default function Create() {
       if (!questData.selectedSection) {
         messages.push("Please select a subject");
       }
+      if (
+        typeof questData.countdownSeconds !== "number" ||
+        questData.countdownSeconds < MIN_COUNTDOWN_SECONDS ||
+        questData.countdownSeconds > MAX_COUNTDOWN_SECONDS
+      ) {
+        messages.push("Countdown timer must be between 30 and 3600 seconds");
+      }
+
+      if (questData.questType === "lesson") {
+        if (!Array.isArray(questData.lessons) || questData.lessons.length < 1) {
+          messages.push("Please add at least one lesson");
+        }
+
+        const hasIncompleteLesson = (questData.lessons || []).some((lesson) => {
+          if (!lesson?.title?.trim() || !lesson?.body?.trim()) {
+            return true;
+          }
+          const mediaType = lesson.mediaType || "none";
+          return (
+            (mediaType === "image" || mediaType === "video") &&
+            !lesson?.mediaUrl?.trim()
+          );
+        });
+
+        if (hasIncompleteLesson) {
+          messages.push("Please complete all lesson fields");
+        }
+
+        return messages;
+      }
+
       if (questData.questions.length < 1) {
         messages.push("Please add at least one question");
       }
@@ -2511,8 +2610,13 @@ export default function Create() {
           body: JSON.stringify({
             title: questData.title.trim(),
             description: questData.description.trim(),
+            questType: questData.questType || "quiz",
             questions: questData.questions,
-            difficulty: questData.difficulty,
+            lessons: questData.lessons || [],
+            countdownSeconds: Math.max(
+              MIN_COUNTDOWN_SECONDS,
+              Math.min(MAX_COUNTDOWN_SECONDS, Number(questData.countdownSeconds) || 300)
+            ),
             level: questData.level,
             // Send subject for forward compatibility; route uses path param
             subject: questData.selectedSection._id || questData.selectedSection,
@@ -2544,7 +2648,8 @@ export default function Create() {
                   title: "",
                   description: "",
                   selectedSection: null,
-                  difficulty: "medium",
+                  questType: "quiz",
+                  countdownSeconds: 300,
                   level: 1,
                   questions: [
                     {
@@ -2553,6 +2658,7 @@ export default function Create() {
                       correct_index: 0,
                     },
                   ],
+                  lessons: [],
                 });
                 // Clear edit parameters and show options
                 router.replace("/(tabs)/create");
@@ -2589,7 +2695,7 @@ export default function Create() {
           <View style={styles.formHeader}>
             {/* Apply dynamic color so header is visible in dark mode */}
             <Text style={[styles.formTitle, { color: colors.textSecondary }]}> 
-              🗺️ {isEditing ? "Edit" : "Create"} Cyber Quest Map
+              ️ {isEditing ? "Edit" : "Create"} Cyber Quest Map
             </Text>
 
             {/* Import/Export Menu Button */}
@@ -2611,7 +2717,7 @@ export default function Create() {
                   style={styles.createNewButton}
                   onPress={() => {
                     console.log(
-                      "🔍 Create New button clicked - clearing edit mode"
+                      " Create New button clicked - clearing edit mode"
                     );
                     resetToCreateMode();
                   }}
@@ -2741,7 +2847,7 @@ export default function Create() {
                     { color: colors.text },
                   ]}
                 >
-                  📚 JSON Import Instructions
+                   JSON Import Instructions
                 </Text>
                 <TouchableOpacity
                   onPress={() => setShowInstructionsModal(false)}
@@ -2771,8 +2877,8 @@ export default function Create() {
                   <Text style={styles.instructionsCode}>description</Text> -
                   Quest description (string)
                   {"\n"}•{" "}
-                  <Text style={styles.instructionsCode}>difficulty</Text> -
-                  "easy", "medium", or "hard"
+                  <Text style={styles.instructionsCode}>countdownSeconds</Text> -
+                  Quest timer in seconds (30 to 3600)
                   {"\n"}• <Text style={styles.instructionsCode}>level</Text> -
                   Quest level (number, 1-100)
                   {"\n"}• <Text style={styles.instructionsCode}>questions</Text>{" "}
@@ -2889,7 +2995,7 @@ export default function Create() {
                   {"\n\n"}✅ All fields marked as required must be present
                   {"\n\n"}✅ Hints are optional for all question types
                   {"\n\n"}
-                  💡 Download the sample JSON to see a complete working example!
+                   Download the sample JSON to see a complete working example!
                 </Text>
               </ScrollView>
             </View>
@@ -3208,6 +3314,88 @@ export default function Create() {
                 )}
               </View>
 
+              {/* Quest Type Selection */}
+              <View style={styles.inputGroup}>
+                <Text
+                  style={[styles.inputLabel, { color: colors.textSecondary }]}
+                >
+                  Quest Type
+                </Text>
+                <View style={styles.difficultyContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.difficultyButton,
+                      {
+                        backgroundColor: "#FFFFFF",
+                        borderColor: colors.border,
+                      },
+                      questData.questType === "quiz" && [
+                        styles.selectedDifficulty,
+                        {
+                          backgroundColor: "#FFFFFF",
+                          borderColor: colors.primary,
+                        },
+                      ],
+                    ]}
+                    onPress={() =>
+                      setQuestData((prev) => ({
+                        ...prev,
+                        questType: "quiz",
+                      }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.difficultyText,
+                        { color: colors.text },
+                        questData.questType === "quiz" && {
+                          color: colors.text,
+                          fontWeight: "700",
+                        },
+                      ]}
+                    >
+                      Quiz Cyber Quest
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.difficultyButton,
+                      {
+                        backgroundColor: "#FFFFFF",
+                        borderColor: colors.border,
+                      },
+                      questData.questType === "lesson" && [
+                        styles.selectedDifficulty,
+                        {
+                          backgroundColor: "#FFFFFF",
+                          borderColor: colors.primary,
+                        },
+                      ],
+                    ]}
+                    onPress={() =>
+                      setQuestData((prev) => ({
+                        ...prev,
+                        questType: "lesson",
+                      }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.difficultyText,
+                        { color: colors.text },
+                        questData.questType === "lesson" && {
+                          color: colors.text,
+                          fontWeight: "700",
+                        },
+                      ]}
+                    >
+                      Lesson Quest
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {/* Quest Level Display */}
               {questData.selectedSection && (
                 <View style={styles.inputGroup}>
@@ -3258,53 +3446,41 @@ export default function Create() {
                 </View>
               )}
 
-              {/* Difficulty Selection */}
+              {/* Quest Countdown Timer */}
               <View style={styles.inputGroup}>
                 <Text
                   style={[styles.inputLabel, { color: colors.textSecondary }]}
                 >
-                  Difficulty Levels
+                  Quest Countdown Timer (seconds)
                 </Text>
-                <View style={styles.difficultyContainer}>
-                  {difficulties.map((diff) => (
-                    <TouchableOpacity
-                      key={diff.value}
-                      style={[
-                        styles.difficultyButton,
-                        {
-                          backgroundColor: "#FFFFFF",
-                          borderColor: colors.border,
-                        },
-                        questData.difficulty === diff.value && [
-                          styles.selectedDifficulty,
-                          {
-                            backgroundColor: "#FFFFFF",
-                            borderColor: colors.primary,
-                          },
-                        ],
-                      ]}
-                      onPress={() =>
-                        setQuestData({ ...questData, difficulty: diff.value })
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.difficultyText,
-                          { color: colors.text },
-                          questData.difficulty === diff.value && {
-                            color: colors.text,
-                            fontWeight: "700",
-                          },
-                        ]}
-                      >
-                        {diff.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: "#FFFFFF",
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  keyboardType="numeric"
+                  value={String(questData.countdownSeconds || "")}
+                  onChangeText={(value) => {
+                    const digits = value.replace(/[^0-9]/g, "");
+                    setQuestData((prev) => ({
+                      ...prev,
+                      countdownSeconds: digits ? Number(digits) : 0,
+                    }));
+                  }}
+                  placeholder="e.g. 300"
+                  placeholderTextColor={colors.textSecondary}
+                />
+                <Text style={[styles.helperText, { color: colors.textSecondary }]}> 
+                  Set between 30 and 3600 seconds.
+                </Text>
               </View>
 
               {/* Questions Editor */}
+              {questData.questType === "quiz" && (
               <View style={styles.inputGroup}>
                 <Text
                   style={[styles.inputLabel, { color: colors.textSecondary }]}
@@ -3430,6 +3606,213 @@ export default function Create() {
                   </View>
                 ))}
               </View>
+              )}
+
+              {/* Lesson Editor */}
+              {questData.questType === "lesson" && (
+                <View style={styles.inputGroup}>
+                  <Text
+                    style={[styles.inputLabel, { color: colors.textSecondary }]}
+                  >
+                    Lessons ({(questData.lessons || []).length}/100)
+                  </Text>
+
+                  {(questData.lessons || []).map((lesson, lessonIndex) => (
+                    <View
+                      key={`lesson-${lessonIndex}`}
+                      style={[
+                        styles.questionContainer,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.questionHeader}>
+                        <View style={styles.questionHeaderLeft}>
+                          <Text
+                            style={[
+                              styles.questionNumber,
+                              {
+                                color: colors.primary,
+                              },
+                            ]}
+                          >
+                            Lesson {lessonIndex + 1}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.removeQuestionButton}
+                          onPress={() => removeLesson(lessonIndex)}
+                        >
+                          <Ionicons
+                            name="trash"
+                            size={16}
+                            color={colors.error}
+                          />
+                        </TouchableOpacity>
+                      </View>
+
+                      <TextInput
+                        value={lesson.title || ""}
+                        onChangeText={(text) => updateLesson(lessonIndex, "title", text)}
+                        placeholder="Topic title"
+                        style={styles.textInput}
+                        mode="outlined"
+                        theme={{
+                          colors: {
+                            primary: colors.primary,
+                            outline: colors.border,
+                            background: colors.surface,
+                            onSurface: colors.text,
+                            text: colors.text,
+                            placeholder: colors.textSecondary,
+                          },
+                        }}
+                        textColor={colors.text}
+                      />
+
+                      <TextInput
+                        value={lesson.subheading || ""}
+                        onChangeText={(text) =>
+                          updateLesson(lessonIndex, "subheading", text)
+                        }
+                        placeholder="Lesson subheading (optional)"
+                        style={styles.textInput}
+                        mode="outlined"
+                        theme={{
+                          colors: {
+                            primary: colors.primary,
+                            outline: colors.border,
+                            background: colors.surface,
+                            onSurface: colors.text,
+                            text: colors.text,
+                            placeholder: colors.textSecondary,
+                          },
+                        }}
+                        textColor={colors.text}
+                      />
+
+                      <TextInput
+                        value={lesson.body || ""}
+                        onChangeText={(text) => updateLesson(lessonIndex, "body", text)}
+                        placeholder="Lesson body"
+                        multiline
+                        numberOfLines={5}
+                        style={[styles.textInput, styles.textArea]}
+                        mode="outlined"
+                        theme={{
+                          colors: {
+                            primary: colors.primary,
+                            outline: colors.border,
+                            background: colors.surface,
+                            onSurface: colors.text,
+                            text: colors.text,
+                            placeholder: colors.textSecondary,
+                          },
+                        }}
+                        textColor={colors.text}
+                      />
+
+                      <View style={styles.difficultyContainer}>
+                        {[
+                          { value: "none", label: "No Media" },
+                          { value: "image", label: "Image" },
+                          { value: "video", label: "Video" },
+                        ].map((mediaOption) => (
+                          <TouchableOpacity
+                            key={`${lessonIndex}-${mediaOption.value}`}
+                            style={[
+                              styles.difficultyButton,
+                              {
+                                backgroundColor: "#FFFFFF",
+                                borderColor: colors.border,
+                              },
+                              (lesson.mediaType || "none") === mediaOption.value && [
+                                styles.selectedDifficulty,
+                                {
+                                  backgroundColor: "#FFFFFF",
+                                  borderColor: colors.primary,
+                                },
+                              ],
+                            ]}
+                            onPress={() =>
+                              updateLesson(
+                                lessonIndex,
+                                "mediaType",
+                                mediaOption.value
+                              )
+                            }
+                          >
+                            <Text
+                              style={[
+                                styles.difficultyText,
+                                { color: colors.text },
+                              ]}
+                            >
+                              {mediaOption.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      {(lesson.mediaType === "image" || lesson.mediaType === "video") && (
+                        <TextInput
+                          value={lesson.mediaUrl || ""}
+                          onChangeText={(text) =>
+                            updateLesson(lessonIndex, "mediaUrl", text)
+                          }
+                          placeholder={`Enter ${lesson.mediaType} URL`}
+                          style={styles.textInput}
+                          mode="outlined"
+                          theme={{
+                            colors: {
+                              primary: colors.primary,
+                              outline: colors.border,
+                              background: colors.surface,
+                              onSurface: colors.text,
+                              text: colors.text,
+                              placeholder: colors.textSecondary,
+                            },
+                          }}
+                          textColor={colors.text}
+                        />
+                      )}
+                    </View>
+                  ))}
+
+                  {(questData.lessons || []).length < 100 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.createButton,
+                        {
+                          marginTop: 16,
+                          marginBottom: 12,
+                        },
+                      ]}
+                      onPress={addLesson}
+                      activeOpacity={0.7}
+                    >
+                      <LinearGradient
+                        colors={["#4a7c59", "#3a6c49"]}
+                        style={styles.buttonGradient}
+                      >
+                        <Ionicons name="add" size={20} color="#FFFFFF" />
+                        <Text
+                          style={[
+                            styles.buttonText,
+                            {
+                              color: "#FFFFFF",
+                            },
+                          ]}
+                        >
+                          Add Lesson
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
 
               {/* Validation Message */}
               {validationMessages.length > 0 && (
@@ -3440,7 +3823,7 @@ export default function Create() {
             </>
           )}
           {/* Question Type Selection Modal */}
-          {showQuestionTypes && (
+          {questData.questType === "quiz" && showQuestionTypes && (
             <View style={styles.questionTypeModal}>
               <Text style={styles.questionTypeTitle}>Choose Question Type</Text>
               <View style={styles.questionTypeGrid}>
@@ -3476,7 +3859,7 @@ export default function Create() {
           )}
 
           {/* Add Question Button - Positioned above Create Quest Button */}
-          {questData.questions.length < 50 && (
+          {questData.questType === "quiz" && questData.questions.length < 50 && (
             <TouchableOpacity
               style={[
                 styles.createButton,
@@ -3743,8 +4126,8 @@ export default function Create() {
     const fetchAvailableStudents = useCallback(async () => {
       try {
         setLoadingStudents(true);
-        console.log("🔍 Fetching students for availability list...");
-        console.log("🔍 Selected subject:", selectedSubjectId);
+        console.log(" Fetching students for availability list...");
+        console.log(" Selected subject:", selectedSubjectId);
 
         // 1) Get ALL students available to instructor/admin
         const allStudentsResp = await fetch(`${API_URL}/users/students`, {
@@ -3756,7 +4139,7 @@ export default function Create() {
 
         if (!allStudentsResp.ok) {
           const t = await allStudentsResp.text();
-          console.error("🔍 Failed to fetch all students:", t);
+          console.error(" Failed to fetch all students:", t);
           setAllStudents([]);
           return;
         }
@@ -3765,7 +4148,7 @@ export default function Create() {
         const allStudentsList = Array.isArray(allStudentsData.students)
           ? allStudentsData.students
           : [];
-        console.log("🔍 All students fetched:", allStudentsList.length);
+        console.log(" All students fetched:", allStudentsList.length);
 
         // 2) If a subject is selected, fetch assigned students and exclude them
         if (selectedSubjectId) {
@@ -3784,23 +4167,23 @@ export default function Create() {
             currentIds = Array.isArray(currentData.students)
               ? currentData.students.map((s) => s._id)
               : [];
-            console.log("🔍 Current section student count:", currentIds.length);
+            console.log(" Current section student count:", currentIds.length);
           }
 
           const available = allStudentsList.filter(
             (s) => !currentIds.includes(s._id)
           );
           console.log(
-            "🔍 Available (excl. current section):",
+            " Available (excl. current section):",
             available.length
           );
           setAllStudents(available);
         } else {
-          console.log("🔍 No section selected, showing all students");
+          console.log(" No section selected, showing all students");
           setAllStudents(allStudentsList);
         }
       } catch (error) {
-        console.error("🔍 Network error fetching students:", error);
+        console.error(" Network error fetching students:", error);
         showCustomModal(
           "Error",
           `Failed to load students: ${error.message}`,
@@ -4055,7 +4438,7 @@ export default function Create() {
             onPress: () => {
               if (subjectCode) {
                 showCustomModal(
-                  "Code Ready to Share! 📋",
+                  "Code Ready to Share! ",
                   `Subject Code: ${subjectCode}\n\nTell students:\n1. Tap "Join" on home page\n2. Enter code: ${subjectCode}\n3. They'll be enrolled instantly!`,
                   "success"
                 );
@@ -4086,8 +4469,8 @@ export default function Create() {
         ];
 
         showCustomModal(
-          "Subject Created! 🎉",
-          `"${sectionData.name}" has been created successfully!\n\n📋 Subject Code: ${subjectCode}\n\nShare this 6-character code with students so they can join your subject using the "Join" button.`,
+          "Subject Created! ",
+          `"${sectionData.name}" has been created successfully!\n\n Subject Code: ${subjectCode}\n\nShare this 6-character code with students so they can join your subject using the "Join" button.`,
           "success",
           () => {}, // Default onConfirm
           successActions
@@ -4309,7 +4692,7 @@ export default function Create() {
           // Small delay to ensure modal closes before showing success
           setTimeout(() => {
             showCustomModal(
-              "Success! 🎉",
+              "Success! ",
               `"${editFormData.name}" has been updated successfully!`,
               "success"
             );
@@ -4370,7 +4753,7 @@ export default function Create() {
 
         if (response.ok) {
           const data = await response.json();
-          console.log("📡 Available instructors response:", data);
+          console.log(" Available instructors response:", data);
           if (data.success) {
             setAvailableInstructors(data.users || []);
           }
@@ -4472,7 +4855,7 @@ export default function Create() {
         {!useCompactHeader && (
           <View style={[styles.formHeader, { borderBottomColor: colors.border }]}> 
             <Text style={[styles.formTitle, { color: colors.textSecondary }]}> 
-              🎓 Course Management
+               Course Management
             </Text>
           </View>
         )}
@@ -6340,7 +6723,7 @@ export default function Create() {
                 style={styles.modalList}
                 onLayout={() =>
                   console.log(
-                    "🔍 Assigned Students Modal FlatList - Data:",
+                    " Assigned Students Modal FlatList - Data:",
                     assignedStudents
                   )
                 }
@@ -6933,16 +7316,16 @@ export default function Create() {
   };
 
   const renderContent = () => {
-    console.log("🔍 renderContent - activeCreator:", activeCreator);
-    console.log("🔍 renderContent - isEditMode:", isEditMode);
+    console.log(" renderContent - activeCreator:", activeCreator);
+    console.log(" renderContent - isEditMode:", isEditMode);
 
     // Show the three options if no creator is selected
     if (!activeCreator) {
-      console.log("🔍 renderContent - Showing create options");
+      console.log(" renderContent - Showing create options");
       return renderCreateOptions();
     }
 
-    console.log("🔍 renderContent - Showing creator for:", activeCreator);
+    console.log(" renderContent - Showing creator for:", activeCreator);
     return (
       <Animated.View
         style={[
@@ -7064,7 +7447,7 @@ export default function Create() {
                   <Text
                     style={[styles.headerTitle, { color: "#000000" }]}
                   >
-                    🎮 Creator&apos;s Workshop
+                     Creator&apos;s Workshop
                   </Text>
                 )}
 

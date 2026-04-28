@@ -34,6 +34,7 @@ import Svg, {
   LinearGradient,
   Stop,
 } from "react-native-svg";
+import { AudioContext } from "react-native-audio-api";
 
 const PlayerCharacter = React.memo(
   function PlayerCharacter({
@@ -178,12 +179,77 @@ const [importing, setImporting] = React.useState(false);
   const levelProgressLoadedRef = useRef(false); // Track if level progress has been loaded
   const hasAppliedReturnSubjectRef = useRef(false);
   const hasAppliedReturnFocusRef = useRef(false);
+  const homeAudioContextRef = useRef(null);
+  const homeAudioSourceRef = useRef(null);
   const router = useRouter();
 
-  useEffect(() => {
+  const formatCountdownLabel = useCallback((secondsValue) => {
+    const totalSeconds = Math.max(0, Number(secondsValue) || 0);
+    const minutes = Math.floor(totalSeconds / 60)
+      .toString()
+      .padStart(2, "0");
+    const seconds = Math.floor(totalSeconds % 60)
+      .toString()
+      .padStart(2, "0");
+    return `${minutes}:${seconds}`;
+  }, []);
+
+    useEffect(() => {
     hasAppliedReturnSubjectRef.current = false;
     hasAppliedReturnFocusRef.current = false;
-  }, [returnSubjectIdParam, focusModuleIdParam]);
+    }, [returnSubjectIdParam, focusModuleIdParam]);
+
+      useEffect(() => {
+        const startHomeMusic = async () => {
+          if (homeAudioSourceRef.current || homeAudioContextRef.current) return;
+
+          try {
+            const audioContext = new AudioContext();
+            homeAudioContextRef.current = audioContext;
+
+            const audioBuffer = await audioContext.decodeAudioData(
+              require("../../assets/sounds/home-bg.mp3")
+            );
+
+            const source = audioContext.createBufferSource();
+            const gainNode = audioContext.createGain?.();
+            source.buffer = audioBuffer;
+            source.loop = true;
+            if (gainNode) {
+              gainNode.gain.value = 0.3;
+              source.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+            } else {
+              source.connect(audioContext.destination);
+            }
+            source.start(audioContext.currentTime);
+            homeAudioSourceRef.current = source;
+          } catch (error) {
+            console.warn("Home background music failed to start:", error);
+          }
+        };
+
+        startHomeMusic();
+
+        return () => {
+          try {
+            homeAudioSourceRef.current?.stop();
+            homeAudioSourceRef.current?.disconnect();
+          } catch {
+            // Ignore cleanup errors if source already stopped or detached.
+          }
+
+          const contextToClose = homeAudioContextRef.current;
+          homeAudioContextRef.current = null;
+          homeAudioSourceRef.current = null;
+
+          if (contextToClose) {
+            contextToClose.close().catch(() => {
+              // Ignore close errors during teardown.
+            });
+          }
+        };
+      }, []);
 
 const downloadJsonWeb = (data, filename) => {
   try {
@@ -732,12 +798,14 @@ const handleImportCyberQuestsWeb = () => {
               // For instructors: All quests are unlocked, no progress tracking
               if (data.success && data.cyberQuests) {
                 modulesData = data.cyberQuests.map((quest, index) => ({
+                  questType: quest.questType || "quiz",
                   _id: quest._id,
                   title: quest.title,
-                  description: `Cyber Quest: ${
-                    quest.questions?.length || 0
-                  } questions`,
-                  difficulty: quest.difficulty,
+                  description:
+                    (quest.questType || "quiz") === "lesson"
+                      ? `Lesson Quest: ${quest.lessons?.length || 0} lessons`
+                      : `Cyber Quest: ${quest.questions?.length || 0} questions`,
+                  countdownSeconds: quest.countdownSeconds,
                   isUnlocked: true, // Instructors can access all quests
                   isCompleted: false, // Instructors don't have completion status
                   order: quest.level || index + 1,
@@ -772,12 +840,14 @@ const handleImportCyberQuestsWeb = () => {
                       quest.level === 1 || !!questProgress.status;
 
                     const questData = {
+                      questType: quest.questType || "quiz",
                       _id: quest._id,
                       title: quest.title,
-                      description: `Cyber Quest: ${
-                        quest.questions?.length || 0
-                      } questions`,
-                      difficulty: quest.difficulty,
+                      description:
+                        (quest.questType || "quiz") === "lesson"
+                          ? `Lesson Quest: ${quest.lessons?.length || 0} lessons`
+                          : `Cyber Quest: ${quest.questions?.length || 0} questions`,
+                      countdownSeconds: quest.countdownSeconds,
                       isUnlocked: isUnlocked,
                       isCompleted: isCompleted,
                       order: quest.level || index + 1, // Use actual level from backend, fallback to index
@@ -3252,6 +3322,11 @@ const handleImportCyberQuestsWeb = () => {
             <Text style={styles.moduleDescription}>
               {selectedModule.description}
             </Text>
+            {selectedModule.type === "cyber-quest" && (
+              <Text style={styles.moduleDescription}>
+                Quest Timer: {formatCountdownLabel(selectedModule.countdownSeconds || 300)}
+              </Text>
+            )}
 
             <TouchableOpacity
               style={styles.enhancedStartButton}
@@ -3270,9 +3345,11 @@ const handleImportCyberQuestsWeb = () => {
             >
               <Ionicons name="play" size={20} color="#FFFFFF" />
               <Text style={styles.enhancedStartButtonText}>
-                {selectedModule.type === "cyber-quest"
-                  ? "Start Quest"
-                  : "Begin Quest"}
+                  {selectedModule.questType === "lesson"
+                    ? "Start Lesson"
+                    : selectedModule.type === "cyber-quest"
+                    ? "Start Quest"
+                    : "Begin Quest"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -3567,9 +3644,11 @@ const handleImportCyberQuestsWeb = () => {
                             ? ` • Total: ${item.totalQuestions}`
                             : ""}
                         </Text>
-                        <Text style={[styles.historyModalItemDetail, { color: colors.textSecondary }]}> 
-                          Difficulty: {item.difficulty || "medium"}
-                        </Text>
+                        {typeof item.timeLeftSeconds === "number" && (
+                          <Text style={[styles.historyModalItemDetail, { color: colors.textSecondary }]}> 
+                            Time Left: {formatCountdownLabel(item.timeLeftSeconds)}
+                          </Text>
+                        )}
                         <Text style={[styles.historyModalItemDetail, { color: colors.textSecondary }]}> 
                           Finished: {item.completedAt ? new Date(item.completedAt).toLocaleString() : "N/A"}
                         </Text>
