@@ -26,6 +26,7 @@ import COLORS from "@/constants/custom-colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
+import * as Animatable from 'react-native-animatable';
 import { LinearGradient as ExpoLinearGradient } from "expo-linear-gradient";
 import Svg, {
   Path,
@@ -79,6 +80,9 @@ const PlayerCharacter = React.memo(
     );
   }
 );
+
+// Make TouchableOpacity animatable for module nodes
+const AnimatableTouchable = Animatable.createAnimatableComponent(TouchableOpacity);
 
 const USE_DUMMY_DATA = false;
 
@@ -192,6 +196,18 @@ const [importing, setImporting] = React.useState(false);
       .toString()
       .padStart(2, "0");
     return `${minutes}:${seconds}`;
+  }, []);
+
+  const formatAvailabilityDateTimeLabel = useCallback((value) => {
+    if (!value) return "";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date);
   }, []);
 
     useEffect(() => {
@@ -806,6 +822,7 @@ const handleImportCyberQuestsWeb = () => {
                       ? `Lesson Quest: ${quest.lessons?.length || 0} lessons`
                       : `Cyber Quest: ${quest.questions?.length || 0} questions`,
                   countdownSeconds: quest.countdownSeconds,
+                  availableAt: quest.availableAt || null,
                   isUnlocked: true, // Instructors can access all quests
                   isCompleted: false, // Instructors don't have completion status
                   order: quest.level || index + 1,
@@ -830,6 +847,13 @@ const handleImportCyberQuestsWeb = () => {
                   (quest, index) => {
                     const questProgress = progressData[quest._id] || {};
                     const isCompleted = questProgress.status === "completed";
+                    const availableAtDate = quest.availableAt
+                      ? new Date(quest.availableAt)
+                      : null;
+                    const isScheduledFuture =
+                      availableAtDate &&
+                      !Number.isNaN(availableAtDate.getTime()) &&
+                      availableAtDate.getTime() > Date.now();
 
                     // Level progression logic:
                     // - If there's a progress entry, the level is unlocked
@@ -837,7 +861,7 @@ const handleImportCyberQuestsWeb = () => {
                     // - The backend only creates progress entries for unlocked levels
                     // Always allow Level 1 as unlocked for students as a safe fallback
                     const isUnlocked =
-                      quest.level === 1 || !!questProgress.status;
+                      !isScheduledFuture && (quest.level === 1 || !!questProgress.status);
 
                     const questData = {
                       questType: quest.questType || "quiz",
@@ -848,6 +872,8 @@ const handleImportCyberQuestsWeb = () => {
                           ? `Lesson Quest: ${quest.lessons?.length || 0} lessons`
                           : `Cyber Quest: ${quest.questions?.length || 0} questions`,
                       countdownSeconds: quest.countdownSeconds,
+                        availableAt: quest.availableAt || null,
+                        isLockedBySchedule: isScheduledFuture,
                       isUnlocked: isUnlocked,
                       isCompleted: isCompleted,
                       order: quest.level || index + 1, // Use actual level from backend, fallback to index
@@ -2854,10 +2880,11 @@ const handleImportCyberQuestsWeb = () => {
             const position = getModulePosition(index);
 
             return (
-              <TouchableOpacity
+              <AnimatableTouchable
                 key={module._id}
                 style={[
                   styles.moduleNode,
+                  module.questType === "lesson" && styles.lessonNode,
                   selectedModule?._id === module._id && styles.selectedNode,
                   !module.isUnlocked && styles.lockedNode,
                   module.isCompleted && styles.completedNode,
@@ -2875,12 +2902,16 @@ const handleImportCyberQuestsWeb = () => {
                       1,
                       (module.order || index + 1) - 1
                     );
-                    const lockedMsg =
-                      previousLevel === 1
-                        ? "This is the first level. Pull to refresh or try again in a moment."
-                        : `Complete Level ${previousLevel} to unlock Level ${
-                            module.order || index + 1
-                          }!`;
+                    const availableAtLabel = formatAvailabilityDateTimeLabel(
+                      module.availableAt
+                    );
+                    const lockedMsg = module.isLockedBySchedule && availableAtLabel
+                      ? `This quest unlocks on ${availableAtLabel}.`
+                      : previousLevel === 1
+                      ? "This is the first level. Pull to refresh or try again in a moment."
+                      : `Complete Level ${previousLevel} to unlock Level ${
+                          module.order || index + 1
+                        }!`;
 
                     if (Platform.OS === "web") {
                       alert(
@@ -2903,6 +2934,11 @@ const handleImportCyberQuestsWeb = () => {
                   }
                 }}
                 activeOpacity={module.isUnlocked ? 0.7 : 0.9}
+                animation={module.questType === "lesson" ? "pulse" : undefined}
+                iterationCount={module.questType === "lesson" ? "infinite" : 1}
+                duration={module.questType === "lesson" ? 1400 : undefined}
+                easing={module.questType === "lesson" ? "ease-out" : undefined}
+                useNativeDriver={true}
                 disabled={false} // Allow tapping for feedback, but handle logic in onPress
               >
                 {/* Use the selected background's module image instead of fixed image */}
@@ -3017,6 +3053,26 @@ const handleImportCyberQuestsWeb = () => {
                   <Text style={styles.levelNumberText}>{index + 1}</Text>
                 </View>
 
+                {/* Release schedule badge for locked quests */}
+                {!module.isUnlocked && module.isLockedBySchedule && module.availableAt && (
+                  <View style={styles.availabilityBadge}>
+                    <Text
+                      style={styles.availabilityBadgeText}
+                      numberOfLines={2}
+                      ellipsizeMode="tail"
+                    >
+                      Unlocks {formatAvailabilityDateTimeLabel(module.availableAt)}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Lesson badge for lesson-typed quests */}
+                {module.questType === "lesson" && (
+                  <View style={styles.lessonBadge}>
+                    <Text style={styles.lessonBadgeText}>Lesson</Text>
+                  </View>
+                )}
+
                 {/* instructor Options Button */}
                 {isinstructor && (
                   <View style={styles.instructorOptionsContainer}>
@@ -3123,7 +3179,7 @@ const handleImportCyberQuestsWeb = () => {
                     )}
                   </View>
                 )}
-              </TouchableOpacity>
+              </AnimatableTouchable>
             );
           })}
 
@@ -3322,6 +3378,13 @@ const handleImportCyberQuestsWeb = () => {
             <Text style={styles.moduleDescription}>
               {selectedModule.description}
             </Text>
+            {selectedModule.availableAt && (
+              <Text style={styles.moduleDescription}>
+                {selectedModule.isLockedBySchedule
+                  ? `Available on ${formatAvailabilityDateTimeLabel(selectedModule.availableAt)}`
+                  : `Scheduled release: ${formatAvailabilityDateTimeLabel(selectedModule.availableAt)}`}
+              </Text>
+            )}
             {selectedModule.type === "cyber-quest" && (
               <Text style={styles.moduleDescription}>
                 Quest Timer: {formatCountdownLabel(selectedModule.countdownSeconds || 300)}
@@ -3352,6 +3415,32 @@ const handleImportCyberQuestsWeb = () => {
                     : "Begin Quest"}
               </Text>
             </TouchableOpacity>
+
+            {isInstructorOrAdmin && (
+              <TouchableOpacity
+                style={styles.scheduleEditButton}
+                onPress={() => {
+                  const editRouteParams = {
+                    edit: String(selectedModule._id),
+                    from: "index",
+                    focusModuleId: String(selectedModule._id),
+                  };
+                  const selectedSubjectId =
+                    selectedSubject?._id || selectedSubject?.id;
+                  if (selectedSubjectId) {
+                    editRouteParams.subjectId = String(selectedSubjectId);
+                  }
+
+                  router.push({
+                    pathname: "/(tabs)/create",
+                    params: editRouteParams,
+                  });
+                }}
+              >
+                <Ionicons name="calendar-outline" size={18} color={COLORS.white} />
+                <Text style={styles.scheduleEditButtonText}>Edit Schedule</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </Animated.View>
       )}
@@ -4748,6 +4837,80 @@ const styles = StyleSheet.create({
     minWidth: 50,
     boxShadow: "0px 2px 4px rgba(25, 118, 210, 0.8)",
     elevation: 5,
+  },
+
+  // Lesson-specific styles
+  lessonNode: {
+    borderColor: COLORS.gold,
+    borderWidth: 4,
+    backgroundColor: 'rgba(255, 215, 0, 0.18)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 20px rgba(255, 215, 0, 0.6), inset 0 0 12px rgba(255,255,255,0.06)',
+        transform: [{ scale: 1 }],
+      },
+      default: {
+        shadowColor: '#FFD700',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.6,
+        shadowRadius: 10,
+      },
+    }),
+  },
+
+  lessonBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(255,215,0,0.95)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    zIndex: 6,
+  },
+
+  lessonBadgeText: {
+    color: '#222',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  availabilityBadge: {
+    position: 'absolute',
+    bottom: -54,
+    left: '50%',
+    marginLeft: -58,
+    width: 116,
+    backgroundColor: 'rgba(17, 24, 39, 0.88)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+  },
+
+  availabilityBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  scheduleEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2A9D8F',
+    paddingVertical: 12,
+    borderRadius: 14,
+    marginTop: 10,
+  },
+
+  scheduleEditButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   // Question Preview Styles

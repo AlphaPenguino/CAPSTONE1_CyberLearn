@@ -30,6 +30,23 @@ const normalizeCountdownSeconds = (value) => {
   );
 };
 
+const parseOptionalAvailabilityDate = (value) => {
+  if (value === undefined) {
+    return { provided: false, value: undefined };
+  }
+
+  if (value === null || value === "") {
+    return { provided: true, value: null };
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return { provided: true, invalid: true };
+  }
+
+  return { provided: true, value: parsed };
+};
+
 /**
  * @route   GET /api/all-cyber-quests
  * @desc    Get all cyber quests from all sections (for instructors/admins)
@@ -490,6 +507,7 @@ router.post(
         countdownSeconds,
         level,
         subject,
+        availableAt,
       } = req.body;
 
       // Resolve subjectId from either legacy path param (sectionId) or body.subject
@@ -540,6 +558,14 @@ router.post(
       }
 
       const questCountdownSeconds = normalizeCountdownSeconds(countdownSeconds);
+      const availabilityResult = parseOptionalAvailabilityDate(availableAt);
+
+      if (availabilityResult.invalid) {
+        return res.status(400).json({
+          success: false,
+          message: "availableAt must be a valid date/time value",
+        });
+      }
 
       const normalizedQuestions = Array.isArray(questions) ? questions : [];
       const normalizedLessons = Array.isArray(lessons) ? lessons : [];
@@ -839,6 +865,7 @@ router.post(
         created_by: req.user.id,
         countdownSeconds: questCountdownSeconds,
         level: questLevel,
+        availableAt: availabilityResult.provided ? availabilityResult.value : null,
       });
 
       // Debug: ensure subject is set before save
@@ -958,6 +985,7 @@ router.put(
         countdownSeconds,
         level,
         subject,
+        availableAt,
       } = req.body;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -1035,6 +1063,19 @@ router.put(
           });
         }
         cyberQuest.countdownSeconds = Math.round(parsedCountdown);
+      }
+
+      if (availableAt !== undefined) {
+        const availabilityResult = parseOptionalAvailabilityDate(availableAt);
+
+        if (availabilityResult.invalid) {
+          return res.status(400).json({
+            success: false,
+            message: "availableAt must be a valid date/time value",
+          });
+        }
+
+        cyberQuest.availableAt = availabilityResult.value;
       }
 
       if (cyberQuest.questType === "quiz" && questions) {

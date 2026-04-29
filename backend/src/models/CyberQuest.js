@@ -256,6 +256,11 @@ const cyberQuestSchema = new mongoose.Schema(
       default: "quiz",
     },
 
+    availableAt: {
+      type: Date,
+      default: null,
+    },
+
     questions: {
       type: [questionSchema],
       default: [],

@@ -11,11 +11,13 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
-  Dimensions,
   TouchableWithoutFeedback,
+  Image,
   TextInput as RNTextInput,
   KeyboardAvoidingView,
+  Dimensions,
 } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -48,10 +50,53 @@ const CREATOR_COLORS = {
 
 // Utility function to generate unique IDs
 const generateUniqueId = () => Date.now() + Math.random();
+const IMAGE_CONTENT_PREFIX = "__img__::";
+
+const isImageContentValue = (value) =>
+  typeof value === "string" && value.startsWith(IMAGE_CONTENT_PREFIX);
+
+const extractImageContentUri = (value) =>
+  isImageContentValue(value)
+    ? value.slice(IMAGE_CONTENT_PREFIX.length)
+    : "";
+
+const toImageContentValue = (uri) => `${IMAGE_CONTENT_PREFIX}${uri}`;
+
+const toTextContentValue = (value) =>
+  isImageContentValue(value) ? "" : String(value || "");
+
+const readImageAsDataUrl = async (uri, mimeType = "image/jpeg") => {
+  if (Platform.OS === "web") {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error("Unable to read the selected image on web.");
+    }
+
+    const blob = await response.blob();
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result;
+        const base64 = typeof result === "string" ? result.split(",")[1] : "";
+        resolve(base64 || "");
+      };
+      reader.onerror = () => reject(new Error("Unable to convert image to base64."));
+      reader.readAsDataURL(blob);
+    });
+
+    return `data:${mimeType};base64,${base64Data}`;
+  }
+
+  const base64Data = await FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+
+  return `data:${mimeType};base64,${base64Data}`;
+};
 
 // Function to migrate old sorting questions to have IDs
-const migrateSortingItems = (questions) => {
-  return questions.map((question) => {
+const migrateSortingItems = (questions) =>
+  questions.map((question) => {
     if (question.type === "sorting" && question.items) {
       return {
         ...question,
@@ -61,7 +106,100 @@ const migrateSortingItems = (questions) => {
         })),
       };
     }
+
     return question;
+  });
+
+const formatDateTimeInputValue = (value) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate()
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const parseDateTimeInputValue = (value) => {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value !== "string") {
+    const coercedDate = new Date(value);
+    return Number.isNaN(coercedDate.getTime()) ? null : coercedDate;
+  }
+
+  const normalizedValue = value.includes("T") ? value : value.replace(" ", "T");
+  const date = new Date(normalizedValue);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const SCHEDULE_MONTH_LABELS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const getScheduleDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
+
+const buildScheduleDraft = (value) => {
+  const parsedDate = parseDateTimeInputValue(value) || new Date();
+  const month = parsedDate.getMonth() + 1;
+  const year = parsedDate.getFullYear();
+  const day = parsedDate.getDate();
+  const hour24 = parsedDate.getHours();
+  const hour12 = hour24 % 12 || 12;
+
+  return {
+    year,
+    month,
+    day,
+    hour: hour12,
+    minute: parsedDate.getMinutes(),
+    period: hour24 >= 12 ? "PM" : "AM",
+  };
+};
+
+const buildScheduleDateFromDraft = (draft) => {
+  const hour24 =
+    draft.period === "PM" ? (draft.hour % 12) + 12 : draft.hour % 12;
+
+  return new Date(
+    draft.year,
+    draft.month - 1,
+    draft.day,
+    hour24,
+    draft.minute,
+    0,
+    0
+  );
+};
+
+const formatScheduleDisplayLabel = (value) => {
+  const parsedDate = parseDateTimeInputValue(value);
+  if (!parsedDate) return "Available immediately";
+
+  return parsedDate.toLocaleString([], {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 };
 
@@ -69,7 +207,6 @@ export default function Create() {
   const { edit, from, subjectId, focusModuleId } = useLocalSearchParams();
   const router = useRouter();
   const { colors, isDarkMode } = useTheme();
-  // Use dark blue in light mode instead of yellow for text & icon accents
   const highlightColor = isDarkMode ? colors.primary : "#1976d2";
   console.log(" ~ Create ~ edit:", edit);
   const { user, token } = useAuthStore();
@@ -77,40 +214,33 @@ export default function Create() {
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Debug logging
   console.log(" Create Component - Edit param:", edit);
   console.log(" Create Component - Type of edit:", typeof edit);
 
-    // Simply check: if we have edit param, we're in edit mode
-    // If user clicks Create tab directly, they can click "Create New" to start fresh
-    const isEditMode = !!edit;
-    const fromSource = Array.isArray(from) ? from[0] : from;
-    const returnSubjectId = Array.isArray(subjectId) ? subjectId[0] : subjectId;
-    const returnFocusModuleId = Array.isArray(focusModuleId)
+  const isEditMode = !!edit;
+  const fromSource = Array.isArray(from) ? from[0] : from;
+  const returnSubjectId = Array.isArray(subjectId) ? subjectId[0] : subjectId;
+  const returnFocusModuleId = Array.isArray(focusModuleId)
     ? focusModuleId[0]
     : focusModuleId;
-    const openedFromInstructorTools = fromSource === "instructor-tools";
-    const openedFromIndex = fromSource === "index";
-    console.log(" Create Component - isEditMode:", isEditMode);
+  const openedFromInstructorTools = fromSource === "instructor-tools";
+  const openedFromIndex = fromSource === "index";
+  console.log(" Create Component - isEditMode:", isEditMode);
 
-  // Internal UI state to track which creator is active
   const [activeCreator, setActiveCreator] = useState(() => {
-    // If we have edit param, show editor by default
     const initialState = edit ? "cyber-quest-map" : "";
     console.log(" Create Component - Initial activeCreator:", initialState);
     return initialState;
   });
   const questMenuControlRef = useRef(null);
 
-    // Function to clear edit mode and show options
-    const resetToCreateMode = useCallback(() => {
+  const resetToCreateMode = useCallback(() => {
     console.log(" Resetting to create mode");
     setActiveCreator("");
-    // Clear URL parameters by replacing the current route
     router.replace("/create");
-    }, [router]);
+  }, [router]);
 
-    const navigateBackToIndexWithContext = useCallback(() => {
+  const navigateBackToIndexWithContext = useCallback(() => {
     const params = {};
     if (returnSubjectId) {
       params.subjectId = String(returnSubjectId);
@@ -125,10 +255,9 @@ export default function Create() {
     }
 
     router.replace("/(tabs)");
-    }, [returnSubjectId, returnFocusModuleId, router]);
+  }, [returnSubjectId, returnFocusModuleId, router]);
 
-    const handleCreatorBack = useCallback(() => {
-    // In creator flows, go back to creator options first and clear edit params when needed.
+  const handleCreatorBack = useCallback(() => {
     if (activeCreator) {
       questMenuControlRef.current?.closeMenu?.();
       if (isEditMode) {
@@ -157,7 +286,7 @@ export default function Create() {
     }
 
     router.back();
-    }, [
+  }, [
     activeCreator,
     isEditMode,
     openedFromIndex,
@@ -165,8 +294,7 @@ export default function Create() {
     navigateBackToIndexWithContext,
     resetToCreateMode,
     router,
-    questMenuControlRef,
-    ]);
+  ]);
 
   useEffect(() => {
     if (activeCreator !== "cyber-quest-map") {
@@ -174,24 +302,22 @@ export default function Create() {
     }
   }, [activeCreator]);
 
-  // Handle URL parameter changes
   useEffect(() => {
     console.log(" Create Component - useEffect triggered, edit:", edit);
 
     if (edit) {
-      // If edit parameter exists, go to editor
       console.log(
         " Create Component - Setting activeCreator to cyber-quest-map"
       );
       setActiveCreator("cyber-quest-map");
     } else {
-      // If no edit parameter, show create options
       console.log(
         " Create Component - Setting activeCreator to empty (show options)"
       );
       setActiveCreator("");
     }
-  }, [edit]); // Animate on tab change
+  }, [edit]);
+
   React.useEffect(() => {
     if (activeCreator) {
       Animated.parallel([
@@ -317,6 +443,7 @@ export default function Create() {
       selectedSection: null,
       questType: "quiz",
       countdownSeconds: 300,
+      availableAt: "",
       level: 1,
       questions: [],
       lessons: [],
@@ -345,6 +472,11 @@ export default function Create() {
       onConfirm: () => {},
     });
     const [showImportExportMenu, setShowImportExportMenu] = useState(false);
+    const [bankView, setBankView] = useState("quiz");
+    const [showSchedulePicker, setShowSchedulePicker] = useState(false);
+    const [scheduleDraft, setScheduleDraft] = useState(() =>
+      buildScheduleDraft("")
+    );
 
     const [showQuestionExamples, setShowQuestionExamples] = useState(true);
 
@@ -365,6 +497,48 @@ export default function Create() {
 
     // State for instructions modal
     const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+
+    const openSchedulePicker = useCallback(() => {
+      setScheduleDraft(buildScheduleDraft(questData.availableAt));
+      setShowSchedulePicker(true);
+    }, [questData.availableAt]);
+
+    const closeSchedulePicker = useCallback(() => {
+      setShowSchedulePicker(false);
+    }, []);
+
+    const updateScheduleDraftValue = useCallback((field, value) => {
+      setScheduleDraft((currentDraft) => {
+        const nextDraft = {
+          ...currentDraft,
+          [field]: Number(value),
+        };
+
+        if (field === "month" || field === "year") {
+          const maxDay = getScheduleDaysInMonth(nextDraft.year, nextDraft.month);
+          nextDraft.day = Math.min(nextDraft.day, maxDay);
+        }
+
+        return nextDraft;
+      });
+    }, []);
+
+    const confirmSchedulePicker = useCallback(() => {
+      const pickedDate = buildScheduleDateFromDraft(scheduleDraft);
+      setQuestData((currentQuest) => ({
+        ...currentQuest,
+        availableAt: formatDateTimeInputValue(pickedDate),
+      }));
+      setShowSchedulePicker(false);
+    }, [scheduleDraft]);
+
+    const clearSchedulePicker = useCallback(() => {
+      setQuestData((currentQuest) => ({
+        ...currentQuest,
+        availableAt: "",
+      }));
+      setShowSchedulePicker(false);
+    }, []);
 
     // Helper function to show custom modal (cross-platform)
     const showCustomModal = (
@@ -392,7 +566,6 @@ export default function Create() {
             Authorization: `Bearer ${token}`,
           },
         });
-
         if (response.ok) {
           const data = await response.json();
           if (data.success && Array.isArray(data.subjects)) {
@@ -504,6 +677,7 @@ export default function Create() {
               selectedSection: quest.subject || quest.section_id,
               questType: quest.questType || "quiz",
               countdownSeconds: quest.countdownSeconds || 300,
+              availableAt: formatDateTimeInputValue(quest.availableAt),
               level: quest.level || 1,
               questions: migratedQuestions,
               lessons: Array.isArray(quest.lessons) ? quest.lessons : [],
@@ -513,6 +687,7 @@ export default function Create() {
               description: quest.description || "",
               questType: quest.questType || "quiz",
               countdownSeconds: quest.countdownSeconds || 300,
+              availableAt: formatDateTimeInputValue(quest.availableAt),
               level: quest.level || 1,
               questions: migratedQuestions,
               lessons: Array.isArray(quest.lessons) ? quest.lessons : [],
@@ -539,6 +714,7 @@ export default function Create() {
           selectedSection: null,
           questType: "quiz",
           countdownSeconds: 300,
+          availableAt: "",
           level: 1,
           questions: [],
           lessons: [],
@@ -609,6 +785,7 @@ export default function Create() {
       title: source?.title || "Untitled Quiz Bank",
       description: source?.description || "",
       countdownSeconds: source?.countdownSeconds || 300,
+      availableAt: source?.availableAt || "",
       level: source?.level || 1,
       questions: migrateSortingItems(Array.isArray(source?.questions) ? source.questions : []),
     });
@@ -656,6 +833,120 @@ export default function Create() {
 
       setShowImportExportMenu(false);
       showCustomModal("Success", "Quiz bank exported successfully.", "success");
+    };
+
+    // Lesson bank payload builder + save/export helpers
+    const buildLessonBankPayload = (source = questData) => ({
+      title: source?.title || "Untitled Lesson Bank",
+      description: source?.description || "",
+      lessons: Array.isArray(source?.lessons) ? source.lessons : [],
+    });
+
+    const saveLessonBankJson = async (payload, fallbackName = "lesson-bank") => {
+      if (!Array.isArray(payload?.lessons) || payload.lessons.length === 0) {
+        showCustomModal(
+          "No Lessons",
+          "There are no lessons to export yet.",
+          "error"
+        );
+        return;
+      }
+
+      const safeName = String(payload.title || fallbackName)
+        .trim()
+        .replace(/[^a-z0-9_-]+/gi, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase();
+      const fileName = `${safeName || fallbackName}.json`;
+      const jsonString = JSON.stringify(payload, null, 2);
+
+      if (Platform.OS === "web") {
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = fileName;
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+      } else {
+        const fileUri = FileSystem.documentDirectory + fileName;
+        await FileSystem.writeAsStringAsync(fileUri, jsonString);
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/json",
+            dialogTitle: "Export Lesson Bank",
+            UTI: "public.json",
+          });
+        }
+      }
+
+      setShowImportExportMenu(false);
+      showCustomModal("Success", "Lesson bank exported successfully.", "success");
+    };
+
+    const handleExportCurrentLessonBank = async () => {
+      try {
+        await saveLessonBankJson(buildLessonBankPayload(questData), "lesson-bank-current");
+      } catch (error) {
+        console.error("Error exporting current lesson bank:", error);
+        showCustomModal(
+          "Export Error",
+          error.message || "Failed to export current lesson bank.",
+          "error"
+        );
+      }
+    };
+
+    const handleExportLoadedLessonBank = async () => {
+      try {
+        const source = loadedQuizSnapshot || questData;
+        await saveLessonBankJson(buildLessonBankPayload(source), "lesson-bank-loaded");
+      } catch (error) {
+        console.error("Error exporting loaded lesson bank:", error);
+        showCustomModal(
+          "Export Error",
+          error.message || "Failed to export loaded lesson bank.",
+          "error"
+        );
+      }
+    };
+
+    const handleImportLessonsJSON = async () => {
+      try {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: "application/json",
+          copyToCacheDirectory: true,
+        });
+
+        if (result.canceled) return;
+        const file = result.assets[0];
+        let fileContent;
+
+        if (Platform.OS === "web") {
+          const response = await fetch(file.uri);
+          fileContent = await response.text();
+        } else {
+          fileContent = await FileSystem.readAsStringAsync(file.uri);
+        }
+
+        const jsonData = JSON.parse(fileContent);
+
+        if (!Array.isArray(jsonData.lessons) || jsonData.lessons.length === 0) {
+          showCustomModal("Invalid Format", "The JSON must contain a non-empty lessons array.", "error");
+          return;
+        }
+
+        // Merge or replace lessons - for now replace to avoid accidental duplicates
+        setQuestData((prev) => ({ ...prev, lessons: jsonData.lessons }));
+        setShowImportExportMenu(false);
+        showCustomModal("Success", "Lesson bank imported successfully!", "success");
+      } catch (error) {
+        console.error("Error importing lessons JSON:", error);
+        showCustomModal("Import Error", error.message || "Failed to import lessons JSON.", "error");
+      }
     };
 
     const handleExportCurrentQuizBank = async () => {
@@ -741,6 +1032,7 @@ export default function Create() {
           title: jsonData.title || "",
           description: jsonData.description || "",
           countdownSeconds: jsonData.countdownSeconds || 300,
+          availableAt: formatDateTimeInputValue(jsonData.availableAt),
           level: jsonData.level || 1,
           questions: jsonData.questions || [],
         });
@@ -1020,6 +1312,33 @@ export default function Create() {
       }
     };
 
+    const pickImageContentValue = useCallback(async () => {
+      try {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: "image/*",
+          copyToCacheDirectory: true,
+          multiple: false,
+        });
+
+        if (result.canceled || !result.assets?.length) {
+          return null;
+        }
+
+        const asset = result.assets[0];
+        const mimeType = asset.mimeType || "image/jpeg";
+        const imageDataUrl = await readImageAsDataUrl(asset.uri, mimeType);
+
+        return toImageContentValue(imageDataUrl);
+      } catch (error) {
+        showCustomModal(
+          "Image Import Failed",
+          `Could not import image: ${error.message}`,
+          "error"
+        );
+        return null;
+      }
+    }, []);
+
     const updateQuestion = (index, field, value) => {
       const newQuestions = [...questData.questions];
       newQuestions[index][field] = value;
@@ -1036,6 +1355,17 @@ export default function Create() {
         ...questData,
         questions: newQuestions,
       });
+    };
+
+    const setChoiceImage = async (questionIndex, choiceIndex) => {
+      const imageValue = await pickImageContentValue();
+      if (!imageValue) return;
+      updateChoice(questionIndex, choiceIndex, imageValue);
+    };
+
+    const setChoiceTextMode = (questionIndex, choiceIndex) => {
+      const currentValue = questData.questions?.[questionIndex]?.choices?.[choiceIndex];
+      updateChoice(questionIndex, choiceIndex, toTextContentValue(currentValue));
     };
 
     const addChoice = (questionIndex) => {
@@ -1108,6 +1438,18 @@ export default function Create() {
       });
     };
 
+    const setCodeBlockImage = async (questionIndex, blockIndex) => {
+      const imageValue = await pickImageContentValue();
+      if (!imageValue) return;
+      updateCodeBlock(questionIndex, blockIndex, imageValue);
+    };
+
+    const setCodeBlockTextMode = (questionIndex, blockIndex) => {
+      const currentValue =
+        questData.questions?.[questionIndex]?.codeBlocks?.[blockIndex]?.code;
+      updateCodeBlock(questionIndex, blockIndex, toTextContentValue(currentValue));
+    };
+
     const addCodeBlock = (questionIndex) => {
       const newQuestions = [...questData.questions];
       const nextId =
@@ -1150,6 +1492,18 @@ export default function Create() {
       });
     };
 
+    const setSortingCategoryImage = async (questionIndex, categoryIndex) => {
+      const imageValue = await pickImageContentValue();
+      if (!imageValue) return;
+      updateSortingCategory(questionIndex, categoryIndex, imageValue);
+    };
+
+    const setSortingCategoryTextMode = (questionIndex, categoryIndex) => {
+      const currentValue =
+        questData.questions?.[questionIndex]?.categories?.[categoryIndex];
+      updateSortingCategory(questionIndex, categoryIndex, toTextContentValue(currentValue));
+    };
+
     const addSortingCategory = (questionIndex) => {
       const newQuestions = [...questData.questions];
       if (newQuestions[questionIndex].categories.length < 5) {
@@ -1186,6 +1540,29 @@ export default function Create() {
       setQuestData({
         ...questData,
         questions: newQuestions,
+      });
+    };
+
+    const setSortingItemImage = async (questionIndex, itemIndex) => {
+      const imageValue = await pickImageContentValue();
+      if (!imageValue) return;
+
+      const item = questData.questions?.[questionIndex]?.items?.[itemIndex];
+      if (!item) return;
+
+      updateSortingItem(questionIndex, itemIndex, {
+        ...item,
+        text: imageValue,
+      });
+    };
+
+    const setSortingItemTextMode = (questionIndex, itemIndex) => {
+      const item = questData.questions?.[questionIndex]?.items?.[itemIndex];
+      if (!item) return;
+
+      updateSortingItem(questionIndex, itemIndex, {
+        ...item,
+        text: toTextContentValue(item.text),
       });
     };
 
@@ -1278,26 +1655,65 @@ export default function Create() {
                     />
                   </TouchableOpacity>
 
-                  <TextInput
-                    value={choice}
-                    onChangeText={(text) =>
-                      updateChoice(questionIndex, choiceIndex, text)
-                    }
-                    placeholder={`Choice ${choiceIndex + 1}...`}
-                    style={[styles.textInput, styles.choiceInput]}
-                    mode="outlined"
-                    theme={{
-                      colors: {
-                        primary: colors.primary,
-                        outline: colors.border,
-                        background: colors.surface,
-                        onSurface: colors.text,
-                        text: colors.text,
-                        placeholder: colors.textSecondary,
-                      },
-                    }}
-                    textColor={colors.text}
-                  />
+                  <View style={styles.choiceContentWrap}>
+                    <View style={styles.contentModeRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.contentModeButton,
+                          !isImageContentValue(choice) && styles.contentModeButtonActive,
+                        ]}
+                        onPress={() => setChoiceTextMode(questionIndex, choiceIndex)}
+                      >
+                        <Text style={styles.contentModeButtonText}>Text</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.contentModeButton,
+                          isImageContentValue(choice) && styles.contentModeButtonActive,
+                        ]}
+                        onPress={() => setChoiceImage(questionIndex, choiceIndex)}
+                      >
+                        <Text style={styles.contentModeButtonText}>Image</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {isImageContentValue(choice) ? (
+                      <View style={styles.imageChoicePreviewWrap}>
+                        <Image
+                          source={{ uri: extractImageContentUri(choice) }}
+                          style={styles.imageChoicePreview}
+                          resizeMode="contain"
+                        />
+                        <TouchableOpacity
+                          style={styles.inlineActionButton}
+                          onPress={() => setChoiceImage(questionIndex, choiceIndex)}
+                        >
+                          <Text style={[styles.inlineActionText, { color: colors.primary }]}>Replace image</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TextInput
+                        value={choice}
+                        onChangeText={(text) =>
+                          updateChoice(questionIndex, choiceIndex, text)
+                        }
+                        placeholder={`Choice ${choiceIndex + 1}...`}
+                        style={[styles.textInput, styles.choiceInput]}
+                        mode="outlined"
+                        theme={{
+                          colors: {
+                            primary: colors.primary,
+                            outline: colors.border,
+                            background: colors.surface,
+                            onSurface: colors.text,
+                            text: colors.text,
+                            placeholder: colors.textSecondary,
+                          },
+                        }}
+                        textColor={colors.text}
+                      />
+                    )}
+                  </View>
 
                   {question.choices.length > 1 && (
                     <TouchableOpacity
@@ -1736,32 +2152,71 @@ export default function Create() {
               {question.codeBlocks.map((block, blockIndex) => (
                 <View key={block.id} style={styles.choiceItem}>
                   <Text style={styles.blankNumber}>#{blockIndex + 1}</Text>
-                  <TextInput
-                    value={block.code}
-                    onChangeText={(text) =>
-                      updateCodeBlock(questionIndex, blockIndex, text)
-                    }
-                    placeholder={`Code block ${blockIndex + 1}...`}
-                    multiline
-                    numberOfLines={2}
-                    style={[
-                      styles.textInput,
-                      styles.codeInput,
-                      { backgroundColor: colors.surface },
-                    ]}
-                    mode="outlined"
-                    theme={{
-                      colors: {
-                        primary: colors.primary,
-                        outline: colors.primary,
-                        background: colors.surface,
-                        onSurface: colors.text,
-                        text: colors.text,
-                        placeholder: colors.textSecondary,
-                      },
-                    }}
-                    textColor={colors.text}
-                  />
+                  <View style={styles.choiceContentWrap}>
+                    <View style={styles.contentModeRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.contentModeButton,
+                          !isImageContentValue(block.code) && styles.contentModeButtonActive,
+                        ]}
+                        onPress={() => setCodeBlockTextMode(questionIndex, blockIndex)}
+                      >
+                        <Text style={styles.contentModeButtonText}>Text</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.contentModeButton,
+                          isImageContentValue(block.code) && styles.contentModeButtonActive,
+                        ]}
+                        onPress={() => setCodeBlockImage(questionIndex, blockIndex)}
+                      >
+                        <Text style={styles.contentModeButtonText}>Image</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {isImageContentValue(block.code) ? (
+                      <View style={styles.imageChoicePreviewWrap}>
+                        <Image
+                          source={{ uri: extractImageContentUri(block.code) }}
+                          style={styles.imageChoicePreview}
+                          resizeMode="contain"
+                        />
+                        <TouchableOpacity
+                          style={styles.inlineActionButton}
+                          onPress={() => setCodeBlockImage(questionIndex, blockIndex)}
+                        >
+                          <Text style={[styles.inlineActionText, { color: colors.primary }]}>Replace image</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TextInput
+                        value={block.code}
+                        onChangeText={(text) =>
+                          updateCodeBlock(questionIndex, blockIndex, text)
+                        }
+                        placeholder={`Code block ${blockIndex + 1}...`}
+                        multiline
+                        numberOfLines={2}
+                        style={[
+                          styles.textInput,
+                          styles.codeInput,
+                          { backgroundColor: colors.surface },
+                        ]}
+                        mode="outlined"
+                        theme={{
+                          colors: {
+                            primary: colors.primary,
+                            outline: colors.primary,
+                            background: colors.surface,
+                            onSurface: colors.text,
+                            text: colors.text,
+                            placeholder: colors.textSecondary,
+                          },
+                        }}
+                        textColor={colors.text}
+                      />
+                    )}
+                  </View>
 
                   {question.codeBlocks.length > 3 && (
                     <TouchableOpacity
@@ -1901,29 +2356,68 @@ export default function Create() {
               {question.categories.map((category, categoryIndex) => (
                 <View key={categoryIndex} style={styles.choiceItem}>
                   <Text style={styles.blankNumber}>#{categoryIndex + 1}</Text>
-                  <TextInput
-                    value={category}
-                    onChangeText={(text) =>
-                      updateSortingCategory(questionIndex, categoryIndex, text)
-                    }
-                    placeholder={`Category ${categoryIndex + 1}...`}
-                    style={[
-                      styles.textInput,
-                      { backgroundColor: colors.surface },
-                    ]}
-                    mode="outlined"
-                    theme={{
-                      colors: {
-                        primary: colors.primary,
-                        outline: colors.primary,
-                        background: colors.surface,
-                        onSurface: colors.text,
-                        text: colors.text,
-                        placeholder: colors.textSecondary,
-                      },
-                    }}
-                    textColor={colors.text}
-                  />
+                  <View style={styles.choiceContentWrap}>
+                    <View style={styles.contentModeRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.contentModeButton,
+                          !isImageContentValue(category) && styles.contentModeButtonActive,
+                        ]}
+                        onPress={() => setSortingCategoryTextMode(questionIndex, categoryIndex)}
+                      >
+                        <Text style={styles.contentModeButtonText}>Text</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.contentModeButton,
+                          isImageContentValue(category) && styles.contentModeButtonActive,
+                        ]}
+                        onPress={() => setSortingCategoryImage(questionIndex, categoryIndex)}
+                      >
+                        <Text style={styles.contentModeButtonText}>Image</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {isImageContentValue(category) ? (
+                      <View style={styles.imageChoicePreviewWrap}>
+                        <Image
+                          source={{ uri: extractImageContentUri(category) }}
+                          style={styles.imageChoicePreview}
+                          resizeMode="contain"
+                        />
+                        <TouchableOpacity
+                          style={styles.inlineActionButton}
+                          onPress={() => setSortingCategoryImage(questionIndex, categoryIndex)}
+                        >
+                          <Text style={[styles.inlineActionText, { color: colors.primary }]}>Replace image</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TextInput
+                        value={category}
+                        onChangeText={(text) =>
+                          updateSortingCategory(questionIndex, categoryIndex, text)
+                        }
+                        placeholder={`Category ${categoryIndex + 1}...`}
+                        style={[
+                          styles.textInput,
+                          { backgroundColor: colors.surface },
+                        ]}
+                        mode="outlined"
+                        theme={{
+                          colors: {
+                            primary: colors.primary,
+                            outline: colors.primary,
+                            background: colors.surface,
+                            onSurface: colors.text,
+                            text: colors.text,
+                            placeholder: colors.textSecondary,
+                          },
+                        }}
+                        textColor={colors.text}
+                      />
+                    )}
+                  </View>
 
                   {question.categories.length > 2 && (
                     <TouchableOpacity
@@ -1969,32 +2463,71 @@ export default function Create() {
               {question.items.map((item, itemIndex) => (
                 <View key={itemIndex} style={styles.choiceItem}>
                   <Text style={styles.blankNumber}>#{itemIndex + 1}</Text>
-                  <TextInput
-                    value={item.text}
-                    onChangeText={(text) =>
-                      updateSortingItem(questionIndex, itemIndex, {
-                        ...item,
-                        text,
-                      })
-                    }
-                    placeholder={`Item ${itemIndex + 1}...`}
-                    style={[
-                      styles.textInput,
-                      { backgroundColor: colors.surface, flex: 2 },
-                    ]}
-                    mode="outlined"
-                    theme={{
-                      colors: {
-                        primary: colors.primary,
-                        outline: colors.primary,
-                        background: colors.surface,
-                        onSurface: colors.text,
-                        text: colors.text,
-                        placeholder: colors.textSecondary,
-                      },
-                    }}
-                    textColor={colors.text}
-                  />
+                  <View style={styles.choiceContentWrap}>
+                    <View style={styles.contentModeRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.contentModeButton,
+                          !isImageContentValue(item.text) && styles.contentModeButtonActive,
+                        ]}
+                        onPress={() => setSortingItemTextMode(questionIndex, itemIndex)}
+                      >
+                        <Text style={styles.contentModeButtonText}>Text</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.contentModeButton,
+                          isImageContentValue(item.text) && styles.contentModeButtonActive,
+                        ]}
+                        onPress={() => setSortingItemImage(questionIndex, itemIndex)}
+                      >
+                        <Text style={styles.contentModeButtonText}>Image</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {isImageContentValue(item.text) ? (
+                      <View style={styles.imageChoicePreviewWrap}>
+                        <Image
+                          source={{ uri: extractImageContentUri(item.text) }}
+                          style={styles.imageChoicePreview}
+                          resizeMode="contain"
+                        />
+                        <TouchableOpacity
+                          style={styles.inlineActionButton}
+                          onPress={() => setSortingItemImage(questionIndex, itemIndex)}
+                        >
+                          <Text style={[styles.inlineActionText, { color: colors.primary }]}>Replace image</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TextInput
+                        value={item.text}
+                        onChangeText={(text) =>
+                          updateSortingItem(questionIndex, itemIndex, {
+                            ...item,
+                            text,
+                          })
+                        }
+                        placeholder={`Item ${itemIndex + 1}...`}
+                        style={[
+                          styles.textInput,
+                          { backgroundColor: colors.surface, flex: 2 },
+                        ]}
+                        mode="outlined"
+                        theme={{
+                          colors: {
+                            primary: colors.primary,
+                            outline: colors.primary,
+                            background: colors.surface,
+                            onSurface: colors.text,
+                            text: colors.text,
+                            placeholder: colors.textSecondary,
+                          },
+                        }}
+                        textColor={colors.text}
+                      />
+                    )}
+                  </View>
 
                   <View style={{ marginLeft: 10, flex: 1 }}>
                     <Text
@@ -2419,6 +2952,10 @@ export default function Create() {
         return false;
       }
 
+      if (questData.availableAt && !parseDateTimeInputValue(questData.availableAt)) {
+        return false;
+      }
+
       if (questData.questType === "lesson") {
         if (!Array.isArray(questData.lessons) || questData.lessons.length < 1) {
           return false;
@@ -2617,6 +3154,9 @@ export default function Create() {
               MIN_COUNTDOWN_SECONDS,
               Math.min(MAX_COUNTDOWN_SECONDS, Number(questData.countdownSeconds) || 300)
             ),
+            availableAt: parseDateTimeInputValue(questData.availableAt)
+              ? parseDateTimeInputValue(questData.availableAt).toISOString()
+              : null,
             level: questData.level,
             // Send subject for forward compatibility; route uses path param
             subject: questData.selectedSection._id || questData.selectedSection,
@@ -2650,6 +3190,7 @@ export default function Create() {
                   selectedSection: null,
                   questType: "quiz",
                   countdownSeconds: 300,
+                  availableAt: "",
                   level: 1,
                   questions: [
                     {
@@ -3023,69 +3564,148 @@ export default function Create() {
             </View>
           ) : (
             <>
-              {/* Quiz Bank quick actions */}
+              {/* Quiz/Lesson Bank toggle */}
               <View
                 style={[
                   styles.quizBankCard,
                   {
                     backgroundColor: colors.card,
                     borderColor: colors.border,
+                    marginTop: 12,
                   },
                 ]}
               >
-                <View style={styles.quizBankHeaderRow}>
-                  <Ionicons name="library-outline" size={20} color={highlightColor} />
-                  <Text style={[styles.quizBankTitle, { color: colors.text }]}>Quiz Bank</Text>
-                </View>
-                <Text style={[styles.quizBankSubtitle, { color: colors.textSecondary }]}> 
-                  Import a quiz bank into fields or export quiz data from this map.
-                </Text>
-
-                <View style={styles.quizBankActionsRow}>
+                <View style={styles.bankToggleRow}>
                   <TouchableOpacity
                     style={[
-                      styles.quizBankActionButton,
-                      {
-                        backgroundColor: `${highlightColor}15`,
-                        borderColor: `${highlightColor}60`,
-                      },
+                      styles.bankToggleButton,
+                      bankView === "quiz" && [styles.bankToggleButtonActive, { borderColor: highlightColor, backgroundColor: `${highlightColor}18` }],
                     ]}
-                    onPress={handleImportJSON}
+                    onPress={() => setBankView("quiz")}
+                    activeOpacity={0.85}
                   >
-                    <Ionicons name="cloud-upload-outline" size={18} color={highlightColor} />
-                    <Text style={[styles.quizBankActionText, { color: colors.text }]}>Import Quiz Bank</Text>
+                    <Ionicons name="library-outline" size={16} color={bankView === "quiz" ? highlightColor : colors.textSecondary} />
+                    <Text style={[styles.bankToggleText, { color: bankView === "quiz" ? colors.text : colors.textSecondary }]}>Quiz Bank</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={[
-                      styles.quizBankActionButton,
-                      {
-                        backgroundColor: `${highlightColor}15`,
-                        borderColor: `${highlightColor}60`,
-                      },
+                      styles.bankToggleButton,
+                      bankView === "lesson" && [styles.bankToggleButtonActive, { borderColor: highlightColor, backgroundColor: `${highlightColor}18` }],
                     ]}
-                    onPress={handleExportCurrentQuizBank}
+                    onPress={() => setBankView("lesson")}
+                    activeOpacity={0.85}
                   >
-                    <Ionicons name="cloud-download-outline" size={18} color={highlightColor} />
-                    <Text style={[styles.quizBankActionText, { color: colors.text }]}>Export Current Quiz Bank</Text>
+                    <Ionicons name="book-outline" size={16} color={bankView === "lesson" ? highlightColor : colors.textSecondary} />
+                    <Text style={[styles.bankToggleText, { color: bankView === "lesson" ? colors.text : colors.textSecondary }]}>Lesson Bank</Text>
                   </TouchableOpacity>
-
-                  {isEditing && (
-                    <TouchableOpacity
-                      style={[
-                        styles.quizBankActionButton,
-                        {
-                          backgroundColor: `${highlightColor}15`,
-                          borderColor: `${highlightColor}60`,
-                        },
-                      ]}
-                      onPress={handleExportLoadedQuizBank}
-                    >
-                      <Ionicons name="archive-outline" size={18} color={highlightColor} />
-                      <Text style={[styles.quizBankActionText, { color: colors.text }]}>Export Loaded Quiz Bank</Text>
-                    </TouchableOpacity>
-                  )}
                 </View>
+
+                {bankView === "quiz" ? (
+                  <>
+                    <Text style={[styles.quizBankSubtitle, { color: colors.textSecondary }]}> 
+                      Import a quiz bank into fields or export quiz data from this map.
+                    </Text>
+
+                    <View style={styles.quizBankActionsRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.quizBankActionButton,
+                          {
+                            backgroundColor: `${highlightColor}15`,
+                            borderColor: `${highlightColor}60`,
+                          },
+                        ]}
+                        onPress={handleImportJSON}
+                      >
+                        <Ionicons name="cloud-upload-outline" size={18} color={highlightColor} />
+                        <Text style={[styles.quizBankActionText, { color: colors.text }]}>Import Quiz Bank</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.quizBankActionButton,
+                          {
+                            backgroundColor: `${highlightColor}15`,
+                            borderColor: `${highlightColor}60`,
+                          },
+                        ]}
+                        onPress={handleExportCurrentQuizBank}
+                      >
+                        <Ionicons name="cloud-download-outline" size={18} color={highlightColor} />
+                        <Text style={[styles.quizBankActionText, { color: colors.text }]}>Export Current Quiz Bank</Text>
+                      </TouchableOpacity>
+
+                      {isEditing && (
+                        <TouchableOpacity
+                          style={[
+                            styles.quizBankActionButton,
+                            {
+                              backgroundColor: `${highlightColor}15`,
+                              borderColor: `${highlightColor}60`,
+                            },
+                          ]}
+                          onPress={handleExportLoadedQuizBank}
+                        >
+                          <Ionicons name="archive-outline" size={18} color={highlightColor} />
+                          <Text style={[styles.quizBankActionText, { color: colors.text }]}>Export Loaded Quiz Bank</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.quizBankSubtitle, { color: colors.textSecondary }]}> 
+                      Import a lesson bank into fields or export lesson data from this map.
+                    </Text>
+
+                    <View style={styles.quizBankActionsRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.quizBankActionButton,
+                          {
+                            backgroundColor: `${highlightColor}15`,
+                            borderColor: `${highlightColor}60`,
+                          },
+                        ]}
+                        onPress={handleImportLessonsJSON}
+                      >
+                        <Ionicons name="cloud-upload-outline" size={18} color={highlightColor} />
+                        <Text style={[styles.quizBankActionText, { color: colors.text }]}>Import Lesson Bank</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.quizBankActionButton,
+                          {
+                            backgroundColor: `${highlightColor}15`,
+                            borderColor: `${highlightColor}60`,
+                          },
+                        ]}
+                        onPress={handleExportCurrentLessonBank}
+                      >
+                        <Ionicons name="cloud-download-outline" size={18} color={highlightColor} />
+                        <Text style={[styles.quizBankActionText, { color: colors.text }]}>Export Current Lesson Bank</Text>
+                      </TouchableOpacity>
+
+                      {isEditing && (
+                        <TouchableOpacity
+                          style={[
+                            styles.quizBankActionButton,
+                            {
+                              backgroundColor: `${highlightColor}15`,
+                              borderColor: `${highlightColor}60`,
+                            },
+                          ]}
+                          onPress={handleExportLoadedLessonBank}
+                        >
+                          <Ionicons name="archive-outline" size={18} color={highlightColor} />
+                          <Text style={[styles.quizBankActionText, { color: colors.text }]}>Export Loaded Lesson Bank</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </>
+                )}
               </View>
 
               {/* Quest Title */}
@@ -3478,6 +4098,365 @@ export default function Create() {
                   Set between 30 and 3600 seconds.
                 </Text>
               </View>
+
+              {/* Quest Availability Schedule */}
+              <View style={styles.inputGroup}>
+                <Text
+                  style={[styles.inputLabel, { color: colors.textSecondary }]}
+                >
+                  Quest Available From (optional)
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.schedulePickerButton,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  onPress={openSchedulePicker}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.schedulePickerButtonContent}>
+                    <View
+                      style={[
+                        styles.schedulePickerIconWrap,
+                        { backgroundColor: `${colors.primary}20` },
+                      ]}
+                    >
+                      <Ionicons
+                        name="calendar-outline"
+                        size={18}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={styles.schedulePickerTextWrap}>
+                      <Text
+                        style={[
+                          styles.schedulePickerButtonTitle,
+                          { color: colors.text },
+                        ]}
+                      >
+                        {questData.availableAt
+                          ? "Scheduled release"
+                          : "Set release date & time"}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.schedulePickerButtonValue,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {questData.availableAt
+                          ? formatScheduleDisplayLabel(questData.availableAt)
+                          : "Tap to choose when this quest unlocks"}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+                <View style={styles.schedulePickerActions}>
+                  <Text style={[styles.helperText, { color: colors.textSecondary }]}> 
+                    Leave blank if you want the quest to follow the normal unlock rules immediately.
+                  </Text>
+                  {questData.availableAt ? (
+                    <TouchableOpacity
+                      style={styles.schedulePickerClearButton}
+                      onPress={clearSchedulePicker}
+                    >
+                      <Text
+                        style={[
+                          styles.schedulePickerClearText,
+                          { color: colors.primary },
+                        ]}
+                      >
+                        Clear schedule
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+
+              <Modal
+                visible={showSchedulePicker}
+                transparent
+                animationType="fade"
+                onRequestClose={closeSchedulePicker}
+              >
+                <View style={styles.schedulePickerOverlay}>
+                  <TouchableWithoutFeedback onPress={closeSchedulePicker}>
+                    <View style={StyleSheet.absoluteFill} />
+                  </TouchableWithoutFeedback>
+                  <View
+                    style={[
+                      styles.schedulePickerModal,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.modalHeader}>
+                      <View style={styles.modalHeaderContentGrow}>
+                        <Text
+                          style={[
+                            styles.modalTitle,
+                            { color: colors.text },
+                          ]}
+                        >
+                          Set Release Time
+                        </Text>
+                        <Text
+                          style={[
+                            styles.modalSubTitle,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          Pick when this quest becomes available.
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.modalCloseButton}
+                        onPress={closeSchedulePicker}
+                      >
+                        <Ionicons
+                          name="close"
+                          size={22}
+                          color={colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.schedulePickerBody}>
+                      <Text
+                        style={[
+                          styles.schedulePickerPreview,
+                          { color: colors.text },
+                        ]}
+                      >
+                        {formatScheduleDisplayLabel(
+                          buildScheduleDateFromDraft(scheduleDraft)
+                        )}
+                      </Text>
+
+                      <View style={styles.schedulePickerGrid}>
+                        <View style={styles.schedulePickerColumn}>
+                          <Text
+                            style={[
+                              styles.schedulePickerLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            Month
+                          </Text>
+                          <Picker
+                            style={styles.schedulePickerWheel}
+                            selectedValue={scheduleDraft.month}
+                            onValueChange={(value) =>
+                              updateScheduleDraftValue("month", value)
+                            }
+                          >
+                            {SCHEDULE_MONTH_LABELS.map((monthLabel, index) => (
+                              <Picker.Item
+                                key={monthLabel}
+                                label={monthLabel}
+                                value={index + 1}
+                              />
+                            ))}
+                          </Picker>
+                        </View>
+
+                        <View style={styles.schedulePickerColumn}>
+                          <Text
+                            style={[
+                              styles.schedulePickerLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            Day
+                          </Text>
+                          <Picker
+                            style={styles.schedulePickerWheel}
+                            selectedValue={scheduleDraft.day}
+                            onValueChange={(value) =>
+                              updateScheduleDraftValue("day", value)
+                            }
+                          >
+                            {Array.from(
+                              {
+                                length: getScheduleDaysInMonth(
+                                  scheduleDraft.year,
+                                  scheduleDraft.month
+                                ),
+                              },
+                              (_, index) => index + 1
+                            ).map((dayNumber) => (
+                              <Picker.Item
+                                key={dayNumber}
+                                label={String(dayNumber)}
+                                value={dayNumber}
+                              />
+                            ))}
+                          </Picker>
+                        </View>
+
+                        <View style={styles.schedulePickerColumn}>
+                          <Text
+                            style={[
+                              styles.schedulePickerLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            Year
+                          </Text>
+                          <Picker
+                            style={styles.schedulePickerWheel}
+                            selectedValue={scheduleDraft.year}
+                            onValueChange={(value) =>
+                              updateScheduleDraftValue("year", value)
+                            }
+                          >
+                            {Array.from({ length: 11 }, (_, index) => {
+                              const yearValue = new Date().getFullYear() + index;
+                              return (
+                                <Picker.Item
+                                  key={yearValue}
+                                  label={String(yearValue)}
+                                  value={yearValue}
+                                />
+                              );
+                            })}
+                          </Picker>
+                        </View>
+                      </View>
+
+                      <View style={styles.schedulePickerGrid}>
+                        <View style={styles.schedulePickerColumn}>
+                          <Text
+                            style={[
+                              styles.schedulePickerLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            Hour
+                          </Text>
+                          <Picker
+                            style={styles.schedulePickerWheel}
+                            selectedValue={scheduleDraft.hour}
+                            onValueChange={(value) =>
+                              updateScheduleDraftValue("hour", value)
+                            }
+                          >
+                            {Array.from({ length: 12 }, (_, index) => {
+                              const hourValue = index + 1;
+                              return (
+                                <Picker.Item
+                                  key={hourValue}
+                                  label={String(hourValue).padStart(2, "0")}
+                                  value={hourValue}
+                                />
+                              );
+                            })}
+                          </Picker>
+                        </View>
+
+                        <View style={styles.schedulePickerColumn}>
+                          <Text
+                            style={[
+                              styles.schedulePickerLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            Minute
+                          </Text>
+                          <Picker
+                            style={styles.schedulePickerWheel}
+                            selectedValue={scheduleDraft.minute}
+                            onValueChange={(value) =>
+                              updateScheduleDraftValue("minute", value)
+                            }
+                          >
+                            {Array.from({ length: 60 }, (_, index) => {
+                              const minuteValue = index;
+                              return (
+                                <Picker.Item
+                                  key={minuteValue}
+                                  label={String(minuteValue).padStart(2, "0")}
+                                  value={minuteValue}
+                                />
+                              );
+                            })}
+                          </Picker>
+                        </View>
+
+                        <View style={styles.schedulePickerColumn}>
+                          <Text
+                            style={[
+                              styles.schedulePickerLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            AM / PM
+                          </Text>
+                          <Picker
+                            style={styles.schedulePickerWheel}
+                            selectedValue={scheduleDraft.period}
+                            onValueChange={(value) =>
+                              setScheduleDraft((currentDraft) => ({
+                                ...currentDraft,
+                                period: value,
+                              }))
+                            }
+                          >
+                            <Picker.Item label="AM" value="AM" />
+                            <Picker.Item label="PM" value="PM" />
+                          </Picker>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.editModalActions}>
+                      <TouchableOpacity
+                        style={[
+                          styles.editModalButton,
+                          styles.editModalCancelButton,
+                          { borderColor: colors.border },
+                        ]}
+                        onPress={clearSchedulePicker}
+                      >
+                        <Text
+                          style={[
+                            styles.editModalButtonText,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          Clear
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.editModalButton,
+                          styles.editModalSaveButton,
+                        ]}
+                        onPress={confirmSchedulePicker}
+                      >
+                        <Text
+                          style={[
+                            styles.editModalButtonText,
+                            { color: "#FFFFFF" },
+                          ]}
+                        >
+                          Save schedule
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
 
               {/* Questions Editor */}
               {questData.questType === "quiz" && (
@@ -7826,6 +8805,33 @@ const styles = StyleSheet.create({
   quizBankActionsRow: {
     gap: 8,
   },
+  bankToggleRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  bankToggleButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  bankToggleButtonActive: {
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  bankToggleText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
   quizBankActionButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -8704,6 +9710,52 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 40,
   },
+  choiceContentWrap: {
+    flex: 1,
+    gap: 6,
+  },
+  contentModeRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  contentModeButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.55)",
+    backgroundColor: "rgba(255, 255, 255, 0.55)",
+  },
+  contentModeButtonActive: {
+    borderColor: "#2acde6",
+    backgroundColor: "rgba(42, 205, 230, 0.15)",
+  },
+  contentModeButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  imageChoicePreviewWrap: {
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.5)",
+    borderRadius: 10,
+    padding: 8,
+    backgroundColor: "rgba(255,255,255,0.85)",
+    gap: 8,
+  },
+  imageChoicePreview: {
+    width: "100%",
+    height: 120,
+    borderRadius: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
+  },
+  inlineActionButton: {
+    alignSelf: "flex-start",
+  },
+  inlineActionText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
   removeChoiceButton: {
     padding: 4,
     backgroundColor: "rgba(244, 67, 54, 0.2)",
@@ -8937,6 +9989,114 @@ const styles = StyleSheet.create({
     // color now set dynamically via inline styles
     fontSize: 16,
     fontWeight: "600",
+  },
+  schedulePickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  schedulePickerButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    minWidth: 0,
+    gap: 12,
+  },
+  schedulePickerIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  schedulePickerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  schedulePickerButtonTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  schedulePickerButtonValue: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  schedulePickerActions: {
+    marginTop: 10,
+    gap: 10,
+  },
+  schedulePickerClearButton: {
+    alignSelf: "flex-start",
+  },
+  schedulePickerClearText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  schedulePickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Platform.OS === "web" ? 24 : 12,
+  },
+  schedulePickerModal: {
+    width:
+      Platform.OS === "web"
+        ? Math.min(Dimensions.get("window").width * 0.95, 880)
+        : "96%",
+    maxWidth: 880,
+    maxHeight: Platform.OS === "web" ? "90%" : "92%",
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+  },
+  schedulePickerBody: {
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    paddingBottom: Platform.OS === "web" ? 24 : 16,
+    paddingTop: 12,
+  },
+  schedulePickerPreview: {
+    fontSize: Platform.OS === "web" ? 16 : 15,
+    fontWeight: "700",
+    marginBottom: 16,
+  },
+  schedulePickerGrid: {
+    flexDirection: Platform.OS === "web" ? "row" : "column",
+    gap: 12,
+    marginBottom: 12,
+  },
+  schedulePickerColumn: {
+    flex: 1,
+    minWidth: Platform.OS === "web" ? 0 : "100%",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.28)",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 4,
+    overflow: "hidden",
+  },
+  schedulePickerLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  schedulePickerWheel: {
+    width: "100%",
   },
 
   // Info container styles

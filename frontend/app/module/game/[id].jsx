@@ -46,6 +46,24 @@ const battlefieldImages = [
 const AnimatableOptionButton =
   Animatable.createAnimatableComponent(TouchableOpacity);
 
+const IMAGE_CONTENT_PREFIX = "__img__::";
+
+const parseMixedContent = (value) => {
+  if (typeof value !== "string") {
+    return { kind: "text", text: String(value || ""), imageUri: "" };
+  }
+
+  if (value.startsWith(IMAGE_CONTENT_PREFIX)) {
+    return {
+      kind: "image",
+      text: "",
+      imageUri: value.slice(IMAGE_CONTENT_PREFIX.length),
+    };
+  }
+
+  return { kind: "text", text: value, imageUri: "" };
+};
+
 const CYBERQUEST_SFX = {
   questWin: require("../../../assets/sounds/cyberquest/quest-win-bg.mp3"),
   questLose: require("../../../assets/sounds/cyberquest/quest-lose-bg.wav"),
@@ -963,7 +981,7 @@ function hashPassword(password) {
                         ...baseQuestion,
                         options:
                           question.choices?.map((choice, choiceIndex) => ({
-                            text: choice,
+                            ...parseMixedContent(choice),
                             isCorrect: choiceIndex === question.correct_index,
                           })) || [],
                       };
@@ -3306,15 +3324,23 @@ function hashPassword(password) {
                             >
                               {String.fromCharCode(65 + index)}
                             </Text>
-                            <Text
-                              style={[
-                                styles.optionText,
-                                (answerLocked || showDeathAnimation) &&
-                                  styles.optionTextDisabled,
-                              ]}
-                            >
-                              {option.text}
-                            </Text>
+                            {option.kind === "image" && option.imageUri ? (
+                              <Image
+                                source={{ uri: option.imageUri }}
+                                style={styles.optionImage}
+                                resizeMode="contain"
+                              />
+                            ) : (
+                              <Text
+                                style={[
+                                  styles.optionText,
+                                  (answerLocked || showDeathAnimation) &&
+                                    styles.optionTextDisabled,
+                                ]}
+                              >
+                                {option.text}
+                              </Text>
+                            )}
                           </LinearGradient>
                         </AnimatableOptionButton>
                       ))}
@@ -3482,9 +3508,17 @@ function hashPassword(password) {
                                 >
                                   <Text style={styles.codeBlockText}>
                                     {index + 1}.{" "}
-                                    {block?.code || "NO CODE FOUND"}
+                                    {parseMixedContent(block?.code).kind === "image" ? "[Image Block]" : block?.code || "NO CODE FOUND"}
                                   </Text>
                                 </ScrollView>
+                                {parseMixedContent(block?.code).kind === "image" &&
+                                  parseMixedContent(block?.code).imageUri && (
+                                    <Image
+                                      source={{ uri: parseMixedContent(block?.code).imageUri }}
+                                      style={styles.codeBlockImage}
+                                      resizeMode="contain"
+                                    />
+                                  )}
                                 <TouchableOpacity
                                   onPress={() => {
                                     if (!answerLocked && !showDeathAnimation) {
@@ -3561,9 +3595,17 @@ function hashPassword(password) {
                                     style={styles.codeBlockScrollView}
                                   >
                                     <Text style={styles.codeBlockText}>
-                                      {block.code || "NO CODE FOUND"}
+                                      {parseMixedContent(block.code).kind === "image" ? "[Image Block]" : block.code || "NO CODE FOUND"}
                                     </Text>
                                   </ScrollView>
+                                  {parseMixedContent(block.code).kind === "image" &&
+                                    parseMixedContent(block.code).imageUri && (
+                                      <Image
+                                        source={{ uri: parseMixedContent(block.code).imageUri }}
+                                        style={styles.codeBlockImage}
+                                        resizeMode="contain"
+                                      />
+                                    )}
                                 </TouchableOpacity>
                               );
                             })}
@@ -3615,7 +3657,15 @@ function hashPassword(password) {
                       {currentQuestion.categories?.map(
                         (category, categoryIndex) => (
                           <View key={categoryIndex} style={styles.categoryBox}>
-                            <Text style={styles.categoryTitle}>{category}</Text>
+                            {parseMixedContent(category).kind === "image" ? (
+                              <Image
+                                source={{ uri: parseMixedContent(category).imageUri }}
+                                style={styles.categoryImage}
+                                resizeMode="contain"
+                              />
+                            ) : (
+                              <Text style={styles.categoryTitle}>{category}</Text>
+                            )}
                             <View style={styles.categoryItems}>
                               {sortingAnswers[categoryIndex]?.map(
                                 (item, itemIndex) => (
@@ -3637,9 +3687,17 @@ function hashPassword(password) {
                                       answerLocked || showDeathAnimation
                                     }
                                   >
-                                    <Text style={styles.sortedItemText}>
-                                      {item.text}
-                                    </Text>
+                                    {parseMixedContent(item.text).kind === "image" ? (
+                                      <Image
+                                        source={{ uri: parseMixedContent(item.text).imageUri }}
+                                        style={styles.sortingItemImage}
+                                        resizeMode="contain"
+                                      />
+                                    ) : (
+                                      <Text style={styles.sortedItemText}>
+                                        {item.text}
+                                      </Text>
+                                    )}
                                   </TouchableOpacity>
                                 )
                               )}
@@ -3655,7 +3713,15 @@ function hashPassword(password) {
                       <View style={styles.itemsGrid}>
                         {availableItems.map((item, index) => (
                           <View key={index} style={styles.itemToSortContainer}>
-                            <Text style={styles.itemText}>{item.text}</Text>
+                            {parseMixedContent(item.text).kind === "image" ? (
+                              <Image
+                                source={{ uri: parseMixedContent(item.text).imageUri }}
+                                style={styles.sortingItemImage}
+                                resizeMode="contain"
+                              />
+                            ) : (
+                              <Text style={styles.itemText}>{item.text}</Text>
+                            )}
                             <View style={styles.categorySelectorButtons}>
                               {currentQuestion.categories?.map(
                                 (category, catIndex) => (
@@ -4242,6 +4308,12 @@ const styles = {
     fontSize: 16,
     flex: 1,
   },
+  optionImage: {
+    width: "100%",
+    height: 120,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
   optionTextDisabled: {
     color: "#999999",
   },
@@ -4476,6 +4548,13 @@ const styles = {
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
+  codeBlockImage: {
+    width: 140,
+    height: 80,
+    marginTop: 8,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
   questComplete: {
     flex: 1,
     justifyContent: "center",
@@ -4655,6 +4734,13 @@ const styles = {
     marginBottom: 10,
     fontSize: 16,
   },
+  categoryImage: {
+    width: "100%",
+    height: 90,
+    marginBottom: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
   categoryItems: {
     flex: 1,
   },
@@ -4668,6 +4754,13 @@ const styles = {
     color: "#fff",
     textAlign: "center",
     fontSize: 12,
+  },
+  sortingItemImage: {
+    width: 90,
+    height: 60,
+    borderRadius: 6,
+    alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
   itemsToSortContainer: {
     marginTop: 20,
