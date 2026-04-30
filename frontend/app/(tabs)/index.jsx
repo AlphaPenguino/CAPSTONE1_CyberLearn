@@ -215,57 +215,72 @@ const [importing, setImporting] = React.useState(false);
     hasAppliedReturnFocusRef.current = false;
     }, [returnSubjectIdParam, focusModuleIdParam]);
 
-      useEffect(() => {
-        const startHomeMusic = async () => {
-          if (homeAudioSourceRef.current || homeAudioContextRef.current) return;
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
 
-          try {
-            const audioContext = new AudioContext();
-            homeAudioContextRef.current = audioContext;
+      const stopHomeMusic = () => {
+        try {
+          homeAudioSourceRef.current?.stop();
+          homeAudioSourceRef.current?.disconnect();
+        } catch {
+          // Ignore cleanup errors if source already stopped or detached.
+        }
 
-            const audioBuffer = await audioContext.decodeAudioData(
-              require("../../assets/sounds/home-bg.mp3")
-            );
+        const contextToClose = homeAudioContextRef.current;
+        homeAudioContextRef.current = null;
+        homeAudioSourceRef.current = null;
 
-            const source = audioContext.createBufferSource();
-            const gainNode = audioContext.createGain?.();
-            source.buffer = audioBuffer;
-            source.loop = true;
-            if (gainNode) {
-              gainNode.gain.value = 0.3;
-              source.connect(gainNode);
-              gainNode.connect(audioContext.destination);
-            } else {
-              source.connect(audioContext.destination);
-            }
-            source.start(audioContext.currentTime);
-            homeAudioSourceRef.current = source;
-          } catch (error) {
-            console.warn("Home background music failed to start:", error);
+        if (contextToClose) {
+          contextToClose.close().catch(() => {
+            // Ignore close errors during teardown.
+          });
+        }
+      };
+
+      const startHomeMusic = async () => {
+        if (homeAudioSourceRef.current || homeAudioContextRef.current) return;
+
+        try {
+          const audioContext = new AudioContext();
+          homeAudioContextRef.current = audioContext;
+
+          const audioBuffer = await audioContext.decodeAudioData(
+            require("../../assets/sounds/home-bg.mp3")
+          );
+
+          if (!isActive) {
+            audioContext.close().catch(() => {});
+            return;
           }
-        };
 
-        startHomeMusic();
-
-        return () => {
-          try {
-            homeAudioSourceRef.current?.stop();
-            homeAudioSourceRef.current?.disconnect();
-          } catch {
-            // Ignore cleanup errors if source already stopped or detached.
+          const source = audioContext.createBufferSource();
+          const gainNode = audioContext.createGain?.();
+          source.buffer = audioBuffer;
+          source.loop = true;
+          if (gainNode) {
+            gainNode.gain.value = 0.3;
+            source.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+          } else {
+            source.connect(audioContext.destination);
           }
+          source.start(audioContext.currentTime);
+          homeAudioSourceRef.current = source;
+        } catch (error) {
+          console.warn("Home background music failed to start:", error);
+          stopHomeMusic();
+        }
+      };
 
-          const contextToClose = homeAudioContextRef.current;
-          homeAudioContextRef.current = null;
-          homeAudioSourceRef.current = null;
+      startHomeMusic();
 
-          if (contextToClose) {
-            contextToClose.close().catch(() => {
-              // Ignore close errors during teardown.
-            });
-          }
-        };
-      }, []);
+      return () => {
+        isActive = false;
+        stopHomeMusic();
+      };
+    }, [])
+  );
 
 const downloadJsonWeb = (data, filename) => {
   try {
