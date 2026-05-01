@@ -91,6 +91,10 @@ const DEFAULT_PAIR_BANK = [
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const shuffle = (items) => [...items].sort(() => Math.random() - 0.5);
 const getParamValue = (value) => (Array.isArray(value) ? value[0] : value);
+const stripImageContentPrefix = (value) =>
+  typeof value === "string" && value.startsWith(IMAGE_CONTENT_PREFIX)
+    ? value.slice(IMAGE_CONTENT_PREFIX.length)
+    : value;
 
 const readImageAsDataUrl = async (uri, mimeType = "image/jpeg") => {
   if (Platform.OS === "web") {
@@ -315,11 +319,11 @@ const buildPairsFromInstructor = (pairs) =>
     .map((pair, index) => {
       const definitionValue =
         pair.definitionType === "image"
-          ? `${IMAGE_CONTENT_PREFIX}${(pair.definition || "").trim()}`
+          ? `${IMAGE_CONTENT_PREFIX}${stripImageContentPrefix((pair.definition || "").trim())}`
           : (pair.definition || "").trim();
       const answerValue =
         pair.answerType === "image"
-          ? `${IMAGE_CONTENT_PREFIX}${(pair.answer || "").trim()}`
+          ? `${IMAGE_CONTENT_PREFIX}${stripImageContentPrefix((pair.answer || "").trim())}`
           : (pair.answer || "").trim();
 
       return normalizePair(
@@ -1110,7 +1114,7 @@ export default function QuickPlay() {
     if (content.type === "image") {
       return (
         <Image
-          source={{ uri: content.uri }}
+          source={{ uri: stripImageContentPrefix(content.uri) }}
           resizeMode="cover"
           style={styles.tileImage}
         />
@@ -1118,7 +1122,7 @@ export default function QuickPlay() {
     }
 
     return (
-      <Text style={styles.tileFrontText} numberOfLines={4}>
+      <Text style={styles.tileFrontText}>
         {content.text}
       </Text>
     );
@@ -2256,7 +2260,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: webScale(10),
+    padding: webScale(8),
   },
   tileBackContent: {
     alignItems: "center",
@@ -2270,11 +2274,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1.8,
   },
   tileFrontText: {
+    width: "100%",
+    flexShrink: 1,
     color: "#F8FAFC",
     textAlign: "center",
-    fontSize: webScale(12),
+    fontSize: webScale(11),
     fontWeight: "800",
-    lineHeight: webScale(15),
+    lineHeight: webScale(14),
+    paddingHorizontal: webScale(2),
   },
   tileImage: {
     width: "100%",
