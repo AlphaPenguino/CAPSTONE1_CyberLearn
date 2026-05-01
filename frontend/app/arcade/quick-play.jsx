@@ -964,7 +964,7 @@ export default function QuickPlay() {
     });
 
     return () => backSubscription.remove();
-  }, [phase, router, stopAllAudio]);
+  }, [clearResolutionTimer, phase, router, setNavigationLocked, stopAllAudio]);
 
   useEffect(() => {
     if (phase !== "playing") {
@@ -1002,7 +1002,14 @@ export default function QuickPlay() {
     (tileId) => {
       if (phase !== "playing" || isResolving || hasEndedRef.current) return;
       if (matchedPairSet.has(tileMap.get(tileId)?.pairId)) return;
-      if (selectedTileIds.includes(tileId)) return;
+      if (selectedTileIds.includes(tileId)) {
+        const nextSelection = selectedTileIds.filter((selectedId) => selectedId !== tileId);
+        setSelectedTileIds(nextSelection);
+        if (nextSelection.length === 0) {
+          setIsResolving(false);
+        }
+        return;
+      }
 
       const nextSelection = [...selectedTileIds, tileId];
       setSelectedTileIds(nextSelection);
@@ -1045,37 +1052,27 @@ export default function QuickPlay() {
 
   const handleExitPress = useCallback(() => {
     if (phase === "playing") {
-      if (isExitPromptOpenRef.current) return;
-
-      isExitPromptOpenRef.current = true;
-      const cancelExit = () => {
-        isExitPromptOpenRef.current = false;
-      };
-      const confirmExit = () => {
-        isExitPromptOpenRef.current = false;
-        void stopAllAudio();
-        router.replace("/(tabs)/game");
-      };
-
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        if (window.confirm("Are you sure you want to quit the game?")) {
-          confirmExit();
-        } else {
-          cancelExit();
-        }
-        return;
-      }
-
-      Alert.alert("Quit Game", "Are you sure you want to quit the game?", [
-        { text: "No", style: "cancel", onPress: cancelExit },
-        { text: "Yes", style: "destructive", onPress: confirmExit },
-      ]);
+      clearResolutionTimer();
+      hasEndedRef.current = false;
+      setGameResult(null);
+      setTiles([]);
+      setSelectedTileIds([]);
+      setMatchedPairIds([]);
+      setMistakes(0);
+      setMoves(0);
+      setTimer(0);
+      setInitialTimer(0);
+      setIsResolving(false);
+      setBoardSeed((value) => value + 1);
+      setPhase("menu");
+      setNavigationLocked(false);
+      void stopAllAudio();
       return;
     }
 
     void stopAllAudio();
     router.replace("/(tabs)/game");
-  }, [phase, router, stopAllAudio]);
+  }, [clearResolutionTimer, phase, router, setNavigationLocked, stopAllAudio]);
 
   const handleReplay = useCallback(() => {
     clearResolutionTimer();
