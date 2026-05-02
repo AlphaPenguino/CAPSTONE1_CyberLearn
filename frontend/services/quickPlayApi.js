@@ -35,6 +35,68 @@ class QuickPlayApiService {
       throw err;
     }
   }
+
+  async getInstructorSlots() {
+    const token = await this.getAuthToken();
+    try {
+      const res = await fetch(`${this.baseUrl}/slots`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to load Quick Play slots");
+      }
+      return data;
+    } catch (error) {
+      console.error("QuickPlay getInstructorSlots failed", error);
+      throw error;
+    }
+  }
+
+  async saveInstructorSlot(payload) {
+    const token = await this.getAuthToken();
+    try {
+      const res = await fetch(`${this.baseUrl}/slots`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to save Quick Play slot");
+      }
+      return data;
+    } catch (error) {
+      console.error("QuickPlay saveInstructorSlot failed", error);
+      throw error;
+    }
+  }
+
+  async fetchTileSetByCode(quizCode) {
+    const token = await this.getAuthToken();
+    try {
+      const res = await fetch(`${this.baseUrl}/code/${encodeURIComponent(quizCode)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to load Quick Play set");
+      }
+      return data;
+    } catch (error) {
+      console.error("QuickPlay fetchTileSetByCode failed", error);
+      throw error;
+    }
+  }
 }
 
 export default new QuickPlayApiService();

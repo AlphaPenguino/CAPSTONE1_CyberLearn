@@ -23,6 +23,7 @@ import knowledgeRelayRoutes from "./routes/knowledgeRelayRoutes.js";
 import quizShowdownRoutes from "./routes/quizShowdownRoutes.js";
 import digitalDefendersRoutes from "./routes/digitalDefendersRoutes.js";
 import instructorRoutes from "./routes/instructorRoutes.js";
+import quickplayRoutes from "./routes/quickplayRoutes.js";
 import { connectDB } from "./lib/db.js";
 import { trackUserActivity } from "./middleware/analytics.middleware.js";
 import { KnowledgeRelayQuestion } from "./models/KnowledgeRelayQuestion.js";
@@ -139,6 +140,7 @@ app.use("/api/knowledge-relay", trackUserActivity, knowledgeRelayRoutes);
 app.use("/api/quiz-showdown", trackUserActivity, quizShowdownRoutes);
 app.use("/api/digital-defenders", trackUserActivity, digitalDefendersRoutes);
 app.use("/api/instructor", trackUserActivity, instructorRoutes);
+app.use("/api/quickplay", trackUserActivity, quickplayRoutes);
 
 // Initialize Socket.IO game handlers
 initializeGameSocket(io);
