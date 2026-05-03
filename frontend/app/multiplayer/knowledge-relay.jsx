@@ -219,7 +219,10 @@ export default function KnowledgeRelay() {
       console.log("Answer result:", data);
       setIsAnswerLocked(false);
       // Store the question index that was answered BEFORE applying new game state
-      answeredQuestionIndexRef.current = gameData.currentQuestionIndex;
+      // Prefer the index provided in the payload (safer for avoiding stale closures)
+      const answeredIndexFromPayload =
+        data?.gameState?.currentQuestionIndex ?? data?.gameState?.currentQuestion ?? null;
+      answeredQuestionIndexRef.current = answeredIndexFromPayload;
       setGameData(data.gameState);
       setShowResult(true);
       setLastAnswerCorrect(data.correct === true);
@@ -1607,13 +1610,13 @@ export default function KnowledgeRelay() {
             <Modal
               visible={isQuestionModalVisible}
               animationType={
-                Platform.OS === "web" && editingQuestionIndex < 0
+                Platform.OS === "web"
                   ? "fade"
                   : "slide"
               }
-              transparent={Platform.OS === "web" && editingQuestionIndex < 0}
+              transparent={Platform.OS === "web"}
               presentationStyle={
-                Platform.OS === "web" && editingQuestionIndex < 0
+                Platform.OS === "web"
                   ? undefined
                   : "pageSheet"
               }
@@ -1621,14 +1624,14 @@ export default function KnowledgeRelay() {
             >
               <View
                 style={
-                  Platform.OS === "web" && editingQuestionIndex < 0
+                  Platform.OS === "web"
                     ? styles.webQuestionModalOverlay
                     : styles.modalContainer
                 }
               >
                 <View
                   style={
-                    Platform.OS === "web" && editingQuestionIndex < 0
+                    Platform.OS === "web"
                       ? styles.webQuestionModalCard
                       : styles.modalContainer
                   }
@@ -1641,7 +1644,6 @@ export default function KnowledgeRelay() {
                     style={[
                       styles.modalSafeArea,
                       Platform.OS === "web" &&
-                        editingQuestionIndex < 0 &&
                         styles.webQuestionModalSafeArea,
                     ]}
                   >
