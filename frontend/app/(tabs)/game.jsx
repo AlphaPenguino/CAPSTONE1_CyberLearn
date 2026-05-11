@@ -467,7 +467,7 @@ export default function GameArcade() {
       id: "quiz-showdown",
       title: "⚡ Quiz Showdown",
       description: "Buzzer battle - race to answer first!",
-      icon: require("../../assets/images/happy2.png"),
+      icon: require("../../assets/images/happy1.png"),
       color: "#00d4ff",
       players: "1v1",
       mode: "Real-time Typing",
