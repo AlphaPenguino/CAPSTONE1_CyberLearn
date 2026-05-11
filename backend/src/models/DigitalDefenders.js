@@ -200,6 +200,7 @@ class DigitalDefendersGame {
     this.roomId = roomId;
     this.creatorSocketId = creatorSocketId;
     this.maxPlayers = maxPlayers;
+    this.createdAt = new Date();
     this.gameState = "lobby"; // lobby, turnOrder, playing, gameOver, victory
     this.currentWave = 1;
     this.pcHealth = 5;

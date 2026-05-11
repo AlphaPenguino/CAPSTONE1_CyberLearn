@@ -454,6 +454,26 @@ export default function GameArcade() {
 
   const multiplayerModes = [
     {
+      id: "knowledge-relay",
+      title: "🏃‍♂️ Knowledge Relay Race",
+      description: "Team vs Team - Most Points Wins!",
+      icon: require("../../assets/images/happy1.png"),
+      color: "#10B981",
+      players: "Team vs Team",
+      mode: "Turn-based",
+    },
+    
+    {
+      id: "quiz-showdown",
+      title: "⚡ Quiz Showdown",
+      description: "Buzzer battle - race to answer first!",
+      icon: require("../../assets/images/happy2.png"),
+      color: "#00d4ff",
+      players: "1v1",
+      mode: "Real-time Typing",
+    },
+
+    {
       id: "rain-of-words",
       title: "💧 Rain of Words",
       description: "1v1 typing race - type the falling answers!",

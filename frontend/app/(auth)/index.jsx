@@ -22,15 +22,19 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore.js";
 
 const AnimatedRobotImage = Animatable.createAnimatableComponent(Image);
+const AnimatedView = Animatable.createAnimatableComponent(View);
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [privacyChecked, setPrivacyChecked] = useState(false);
+  const [showJingle, setShowJingle] = useState(true);
+  const [jingleFadeOut, setJingleFadeOut] = useState(false);
 
   const audioContextRef = useRef(null);
   const loginMusicRef = useRef(null);
+  const introMusicRef = useRef(null);
 
   const { isLoading, login, sayHello } = useAuthStore();
   const { colors } = useTheme();
@@ -39,17 +43,69 @@ export default function Login() {
   useEffect(() => {
     let isCancelled = false;
 
-    const startLoginMusic = async () => {
+    const startIntroMusic = async () => {
       try {
         const audioContext = new AudioContext();
         audioContextRef.current = audioContext;
+
+        // Try to load intro sound, fallback to delay if not found
+        let audioBuffer;
+        try {
+          audioBuffer = await audioContext.decodeAudioData(
+            require("../../assets/sounds/intro_jingle.mp3")
+          );
+        } catch (introError) {
+          console.warn("Intro sound not found, using silent intro:", introError);
+          // Create a short silent buffer for timing
+          audioBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.1, audioContext.sampleRate);
+        }
+
+        if (isCancelled) {
+          await audioContext.close();
+          return;
+        }
+
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
+        source.start(audioContext.currentTime);
+        introMusicRef.current = source;
+
+        // Transition to login after 4.5 seconds (fade in 1s + wait 2s + fade out 1.5s)
+        setTimeout(() => {
+          if (!isCancelled) {
+            setShowJingle(false);
+            startLoginMusic(audioContext);
+          }
+        }, 4500);
+
+      } catch (error) {
+        console.warn("Intro music failed to start:", error);
+        // If intro fails completely, still transition to login after 4.5 seconds
+        setTimeout(() => {
+          if (!isCancelled) {
+            setShowJingle(false);
+            startLoginMusic();
+          }
+        }, 4500);
+      }
+    };
+
+    const startLoginMusic = async (existingContext = null) => {
+      try {
+        const audioContext = existingContext || new AudioContext();
+        if (!existingContext) {
+          audioContextRef.current = audioContext;
+        }
 
         const audioBuffer = await audioContext.decodeAudioData(
           require("../../assets/sounds/login-page.mp3")
         );
 
         if (isCancelled) {
-          await audioContext.close();
+          if (!existingContext) {
+            await audioContext.close();
+          }
           return;
         }
 
@@ -64,12 +120,14 @@ export default function Login() {
       }
     };
 
-    startLoginMusic();
+    startIntroMusic();
 
     return () => {
       isCancelled = true;
 
       try {
+        introMusicRef.current?.stop();
+        introMusicRef.current?.disconnect();
         loginMusicRef.current?.stop();
         loginMusicRef.current?.disconnect();
       } catch {
@@ -78,6 +136,7 @@ export default function Login() {
 
       const contextToClose = audioContextRef.current;
       audioContextRef.current = null;
+      introMusicRef.current = null;
       loginMusicRef.current = null;
 
       if (contextToClose) {
@@ -125,6 +184,57 @@ export default function Login() {
       }, 100);
     }
   };
+
+  const JingleScreen = () => (
+    <ImageBackground
+      source={require("../../assets/images/loginbg.jpeg")}
+      style={styles.jingleContainer}
+      imageStyle={styles.backgroundImageAsset}
+      resizeMode="cover"
+    >
+      <AnimatedView
+        style={styles.jingleOverlay}
+        animation={jingleFadeOut ? "fadeOut" : "fadeIn"}
+        duration={jingleFadeOut ? 1500 : 1000}
+        easing={jingleFadeOut ? "ease-out" : "ease-in"}
+        onAnimationEnd={() => {
+          if (!jingleFadeOut) {
+            // Fade in completed, start fade out after 2 seconds
+            setTimeout(() => {
+              setJingleFadeOut(true);
+            }, 2000);
+          }
+        }}
+      >
+        <Animatable.View
+          animation={jingleFadeOut ? null : "fadeIn"}
+          duration={1000}
+          style={styles.jingleContent}
+        >
+          <Animatable.Image
+            source={require("../../assets/images/icon.png")}
+            style={styles.jingleLogo}
+            animation={jingleFadeOut ? null : "zoomIn"}
+            duration={1500}
+            delay={500}
+            resizeMode="contain"
+          />
+          <Animatable.Text
+            style={styles.jingleText}
+            animation={jingleFadeOut ? null : "fadeInUp"}
+            duration={1000}
+            delay={1000}
+          >
+            CyberLearn
+          </Animatable.Text>
+        </Animatable.View>
+      </AnimatedView>
+    </ImageBackground>
+  );
+
+  if (showJingle) {
+    return <JingleScreen />;
+  }
 
   return (
     <KeyboardAvoidingView

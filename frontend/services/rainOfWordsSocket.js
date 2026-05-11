@@ -59,6 +59,11 @@ class RainOfWordsSocketService {
       this.emit("room-joined", data);
     });
 
+    this.socket.on("room-watched", (data) => {
+      console.log("Room watched:", data);
+      this.emit("room-watched", data);
+    });
+
     this.socket.on("opponent-joined", (data) => {
       console.log("Opponent joined:", data);
       this.emit("opponent-joined", data);
@@ -136,11 +141,19 @@ class RainOfWordsSocketService {
     });
   }
 
-  leaveRoom() {
+  watchRoom(roomCode) {
     if (!this.socket?.connected) {
       throw new Error("Socket not connected");
     }
-    this.socket.emit("leave-room");
+    console.log("Watching room:", roomCode);
+    this.socket.emit("watch-room", { roomCode });
+  }
+
+  leaveRoom(roomCode = null) {
+    if (!this.socket?.connected) {
+      throw new Error("Socket not connected");
+    }
+    this.socket.emit("leave-room", roomCode ? { roomCode } : {});
   }
 
   startGame(roomCode) {

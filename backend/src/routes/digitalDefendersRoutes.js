@@ -29,9 +29,9 @@ router.get("/debug/rooms", (req, res) => {
         playerCount: game.players.size,
         gameState: game.gameState,
         maxPlayers: game.maxPlayers,
+        createdAt: game.createdAt,
         players: Array.from(game.players.values()).map((p) => ({
           name: p.name,
-          isCreator: p.isCreator,
         })),
       })
     );

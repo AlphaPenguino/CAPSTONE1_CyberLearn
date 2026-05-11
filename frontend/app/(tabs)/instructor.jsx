@@ -48,6 +48,8 @@ export default function InstructorDashboard() {
   });
   const [liveRooms, setLiveRooms] = useState([]);
   const [liveRoomsLoading, setLiveRoomsLoading] = useState(false);
+  const [liveRainOfWordsRooms, setLiveRainOfWordsRooms] = useState([]);
+  const [liveRainOfWordsRoomsLoading, setLiveRainOfWordsRoomsLoading] = useState(false);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [profileModalLoading, setProfileModalLoading] = useState(false);
   const [profileModalError, setProfileModalError] = useState(null);
@@ -148,6 +150,25 @@ export default function InstructorDashboard() {
     }
   }, []);
 
+  const fetchLiveRainOfWordsRooms = useCallback(async () => {
+    try {
+      setLiveRainOfWordsRoomsLoading(true);
+      const response = await fetch(`${API_URL}/rain-of-words/debug/rooms`);
+      const payload = await response.json();
+
+      if (payload?.success && Array.isArray(payload.activeRooms)) {
+        setLiveRainOfWordsRooms(payload.activeRooms);
+      } else {
+        setLiveRainOfWordsRooms([]);
+      }
+    } catch (error) {
+      console.warn("Failed to load live Rain of Words rooms:", error);
+      setLiveRainOfWordsRooms([]);
+    } finally {
+      setLiveRainOfWordsRoomsLoading(false);
+    }
+  }, []);
+
   const getNormalizedRole = (account) =>
       (account?.privilege || account?.role || "student").toLowerCase();
 
@@ -176,6 +197,29 @@ export default function InstructorDashboard() {
     }
 
     return fullUrl;
+  };
+
+  const calculateElapsedTime = (createdAtString) => {
+    if (!createdAtString) return "just now";
+    
+    const createdAt = new Date(createdAtString);
+    const now = new Date();
+    const diffMs = now - createdAt;
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    
+    if (diffSeconds < 60) {
+      return `${diffSeconds}s ago`;
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes}m ago`;
+    } else {
+      const diffHours = Math.floor(diffMinutes / 60);
+      return `${diffHours}h ago`;
+    }
+  };
+
+  const isActiveGame = (gameState) => {
+    return gameState && !["finished", "gameOver", "victory", "ended"].includes(gameState);
   };
 
   const fetchSectionsCatalog = useCallback(async () => {
@@ -429,10 +473,20 @@ export default function InstructorDashboard() {
 
     const refreshTimer = setInterval(() => {
       fetchLiveRooms();
-    }, 15000);
+    }, 5000);
 
     return () => clearInterval(refreshTimer);
   }, [fetchLiveRooms]);
+
+  useEffect(() => {
+    fetchLiveRainOfWordsRooms();
+
+    const refreshTimer = setInterval(() => {
+      fetchLiveRainOfWordsRooms();
+    }, 5000);
+
+    return () => clearInterval(refreshTimer);
+  }, [fetchLiveRainOfWordsRooms]);
 
   // Check if user is instructor or admin
   if (user?.privilege !== "instructor" && user?.privilege !== "admin") {
@@ -551,14 +605,14 @@ export default function InstructorDashboard() {
             {liveRoomsLoading && (
                 <Text style={{ opacity: 0.7, marginBottom: 8 }}>Loading live rooms...</Text>
             )}
-            {!liveRoomsLoading && liveRooms.length === 0 && (
-                <Text style={{ opacity: 0.7 }}>No live rooms right now</Text>
+            {!liveRoomsLoading && liveRooms.filter(r => isActiveGame(r.gameState)).length === 0 && (
+                <Text style={{ opacity: 0.7 }}>No active matches right now</Text>
             )}
-            {liveRooms.map((room) => {
+            {liveRooms.filter(r => isActiveGame(r.gameState)).map((room) => {
               const playerNames = Array.isArray(room.players)
                   ? room.players.map((player) => player.name).filter(Boolean)
                   : [];
-              const isLive = room.gameState && room.gameState !== "lobby";
+              const elapsedTime = calculateElapsedTime(room.createdAt);
 
               return (
                   <View
@@ -570,10 +624,10 @@ export default function InstructorDashboard() {
                         Room {room.roomCode}
                       </Text>
                       <Text style={[styles.activityAction, { color: colors.textSecondary }]}>
-                        {room.playerCount} players • {room.gameState || "unknown"}
+                        {room.playerCount}/{room.maxPlayers || 4} players • {room.gameState}
                       </Text>
                       <Text style={[styles.activityTime, { color: colors.textSecondary }]}>
-                        {playerNames.length > 0 ? playerNames.join(", ") : "Waiting for players"}
+                        {playerNames.length > 0 ? playerNames.join(", ") : "Waiting for players"} • {elapsedTime}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -592,7 +646,69 @@ export default function InstructorDashboard() {
                         }
                     >
                       <MaterialCommunityIcons
-                          name={isLive ? "play-circle-outline" : "eye-outline"}
+                          name="play-circle-outline"
+                          size={22}
+                          color={highlightColor}
+                      />
+                    </TouchableOpacity>
+                  </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Live Rain of Words Rooms */}
+        <View style={styles.activityContainer}>
+          <Text style={[styles.sectionTitle, { color: highlightColor }]}>
+            ⌨️ Live Rain of Words Matches
+          </Text>
+          <Text style={[styles.toolsSubtitle, { color: colors.textSecondary }]}>Watch active typing races in real time.</Text>
+          <View style={styles.activityList}>
+            {liveRainOfWordsRoomsLoading && (
+                <Text style={{ opacity: 0.7, marginBottom: 8 }}>Loading live matches...</Text>
+            )}
+            {!liveRainOfWordsRoomsLoading && liveRainOfWordsRooms.filter(r => isActiveGame(r.gameState)).length === 0 && (
+                <Text style={{ opacity: 0.7 }}>No active matches right now</Text>
+            )}
+            {liveRainOfWordsRooms.filter(r => isActiveGame(r.gameState)).map((room) => {
+              const playerNames = Array.isArray(room.players)
+                  ? room.players.map((player) => player.name).filter(Boolean)
+                  : [];
+              const elapsedTime = calculateElapsedTime(room.createdAt);
+
+              return (
+                  <View
+                      key={room.roomCode}
+                      style={[styles.activityItem, { backgroundColor: colors.card }]}
+                  >
+                    <View style={styles.activityInfo}>
+                      <Text style={[styles.activityStudent, { color: colors.text }]}>
+                        Match {room.roomCode}
+                      </Text>
+                      <Text style={[styles.activityAction, { color: colors.textSecondary }]}>
+                        {room.playerCount}/{room.maxPlayers || 2} players • {room.gameState}
+                      </Text>
+                      <Text style={[styles.activityTime, { color: colors.textSecondary }]}>
+                        {playerNames.length > 0 ? playerNames.join(" vs ") : "Waiting for players"} • {elapsedTime}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[
+                          styles.profileCloseButton,
+                          { backgroundColor: highlightColor + "18" },
+                        ]}
+                        onPress={() =>
+                            router.push({
+                              pathname: "/multiplayer/rain-of-words",
+                              params: {
+                                roomCode: room.roomCode,
+                                spectate: "1",
+                              },
+                            })
+                        }
+                    >
+                      <MaterialCommunityIcons
+                          name="play-circle-outline"
                           size={22}
                           color={highlightColor}
                       />

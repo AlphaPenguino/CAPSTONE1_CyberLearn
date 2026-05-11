@@ -16,7 +16,7 @@ import {
   Easing,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import * as Animatable from "react-native-animatable";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -146,6 +146,18 @@ const SAMPLE_QUESTIONS = [
 
 export default function RainOfWords() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const roomCodeParam = Array.isArray(params?.roomCode)
+    ? params.roomCode[0]
+    : params?.roomCode;
+  const spectateParam = Array.isArray(params?.spectate)
+    ? params.spectate[0]
+    : params?.spectate;
+  const isSpectateRoute =
+    typeof spectateParam === "string" &&
+    ["1", "true", "yes"].includes(spectateParam.toLowerCase());
+  const normalizedSpectateRoomCode =
+    typeof roomCodeParam === "string" ? roomCodeParam.trim().toUpperCase() : "";
   const user = useAuthStore((state) => state.user);
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const videoResizeMode = Platform.OS === "web" ? "stretch" : "cover";
@@ -157,6 +169,7 @@ export default function RainOfWords() {
   const [playerName, setPlayerName] = useState(user?.fullName || "Player");
   const [opponent, setOpponent] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isSpectator, setIsSpectator] = useState(false);
 
   // Gameplay state
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -174,6 +187,7 @@ export default function RainOfWords() {
 
   // Refs
   const socketRef = useRef(null);
+  const spectateRequestedRef = useRef(false);
   const inputRef = useRef(null);
   const missedRoundTimeoutRef = useRef(null);
   const nextQuestionTimeoutRef = useRef(null);
@@ -231,6 +245,16 @@ export default function RainOfWords() {
     setFeedbackKind(kind);
     setFeedbackTick((prev) => prev + 1);
   }, []);
+
+  useEffect(() => {
+    if (!isSpectateRoute || !normalizedSpectateRoomCode) {
+      return;
+    }
+
+    setIsSpectator(true);
+    setRoomCode(normalizedSpectateRoomCode);
+    setGameMode("play");
+  }, [isSpectateRoute, normalizedSpectateRoomCode]);
 
   // Background music: load & play when the game is active, cleanup on stop/unmount
   useEffect(() => {
@@ -459,7 +483,38 @@ export default function RainOfWords() {
 
   const handleGameState = useCallback(
     (data) => {
-      const players = data?.game?.players || [];
+      const publicGame = data?.game || null;
+
+      if (!publicGame) {
+        return;
+      }
+
+      if (isSpectator || isSpectateRoute) {
+        const players = Array.isArray(publicGame.players) ? publicGame.players : [];
+        const firstPlayer = players[0] || null;
+        const secondPlayer = players[1] || null;
+
+        setGameState(publicGame.gameState || "waiting");
+        setRoomCode(publicGame.roomId || normalizedSpectateRoomCode || roomCode);
+        setCurrentQuestion(publicGame.currentQuestion || null);
+        setCurrentQuestionIndex(publicGame.questionsAnswered || 0);
+        setQuestionsAnswered(publicGame.questionsAnswered || 0);
+        setPlayerScore(firstPlayer?.score || 0);
+        setOpponentScore(secondPlayer?.score || 0);
+        setPlayerName(firstPlayer?.name || "Player 1");
+        setOpponent(secondPlayer?.name || null);
+
+        if (publicGame.gameState === "playing" && publicGame.currentQuestion) {
+          spawnFallingWords(publicGame.currentQuestion);
+        }
+
+        if (publicGame.gameState !== "playing") {
+          setFallingWords([]);
+        }
+        return;
+      }
+
+      const players = publicGame.players || [];
       const normalizedName = (playerName || "").trim().toLowerCase();
       const opponentPlayer = players.find(
         (p) => (p?.name || "").trim().toLowerCase() !== normalizedName
@@ -471,8 +526,42 @@ export default function RainOfWords() {
         setGameState("waiting");
       }
     },
-    [playerName]
+    [isSpectator, isSpectateRoute, normalizedSpectateRoomCode, playerName, roomCode, spawnFallingWords]
   );
+
+  const handleRoomWatched = useCallback((data) => {
+    const publicGame = data?.game || null;
+    setIsSpectator(true);
+
+    if (publicGame?.roomId) {
+      setRoomCode(publicGame.roomId);
+    } else if (data?.roomId) {
+      setRoomCode(data.roomId);
+    }
+
+    if (!publicGame) {
+      return;
+    }
+
+    setGameState(publicGame.gameState || "waiting");
+    setCurrentQuestion(publicGame.currentQuestion || null);
+    setCurrentQuestionIndex(publicGame.questionsAnswered || 0);
+    setQuestionsAnswered(publicGame.questionsAnswered || 0);
+
+    const players = Array.isArray(publicGame.players) ? publicGame.players : [];
+    setPlayerScore(players[0]?.score || 0);
+    setOpponentScore(players[1]?.score || 0);
+    setPlayerName(players[0]?.name || "Player 1");
+    setOpponent(players[1]?.name || null);
+
+    if (publicGame.gameState === "playing" && publicGame.currentQuestion) {
+      spawnFallingWords(publicGame.currentQuestion);
+    }
+
+    if (publicGame.gameState !== "playing") {
+      setFallingWords([]);
+    }
+  }, [spawnFallingWords]);
 
   const handleGameStarted = useCallback((data) => {
     setGameState("playing");
@@ -570,6 +659,7 @@ export default function RainOfWords() {
 
     socket.on("room-created", handleRoomCreated);
     socket.on("room-joined", handleRoomJoined);
+    socket.on("room-watched", handleRoomWatched);
     socket.on("opponent-joined", handleOpponentJoined);
     socket.on("game-started", handleGameStarted);
     socket.on("question-display", handleQuestionDisplay);
@@ -586,6 +676,7 @@ export default function RainOfWords() {
       socket.off("error", onServerError);
       socket.off("room-created", handleRoomCreated);
       socket.off("room-joined", handleRoomJoined);
+      socket.off("room-watched", handleRoomWatched);
       socket.off("opponent-joined", handleOpponentJoined);
       socket.off("game-started", handleGameStarted);
       socket.off("question-display", handleQuestionDisplay);
@@ -598,6 +689,7 @@ export default function RainOfWords() {
   }, [
     handleRoomCreated,
     handleRoomJoined,
+    handleRoomWatched,
     handleOpponentJoined,
     handleGameStarted,
     handleQuestionDisplay,
@@ -609,6 +701,10 @@ export default function RainOfWords() {
   ]);
 
   useEffect(() => {
+    if (isSpectator || isSpectateRoute) {
+      return;
+    }
+
     if (gameState !== "waiting" || !roomCode || !isConnected) return;
 
     const requestGameState = () => {
@@ -623,7 +719,25 @@ export default function RainOfWords() {
     const intervalId = setInterval(requestGameState, 1500);
 
     return () => clearInterval(intervalId);
-  }, [gameState, roomCode, isConnected]);
+  }, [gameState, roomCode, isConnected, isSpectator, isSpectateRoute]);
+
+  useEffect(() => {
+    if (!isSpectateRoute || !normalizedSpectateRoomCode || !isConnected) {
+      return;
+    }
+
+    if (spectateRequestedRef.current) {
+      return;
+    }
+
+    spectateRequestedRef.current = true;
+    try {
+      RainOfWordsSocket.watchRoom(normalizedSpectateRoomCode);
+    } catch (error) {
+      console.error("Failed to watch Rain of Words room:", error);
+      spectateRequestedRef.current = false;
+    }
+  }, [isConnected, isSpectateRoute, normalizedSpectateRoomCode]);
 
   // Animate rotation for waiting icon and pulse the waiting text
   useEffect(() => {
@@ -655,6 +769,10 @@ export default function RainOfWords() {
 
   // Handle text input submission
   const handleSubmitAnswer = useCallback(() => {
+    if (isSpectator) {
+      return;
+    }
+
     if (!textInput.trim() || !currentQuestion) return;
 
     const isCorrect = textInput.toLowerCase().trim() === currentQuestion.correct.toLowerCase();
@@ -689,7 +807,7 @@ export default function RainOfWords() {
     }
 
     setTextInput("");
-  }, [clearMissedRoundTimer, textInput, currentQuestion, currentQuestionIndex, roomCode, playerScore, spawnNewQuestion, playSfx, showFeedback]);
+  }, [clearMissedRoundTimer, isSpectator, textInput, currentQuestion, currentQuestionIndex, roomCode, playerScore, spawnNewQuestion, playSfx, showFeedback]);
 
   // Handle key press (Enter to submit)
   useEffect(() => {
@@ -707,6 +825,8 @@ export default function RainOfWords() {
 
   // Create or join room
   const handleCreateRoom = () => {
+    if (isSpectator) return;
+
     if (!playerName.trim()) {
       Alert.alert("Error", "Please enter your name");
       return;
@@ -723,6 +843,8 @@ export default function RainOfWords() {
   };
 
   const handleJoinRoom = () => {
+    if (isSpectator) return;
+
     if (!roomCode.trim()) {
       Alert.alert("Error", "Please enter room code");
       return;
@@ -743,6 +865,8 @@ export default function RainOfWords() {
   };
 
   const handleStartGame = () => {
+    if (isSpectator) return;
+
     try {
       RainOfWordsSocket.startGame(roomCode);
     } catch (error) {
@@ -752,7 +876,7 @@ export default function RainOfWords() {
 
   const handleLeaveGame = () => {
     try {
-      RainOfWordsSocket.leaveRoom();
+      RainOfWordsSocket.leaveRoom(roomCode);
     } catch (error) {
       console.error("Error leaving room:", error);
     }
@@ -760,6 +884,8 @@ export default function RainOfWords() {
   };
 
   const handleRematch = () => {
+    if (isSpectator) return;
+
     setGameState("waiting");
     setPlayerScore(0);
     setOpponentScore(0);
@@ -818,6 +944,41 @@ export default function RainOfWords() {
   };
 
   // LOBBY STATE
+  if (isSpectateRoute && isSpectator && gameState === "lobby") {
+    return (
+      <ImageBackground
+        source={TYPER_BACKGROUND}
+        resizeMode="cover"
+        style={styles.container}
+        imageStyle={styles.backgroundImage}
+      >
+        {renderBackgroundVideoLayer()}
+        <LinearGradient colors={["rgba(26,26,46,0.5)", "rgba(22,33,62,0.5)"]} style={styles.backgroundOverlay}>
+          <SafeAreaView style={styles.safeArea}>
+            <View style={[styles.lobbyContainer, IS_COMPACT_LAYOUT && styles.lobbyContainerCompact]}>
+              <AnimatedText animation="pulse" iterationCount="infinite" style={styles.title}>
+                Spectating Rain of Words
+              </AnimatedText>
+              <Text style={[styles.subtitle, IS_COMPACT_LAYOUT && styles.subtitleCompact]}>
+                Waiting for room {roomCode || normalizedSpectateRoomCode || "..."}
+              </Text>
+              <AnimatedLinearGradient
+                colors={["rgba(0,212,255,0.18)", "rgba(156,39,176,0.12)"]}
+                style={styles.connectionStatus}
+              >
+                <View style={[styles.statusDot, { backgroundColor: isConnected ? "#4CAF50" : "#ff9800" }]} />
+                <Text style={styles.statusText}>{isConnected ? "Connected" : "Connecting..."}</Text>
+              </AnimatedLinearGradient>
+              <AnimatedTouchableOpacity animation="fadeInUp" duration={450} style={[styles.backButton, IS_COMPACT_LAYOUT && styles.backButtonCompact]} onPress={handleLeaveGame}>
+                <Text style={styles.backButtonText}>← Leave Spectator</Text>
+              </AnimatedTouchableOpacity>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+      </ImageBackground>
+    );
+  }
+
   if (gameState === "lobby") {
     return (
       <ImageBackground
@@ -873,6 +1034,7 @@ export default function RainOfWords() {
               <TouchableOpacity
                 style={[styles.modeButton, gameMode === "play" && styles.modeButtonActive]}
                 onPress={() => setGameMode("play")}
+                disabled={isSpectator}
               >
                 <MaterialCommunityIcons name="gamepad-variant" size={24} color="#fff" />
                 <Text style={styles.modeButtonText}>Play</Text>
@@ -881,9 +1043,11 @@ export default function RainOfWords() {
               <TouchableOpacity
                 style={[styles.modeButton, gameMode === "instructor" && styles.modeButtonActive]}
                 onPress={() => {
+                  if (isSpectator) return;
                   setGameMode("instructor");
                   router.push("/multiplayer/rain-of-words-instructor");
                 }}
+                disabled={isSpectator}
               >
                 <MaterialCommunityIcons name="pencil" size={24} color="#fff" />
                 <Text style={styles.modeButtonText}>Instructor</Text>
@@ -898,9 +1062,10 @@ export default function RainOfWords() {
                   placeholderTextColor="#666"
                   value={playerName}
                   onChangeText={setPlayerName}
+                  editable={!isSpectator}
                 />
 
-                <AnimatedTouchableOpacity animation="pulse" duration={700} style={styles.primaryButton} onPress={handleCreateRoom}>
+                <AnimatedTouchableOpacity animation="pulse" duration={700} style={styles.primaryButton} onPress={handleCreateRoom} disabled={isSpectator}>
                   <LinearGradient colors={["#00d4ff", "#0099cc"]} style={styles.buttonGradient}>
                     <Text style={styles.buttonText}>Create Room</Text>
                   </LinearGradient>
@@ -915,9 +1080,10 @@ export default function RainOfWords() {
                   value={roomCode}
                   onChangeText={setRoomCode}
                   maxLength={6}
+                  editable={!isSpectator}
                 />
 
-                <AnimatedTouchableOpacity animation="pulse" duration={700} delay={80} style={styles.primaryButton} onPress={handleJoinRoom}>
+                <AnimatedTouchableOpacity animation="pulse" duration={700} delay={80} style={styles.primaryButton} onPress={handleJoinRoom} disabled={isSpectator}>
                   <LinearGradient colors={["#9c27b0", "#7b1fa2"]} style={styles.buttonGradient}>
                     <Text style={styles.buttonText}>Join Room</Text>
                   </LinearGradient>
@@ -925,7 +1091,7 @@ export default function RainOfWords() {
               </View>
             )}
 
-            <AnimatedTouchableOpacity animation="fadeInUp" duration={450} style={[styles.backButton, IS_COMPACT_LAYOUT && styles.backButtonCompact]} onPress={() => router.back()}>
+            <AnimatedTouchableOpacity animation="fadeInUp" duration={450} style={[styles.backButton, IS_COMPACT_LAYOUT && styles.backButtonCompact]} onPress={handleLeaveGame}>
               <Text style={styles.backButtonText}>← Back</Text>
             </AnimatedTouchableOpacity>
           </View>
@@ -971,15 +1137,22 @@ export default function RainOfWords() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+          {/* Spectator Indicator */}
+          {isSpectator && (
+              <View style={styles.spectatorBanner}>
+                <MaterialCommunityIcons name="eye-outline" size={16} color="#fff" />
+                <Text style={styles.spectatorBannerText}>You are spectating - read-only mode</Text>
+              </View>
+          )}
           <View style={[styles.waitingContainer, IS_COMPACT_LAYOUT && styles.waitingContainerCompact]}>
             <Text style={[styles.roomCodeDisplay, IS_COMPACT_LAYOUT && styles.roomCodeDisplayCompact]}>Room: {roomCode}</Text>
-            <Text style={[styles.playerName, IS_COMPACT_LAYOUT && styles.playerNameCompact]}>{playerName}</Text>
+            <Text style={[styles.playerName, IS_COMPACT_LAYOUT && styles.playerNameCompact]}>{isSpectator ? "Spectating" : playerName}</Text>
 
             {opponent ? (
               <View style={styles.opponentSection}>
                 <MaterialCommunityIcons name="account-check" size={40} color="#4CAF50" />
                 <Text style={styles.opponentText}>{opponent} joined!</Text>
-                <AnimatedTouchableOpacity animation="jello" duration={850} style={[styles.startButton, IS_COMPACT_LAYOUT && styles.startButtonCompact]} onPress={handleStartGame}>
+                <AnimatedTouchableOpacity animation="jello" duration={850} style={[styles.startButton, IS_COMPACT_LAYOUT && styles.startButtonCompact]} onPress={handleStartGame} disabled={isSpectator}>
                   <LinearGradient colors={["#00d4ff", "#4CAF50"]} style={styles.buttonGradient}>
                     <Text style={styles.buttonText}>Start Game</Text>
                   </LinearGradient>
@@ -1008,7 +1181,7 @@ export default function RainOfWords() {
             )}
 
             <AnimatedTouchableOpacity animation="fadeInUp" duration={450} style={[styles.backButton, IS_COMPACT_LAYOUT && styles.backButtonCompact]} onPress={handleLeaveGame}>
-              <Text style={styles.backButtonText}>← Leave</Text>
+              <Text style={styles.backButtonText}>{isSpectator ? "← Leave Spectator" : "← Leave"}</Text>
             </AnimatedTouchableOpacity>
           </View>
           </ScrollView>
@@ -1053,6 +1226,13 @@ export default function RainOfWords() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+          {/* Spectator Indicator */}
+          {isSpectator && (
+              <View style={styles.spectatorBanner}>
+                <MaterialCommunityIcons name="eye-outline" size={16} color="#fff" />
+                <Text style={styles.spectatorBannerText}>You are spectating - read-only mode</Text>
+              </View>
+          )}
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={[styles.gameContainer, IS_COMPACT_LAYOUT && styles.gameContainerCompact]}>
             {/* Score Bar */}
             <View style={[styles.scoreBar, IS_COMPACT_LAYOUT && styles.scoreBarCompact]}>
@@ -1130,7 +1310,7 @@ export default function RainOfWords() {
             )}
 
             {/* Input Section */}
-            <View style={[styles.inputSection, IS_COMPACT_LAYOUT && styles.inputSectionCompact]}>
+              <View style={[styles.inputSection, IS_COMPACT_LAYOUT && styles.inputSectionCompact]}>
                 <TextInput
                 ref={inputRef}
                 style={[styles.gameInput, IS_COMPACT_LAYOUT && styles.gameInputCompact]}
@@ -1138,6 +1318,9 @@ export default function RainOfWords() {
                 placeholderTextColor="#666"
                 value={textInput}
                 onChangeText={(t) => {
+                  if (isSpectator) {
+                    return;
+                  }
                   setTextInput(t);
                   // typing SFX for each keystroke
                   playSfx("typing", { volume: 0.50 });
@@ -1146,9 +1329,9 @@ export default function RainOfWords() {
                 returnKeyType="send"
                 blurOnSubmit={false}
                 onSubmitEditing={() => handleSubmitAnswer()}
-                editable={!gameOver}
+                editable={!gameOver && !isSpectator}
               />
-              <AnimatedTouchableOpacity animation="pulse" duration={650} style={[styles.submitButton, IS_COMPACT_LAYOUT && styles.submitButtonCompact]} onPress={handleSubmitAnswer}>
+              <AnimatedTouchableOpacity animation="pulse" duration={650} style={[styles.submitButton, IS_COMPACT_LAYOUT && styles.submitButtonCompact]} onPress={handleSubmitAnswer} disabled={isSpectator}>
                 <MaterialCommunityIcons name="send" size={24} color="#fff" />
               </AnimatedTouchableOpacity>
             </View>
@@ -1512,6 +1695,26 @@ const styles = StyleSheet.create({
   },
   gameContainerCompact: {
     paddingHorizontal: 10,
+  },
+  spectatorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(0, 212, 255, 0.16)",
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(0, 212, 255, 0.35)",
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  spectatorBannerText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textAlign: "center",
   },
   scoreBar: {
     flexDirection: "row",

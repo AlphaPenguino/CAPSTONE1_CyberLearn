@@ -3,6 +3,7 @@ import { logActivity, AUDIT_ACTIONS, AUDIT_RESOURCES } from "../lib/auditLogger.
 // Game state storage
 const rainOfWordsGames = new Map();
 const rainOfWordsPlayers = new Map();
+const rainOfWordsWatcherSessions = new Map();
 const ROOM_ID_LENGTH = 6;
 const ROOM_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
@@ -255,6 +256,14 @@ const initializeRainOfWordsSocket = (io) => {
   rainOfWordsNamespace.on("connection", (socket) => {
     console.log("Rain of Words user connected:", socket.id);
 
+    const setWatcherSession = (roomId) => {
+      rainOfWordsWatcherSessions.set(socket.id, roomId);
+    };
+
+    const clearWatcherSession = () => {
+      rainOfWordsWatcherSessions.delete(socket.id);
+    };
+
     const handlePlayerExit = async (leaveType = "disconnect") => {
       const player = rainOfWordsPlayers.get(socket.id);
       if (!player) return;
@@ -393,7 +402,57 @@ const initializeRainOfWordsSocket = (io) => {
       console.log(`${playerName} joined Rain of Words room ${normalizedRoomId}`);
     });
 
-    socket.on("leave-room", async () => {
+    socket.on("watch-room", async (data) => {
+      const normalizedRoomId = (data.roomCode || "").trim().toUpperCase();
+
+      if (!isValidRoomId(normalizedRoomId)) {
+        socket.emit("error", { message: "Invalid room code" });
+        return;
+      }
+
+      const game = rainOfWordsGames.get(normalizedRoomId);
+      if (!game) {
+        socket.emit("error", { message: "Room not found" });
+        return;
+      }
+
+      socket.join(normalizedRoomId);
+      setWatcherSession(normalizedRoomId);
+
+      const publicGame = game.getPublicGameState();
+      socket.emit("room-watched", {
+        roomId: normalizedRoomId,
+        game: publicGame,
+        spectator: true,
+      });
+
+      socket.emit("game-state", {
+        game: publicGame,
+      });
+
+      logRainOfWordsActivity({
+        socket,
+        action: AUDIT_ACTIONS.MULTIPLAYER_ROOM_JOIN,
+        playerName: "Spectator",
+        roomId: normalizedRoomId,
+        details: { spectator: true, event: "room_watched" },
+      });
+    });
+
+    socket.on("leave-room", async (data = {}) => {
+      const roomCode = (data.roomCode || rainOfWordsWatcherSessions.get(socket.id) || "")
+        .trim()
+        .toUpperCase();
+
+      if (rainOfWordsWatcherSessions.has(socket.id)) {
+        if (roomCode) {
+          socket.leave(roomCode);
+        }
+        clearWatcherSession();
+        socket.emit("room-left", { success: true, spectator: true });
+        return;
+      }
+
       await handlePlayerExit("leave-room");
     });
 
@@ -613,6 +672,7 @@ const initializeRainOfWordsSocket = (io) => {
     // Handle disconnection
     socket.on("disconnect", async () => {
       await handlePlayerExit("disconnect");
+      clearWatcherSession();
       console.log("Rain of Words user disconnected:", socket.id);
     });
 

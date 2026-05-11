@@ -1,6 +1,7 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
 import { trackGameCompletion } from "../middleware/analytics.middleware.js";
+import { rainOfWordsGames, rainOfWordsPlayers } from "../controllers/rainOfWordsController.js";
 
 const router = express.Router();
 
@@ -576,5 +577,51 @@ router.post(
     }
   }
 );
+
+/**
+ * GET /rain-of-words/debug/rooms
+ * Debug endpoint to list active rooms
+ * @access  Public (for debugging)
+ */
+router.get("/debug/rooms", (req, res) => {
+  try {
+    const rooms = Array.from(rainOfWordsGames.entries()).map(
+      ([roomCode, game]) => ({
+        roomCode,
+        playerCount: game.players.size,
+        gameState: game.gameState,
+        maxPlayers: game.maxPlayers,
+        createdAt: game.createdAt,
+        players: Array.from(game.players.values()).map((p) => ({
+          name: p.name,
+        })),
+      })
+    );
+
+    const players = Array.from(rainOfWordsPlayers.entries()).map(
+      ([socketId, player]) => ({
+        socketId,
+        gameId: player.gameId,
+        playerName: player.playerName,
+        isCreator: player.isCreator,
+      })
+    );
+
+    res.json({
+      success: true,
+      activeRooms: rooms,
+      totalRooms: rainOfWordsGames.size,
+      activePlayers: players,
+      totalPlayers: rainOfWordsPlayers.size,
+    });
+  } catch (error) {
+    console.error("Error in debug/rooms:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching room data",
+      error: error.message,
+    });
+  }
+});
 
 export default router;

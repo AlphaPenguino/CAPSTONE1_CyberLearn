@@ -635,6 +635,19 @@ function DigitalDefenders() {
     setIsDataLoading(true);
   }, [isSpectateRoute, normalizedSpectateRoomCode]);
 
+  useEffect(() => {
+    if (!isSpectateRoute || !normalizedSpectateRoomCode || !isConnected) {
+      return;
+    }
+
+    try {
+      digitalDefendersSocket.watchRoom(normalizedSpectateRoomCode);
+    } catch (error) {
+      console.warn("Failed to start spectating room:", error);
+      setIsDataLoading(false);
+    }
+  }, [isConnected, isSpectateRoute, normalizedSpectateRoomCode]);
+
   const [selectedCard, setSelectedCard] = useState(null);
   const [freezeCountdown, setFreezeCountdown] = useState(0);
   const [gameOverReason, setGameOverReason] = useState(null); // Track why the game ended
@@ -4246,6 +4259,14 @@ function DigitalDefenders() {
               </View>
             </View>
 
+            {/* Spectator Indicator */}
+            {isSpectator && (
+                <View style={styles.spectatorBanner}>
+                  <MaterialCommunityIcons name="eye-outline" size={16} color="#fff" />
+                  <Text style={styles.spectatorBannerText}>You are spectating - read-only mode</Text>
+                </View>
+            )}
+
             {/* Loading / auth states */}
             {(!user || !token) && (
                 <View style={styles.loadingContainer}>
@@ -4352,6 +4373,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 48,
     backgroundColor: "transparent",
+  },
+  spectatorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(0, 212, 255, 0.16)",
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(0, 212, 255, 0.35)",
+    marginHorizontal: -14,
+  },
+  spectatorBannerText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textAlign: "center",
   },
   titleContainer: {
     flexDirection: "row",

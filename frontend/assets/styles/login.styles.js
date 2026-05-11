@@ -188,6 +188,35 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textDecorationLine: "underline",
   },
+
+  // Jingle screen styles
+  jingleContainer: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    alignSelf: "center",
+  },
+  jingleOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(5, 14, 24, 0.38)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  jingleContent: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  jingleLogo: {
+    width: 150,
+    height: 150,
+    marginBottom: 20,
+  },
+  jingleText: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: COLORS.white,
+    textAlign: "center",
+  },
 });
 
 export default styles;
