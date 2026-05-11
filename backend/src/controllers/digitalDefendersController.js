@@ -14,6 +14,16 @@ import {
 const digitalDefendersGames = new Map();
 const digitalDefendersPlayers = new Map();
 
+const setDigitalDefendersSession = (socket, roomCode, role) => {
+  socket.data.digitalDefendersRoomCode = roomCode;
+  socket.data.digitalDefendersRole = role;
+};
+
+const clearDigitalDefendersSession = (socket) => {
+  socket.data.digitalDefendersRoomCode = null;
+  socket.data.digitalDefendersRole = null;
+};
+
 // Generate 4-letter room code
 const generateRoomCode = () => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -112,6 +122,7 @@ const initializeDigitalDefendersSocket = (io) => {
           playerName: playerName.trim(),
           isCreator: true,
         });
+        setDigitalDefendersSession(socket, roomCode, "player");
 
         // Join socket to room
         await socket.join(roomCode);
@@ -224,6 +235,7 @@ const initializeDigitalDefendersSocket = (io) => {
           playerName,
           isCreator: false,
         });
+        setDigitalDefendersSession(socket, trimmedRoomCode, "player");
 
         // Join socket to room
         await socket.join(trimmedRoomCode);
@@ -265,6 +277,53 @@ const initializeDigitalDefendersSocket = (io) => {
       } catch (error) {
         console.error(`Error joining room:`, error);
         socket.emit("error", { message: "Failed to join room" });
+      }
+    });
+
+    // Watch an active game room without joining as a player
+    socket.on("watch-room", async (data) => {
+      try {
+        const { roomCode } = data;
+
+        if (
+          !roomCode ||
+          typeof roomCode !== "string" ||
+          roomCode.trim().length !== 4
+        ) {
+          socket.emit("error", {
+            message: "Room code must be exactly 4 letters",
+          });
+          return;
+        }
+
+        const trimmedRoomCode = roomCode.trim().toUpperCase();
+        const game = digitalDefendersGames.get(trimmedRoomCode);
+
+        if (!game) {
+          socket.emit("error", { message: "Room not found" });
+          return;
+        }
+
+        await socket.join(trimmedRoomCode);
+        setDigitalDefendersSession(socket, trimmedRoomCode, "spectator");
+
+        const publicState = game.getPublicGameState();
+        socket.emit("room-watched", {
+          room: {
+            id: trimmedRoomCode,
+            players: Array.from(game.players.values()),
+            gameState: game.gameState,
+            maxPlayers: game.maxPlayers,
+          },
+          roomCode: trimmedRoomCode,
+          spectator: true,
+          gameState: publicState,
+        });
+
+        socket.emit("game-state", publicState);
+      } catch (error) {
+        console.error(`Error watching room:`, error);
+        socket.emit("error", { message: "Failed to watch room" });
       }
     });
 
@@ -733,14 +792,24 @@ const initializeDigitalDefendersSocket = (io) => {
       const { roomCode } = data;
       const game = digitalDefendersGames.get(roomCode);
       const player = digitalDefendersPlayers.get(socket.id);
+      const sessionRoomCode = socket.data?.digitalDefendersRoomCode;
+      const sessionRole = socket.data?.digitalDefendersRole;
 
-      if (!game || !player || player.gameId !== roomCode) {
+      if (
+        !game ||
+        (!player || player.gameId !== roomCode) &&
+        !(sessionRole === "spectator" && sessionRoomCode === roomCode)
+      ) {
         socket.emit("error", { message: "Invalid game session" });
         return;
       }
 
-      const playerGameState = game.getPlayerGameState(socket.id);
-      socket.emit("game-state", playerGameState);
+      const gameState =
+        sessionRole === "spectator" && sessionRoomCode === roomCode
+          ? game.getPublicGameState()
+          : game.getPlayerGameState(socket.id);
+
+      socket.emit("game-state", gameState);
     });
 
     // Handle countdown tick (optional - for server-controlled countdown)
@@ -846,6 +915,8 @@ const initializeDigitalDefendersSocket = (io) => {
         digitalDefendersPlayers.delete(socket.id);
       }
 
+      clearDigitalDefendersSession(socket);
+
       console.log("Digital Defenders user disconnected:", socket.id);
     });
 
@@ -859,6 +930,19 @@ const initializeDigitalDefendersSocket = (io) => {
     socket.on("leave-room", (data) => {
       const { roomCode } = data;
       const player = digitalDefendersPlayers.get(socket.id);
+      const sessionRoomCode = socket.data?.digitalDefendersRoomCode;
+      const sessionRole = socket.data?.digitalDefendersRole;
+
+      if (
+        sessionRole === "spectator" &&
+        sessionRoomCode &&
+        sessionRoomCode === roomCode
+      ) {
+        socket.leave(roomCode);
+        clearDigitalDefendersSession(socket);
+        socket.emit("room-left", { success: true, spectator: true });
+        return;
+      }
 
       if (player && player.gameId === roomCode) {
         const game = digitalDefendersGames.get(roomCode);
@@ -912,6 +996,7 @@ const initializeDigitalDefendersSocket = (io) => {
         }
 
         digitalDefendersPlayers.delete(socket.id);
+        clearDigitalDefendersSession(socket);
         socket.leave(roomCode);
 
         socket.emit("room-left", { success: true });

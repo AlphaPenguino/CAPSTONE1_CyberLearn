@@ -12,6 +12,7 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  Image,
   ImageBackground,
   Dimensions,
 } from "react-native";
@@ -23,6 +24,8 @@ import { io } from "socket.io-client";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import * as ImagePicker from "expo-image-picker";
+import * as Animatable from "react-native-animatable";
 import { useAuthStore } from "@/store/authStore";
 import { API_URL } from "@/constants/api";
 import knowledgeRelayAPI from "@/services/knowledgeRelayAPI";
@@ -50,6 +53,14 @@ const scaleTeamSelection = (value) =>
         : TEAM_SELECTION_SCALE_MOBILE)
   );
 
+const AnimatedView = Animatable.createAnimatableComponent(View);
+const AnimatedTouchableOpacity = Animatable.createAnimatableComponent(TouchableOpacity);
+const AnimatedText = Animatable.createAnimatableComponent(Text);
+const AnimatedImage = Animatable.createAnimatableComponent(Image);
+const AnimatedScrollView = Animatable.createAnimatableComponent(ScrollView);
+const AnimatedTextInput = Animatable.createAnimatableComponent(TextInput);
+const AnimatedImageBackground = Animatable.createAnimatableComponent(ImageBackground);
+
 // Team configurations
 const TEAMS = {
   A: { name: "Team Alpha", color: "#ef4444", icon: "alpha-a-circle" },
@@ -70,6 +81,9 @@ const PHASES = {
 
 const RELAY_RACE_BG = require("../../assets/images/relayracebg.png");
 const RELAY_BG_GRADIENT = ["rgba(0,0,0,0.65)", "rgba(0,0,0,0.45)"];
+// Reference UI screenshots for design context
+const KR_UI_1 = require("../../assets/images/knowledge_relay_UI_1.png");
+const KR_UI_2 = require("../../assets/images/knowledge_relay_UI_2.png");
 const KNOWLEDGE_RELAY_INSTRUCTIONS_TEXT = `Knowledge Relay Race • Game Rules
 Join or create a Room ID to enter
 Pick a team (Alpha, Beta, Charlie, Delta)
@@ -83,6 +97,7 @@ Highest score wins the race
 // Sample JSON structure for Knowledge Relay questions
 const SAMPLE_KR_QUESTIONS = [
   {
+    type: "multipleChoice",
     question: "What does HTTPS stand for?",
     options: [
       "HyperText Transfer Protocol Standard",
@@ -96,35 +111,34 @@ const SAMPLE_KR_QUESTIONS = [
     points: 1,
   },
   {
-    question: "Which of the following is a strong password?",
-    options: ["password123", "P@55w0rd!", "qwerty", "12345678"],
-    correctAnswer: 1,
-    category: "Authentication",
+    type: "scrambledWord",
+    question: "Unscramble the word to find the cyber attack:",
+    scrambledWord: "HISHPING",
+    answerText: "PHISHING",
+    category: "Social Engineering",
     difficulty: "Medium",
     points: 2,
   },
   {
-    question: "What is phishing?",
-    options: [
-      "A type of malware",
-      "A social engineering attack to trick users into revealing information",
-      "A firewall technique",
-      "An encryption algorithm",
-    ],
+    type: "trueFalse",
+    question: "True or False: A firewall can stop every single malware threat.",
+    options: ["True", "False"],
     correctAnswer: 1,
-    category: "Social Engineering",
+    category: "Network Security",
     difficulty: "Easy",
     points: 1,
   },
   {
-    question: "Which protocol is used to securely transfer files?",
-    options: ["FTP", "SFTP", "HTTP", "SMTP"],
-    correctAnswer: 1,
-    category: "Networking",
-    difficulty: "Medium",
-    points: 2,
+    type: "imageScramble",
+    question: "Look at the scrambled image and type the security tool name.",
+    imageUri: "https://via.placeholder.com/420x280.png?text=Scrambled+Security",
+    answerText: "Firewall",
+    category: "Infrastructure",
+    difficulty: "Hard",
+    points: 3,
   },
   {
+    type: "multipleChoice",
     question: "What does 2FA provide in cybersecurity?",
     options: [
       "Two-Factor Authentication for enhanced security",
@@ -176,6 +190,12 @@ export default function KnowledgeRelay() {
     phase: PHASES.ROOM_SETUP,
   });
 
+  // Keep a ref copy of gameData to read the most recent values inside callbacks
+  const gameDataRef = useRef(gameData);
+  useEffect(() => {
+    gameDataRef.current = gameData;
+  }, [gameData]);
+
   // UI state
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [showResult, setShowResult] = useState(false);
@@ -187,6 +207,8 @@ export default function KnowledgeRelay() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showRoomInstructions, setShowRoomInstructions] = useState(false);
+  const [showUIReferenceModal, setShowUIReferenceModal] = useState(false);
+  const [typedAnswer, setTypedAnswer] = useState("");
 
   // Socket.IO connection
   useEffect(() => {
@@ -218,11 +240,13 @@ export default function KnowledgeRelay() {
     socket.on("kr-answer-result", (data) => {
       console.log("Answer result:", data);
       setIsAnswerLocked(false);
-      // Store the question index that was answered BEFORE applying new game state
-      // Prefer the index provided in the payload (safer for avoiding stale closures)
-      const answeredIndexFromPayload =
-        data?.gameState?.currentQuestionIndex ?? data?.gameState?.currentQuestion ?? null;
+      // Determine the question index that was ANSWERED. Prefer a value we
+      // control locally (gameDataRef) because the server may already have
+      // advanced `gameState.currentQuestionIndex` when sending the payload.
+      const localCurrentIndex = gameDataRef.current?.currentQuestionIndex ?? gameDataRef.current?.currentQuestion ?? null;
+      const answeredIndexFromPayload = localCurrentIndex ?? data?.gameState?.currentQuestionIndex ?? data?.gameState?.currentQuestion ?? null;
       answeredQuestionIndexRef.current = answeredIndexFromPayload;
+      // Apply new game state from server
       setGameData(data.gameState);
       setShowResult(true);
       setLastAnswerCorrect(data.correct === true);
@@ -500,9 +524,23 @@ export default function KnowledgeRelay() {
 
     setIsAnswerLocked(true);
     setSelectedAnswer(answerIndex);
+    setTypedAnswer("");
 
     socketRef.current.emit("kr-submit-answer", {
-      answerIndex: answerIndex,
+      answerIndex,
+    });
+  };
+
+  const handleTypedAnswerSubmit = () => {
+    if (isAnswerLocked || !typedAnswer.trim() || showResult) return;
+    if (!isMyTurn()) return;
+    if (!socketRef.current) return;
+
+    setIsAnswerLocked(true);
+    setSelectedAnswer(typedAnswer.trim());
+
+    socketRef.current.emit("kr-submit-answer", {
+      answerText: typedAnswer.trim(),
     });
   };
 
@@ -546,6 +584,7 @@ export default function KnowledgeRelay() {
   const [instructorQuestions, setInstructorQuestions] = useState([
     {
       id: 1,
+      type: "multipleChoice",
       question: "What does HTTPS stand for?",
       options: [
         "Hypertext Transfer Protocol Secure",
@@ -560,6 +599,37 @@ export default function KnowledgeRelay() {
     },
     {
       id: 2,
+      type: "scrambledWord",
+      question: "Unscramble the security term:",
+      scrambledWord: "HISHPING",
+      answerText: "PHISHING",
+      category: "Social Engineering",
+      difficulty: "Medium",
+      points: 2,
+    },
+    {
+      id: 3,
+      type: "trueFalse",
+      question: "True or False: A firewall can stop every single malware threat.",
+      options: ["True", "False"],
+      correctAnswer: 1,
+      category: "Network Security",
+      difficulty: "Easy",
+      points: 1,
+    },
+    {
+      id: 4,
+      type: "imageScramble",
+      question: "Identify the security tool shown in this scrambled image.",
+      imageUri: "https://via.placeholder.com/420x280.png?text=Scrambled+Security",
+      answerText: "Firewall",
+      category: "Infrastructure",
+      difficulty: "Hard",
+      points: 3,
+    },
+    {
+      id: 5,
+      type: "multipleChoice",
       question: "What is the primary purpose of a firewall?",
       options: [
         "To speed up internet connection",
@@ -573,9 +643,9 @@ export default function KnowledgeRelay() {
       points: 1,
     },
     {
-      id: 3,
-      question:
-        "Which of the following is NOT a strong password characteristic?",
+      id: 6,
+      type: "multipleChoice",
+      question: "Which of the following is NOT a strong password characteristic?",
       options: [
         "Contains uppercase and lowercase letters",
         "Uses personal information like birthdate",
@@ -588,37 +658,9 @@ export default function KnowledgeRelay() {
       points: 2,
     },
     {
-      id: 4,
-      question: "What does 2FA stand for in cybersecurity?",
-      options: [
-        "Two-Factor Authentication",
-        "Two-File Authorization",
-        "Twice-Failed Access",
-        "Two-Firewall Architecture",
-      ],
-      correctAnswer: 0,
-      category: "Authentication",
-      difficulty: "Easy",
-      points: 1,
-    },
-    {
-      id: 5,
-      question: "What is a DDoS attack?",
-      options: [
-        "Direct Database Operation System",
-        "Distributed Denial of Service",
-        "Dynamic Data Override Security",
-        "Dedicated Domain Operation Service",
-      ],
-      correctAnswer: 1,
-      category: "Network Security",
-      difficulty: "Medium",
-      points: 2,
-    },
-    {
-      id: 6,
-      question:
-        "Which encryption method is considered most secure for Wi-Fi networks?",
+      id: 7,
+      type: "multipleChoice",
+      question: "Which encryption method is considered most secure for Wi-Fi networks?",
       options: ["WEP", "WPA", "WPA2", "WPA3"],
       correctAnswer: 3,
       category: "Network Security",
@@ -626,21 +668,8 @@ export default function KnowledgeRelay() {
       points: 3,
     },
     {
-      id: 7,
-      question: "What is phishing?",
-      options: [
-        "A type of computer virus",
-        "A method to catch fish using technology",
-        "A social engineering attack to steal sensitive information",
-        "A way to speed up internet connection",
-      ],
-      correctAnswer: 2,
-      category: "Social Engineering",
-      difficulty: "Easy",
-      points: 1,
-    },
-    {
       id: 8,
+      type: "multipleChoice",
       question: "What does S/MIME stand for in email security?",
       options: [
         "Secure/Multipurpose Internet Mail Extensions",
@@ -659,7 +688,11 @@ export default function KnowledgeRelay() {
   const [isQuestionModalVisible, setIsQuestionModalVisible] = useState(false);
   const [editingQuestionIndex, setEditingQuestionIndex] = useState(-1);
   const [editingQuestionData, setEditingQuestionData] = useState({
+    type: "multipleChoice",
     question: "",
+    scrambledWord: "",
+    answerText: "",
+    imageUri: "",
     options: ["", "", "", ""],
     correctAnswer: 0,
     category: "",
@@ -751,6 +784,16 @@ export default function KnowledgeRelay() {
           >
             <MaterialCommunityIcons name="refresh" size={20} color="#10b981" />
             <Text style={styles.actionsMenuItemText}>Refresh</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionsMenuItem}
+            onPress={() => {
+              setShowUIReferenceModal(true);
+              setShowActionsMenu(false);
+            }}
+          >
+            <MaterialCommunityIcons name="image" size={20} color="#3b82f6" />
+            <Text style={styles.actionsMenuItemText}>View UI Reference</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionsMenuItem}
@@ -856,7 +899,11 @@ export default function KnowledgeRelay() {
       // Create new question
       setEditingQuestionIndex(-1);
       setEditingQuestionData({
+        type: "multipleChoice",
         question: "",
+        scrambledWord: "",
+        answerText: "",
+        imageUri: "",
         options: ["", "", "", ""],
         correctAnswer: 0,
         category: "",
@@ -868,17 +915,70 @@ export default function KnowledgeRelay() {
   };
 
   const saveQuestion = () => {
-    if (
-      !editingQuestionData.question.trim() ||
-      !editingQuestionData.category.trim()
-    ) {
-      Alert.alert("Error", "Please fill in all required fields");
+    const questionData = editingQuestionData || {};
+    const type = questionData.type || "multipleChoice";
+    const questionText = String(questionData.question || "").trim();
+    const categoryText = String(questionData.category || "").trim();
+    const scrambledWordText = String(questionData.scrambledWord || "").trim();
+    const answerText = String(questionData.answerText || "").trim();
+    const imageUriText = String(questionData.imageUri || "").trim();
+    const optionsArray = Array.isArray(questionData.options)
+      ? questionData.options.map((option) => {
+          // Keep image data URIs/URLs as-is (strings). Non-strings coerced to empty string.
+          if (typeof option === "string") return option;
+          return String(option || "");
+        })
+      : [];
+
+    if (!questionText) {
+      Alert.alert("Error", "Please enter a question prompt");
       return;
     }
 
-    if (editingQuestionData.options.some((option) => !option.trim())) {
-      Alert.alert("Error", "Please fill in all answer options");
+    if (!categoryText) {
+      Alert.alert("Error", "Please add a category");
       return;
+    }
+
+    if (type === "multipleChoice" || type === "trueFalse") {
+      if (
+        optionsArray.length < 2 ||
+        optionsArray.some((option) => !option.trim())
+      ) {
+        Alert.alert("Error", "Please provide at least two answer options");
+        return;
+      }
+
+      if (
+        typeof editingQuestionData.correctAnswer !== "number" ||
+        editingQuestionData.correctAnswer < 0 ||
+        editingQuestionData.correctAnswer >= optionsArray.length
+      ) {
+        Alert.alert("Error", "Please select the correct answer");
+        return;
+      }
+    }
+
+    if (type === "scrambledWord") {
+      if (!scrambledWordText) {
+        Alert.alert("Error", "Please enter a scrambled word");
+        return;
+      }
+      if (!answerText) {
+        Alert.alert("Error", "Please enter the word answer");
+        return;
+      }
+    }
+
+    if (type === "imageScramble") {
+      if (!imageUriText) {
+        Alert.alert("Error", "Please provide an image URL or upload");
+        return;
+      }
+      if (!answerText) {
+        Alert.alert("Error", "Please enter the answer for the scrambled image");
+        return;
+      }
     }
 
     const normalizedPoints = Math.max(
@@ -888,6 +988,12 @@ export default function KnowledgeRelay() {
 
     const questionToSave = {
       ...editingQuestionData,
+      question: questionText,
+      category: categoryText,
+      scrambledWord: scrambledWordText,
+      answerText,
+      imageUri: imageUriText,
+      options: optionsArray,
       points: normalizedPoints,
       id:
         editingQuestionIndex >= 0
@@ -928,9 +1034,118 @@ export default function KnowledgeRelay() {
     );
   };
 
+    const renderUIReferenceModal = () => (
+      <Modal
+        visible={showUIReferenceModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowUIReferenceModal(false)}
+      >
+        <View style={styles.docsOverlay}>
+          <View style={styles.docsContainer}>
+            <View style={styles.docsHeader}>
+              <Text style={styles.docsTitle}>Knowledge Relay — UI Reference</Text>
+              <TouchableOpacity
+                style={styles.docsCloseButton}
+                onPress={() => setShowUIReferenceModal(false)}
+              >
+                <MaterialCommunityIcons name="close" size={22} color="#3b82f6" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.docsScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.docsText}>
+                These screenshots show the intended Knowledge Relay UI layout and flows for visual reference.
+              </Text>
+              <AnimatedImage
+                source={KR_UI_1}
+                style={{ width: "100%", height: 380, marginTop: 12, resizeMode: "contain" }}
+              />
+              <Text style={styles.docsText}>Figure 1 — Lobby / Team Setup / Main Game samples.</Text>
+              <AnimatedImage
+                source={KR_UI_2}
+                style={{ width: "100%", height: 380, marginTop: 12, resizeMode: "contain" }}
+              />
+              <Text style={styles.docsText}>Figure 2 — Results, timer, and additional screens.</Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+
   const updateOptionText = (index, text) => {
     const updatedOptions = [...editingQuestionData.options];
     updatedOptions[index] = text;
+    setEditingQuestionData({ ...editingQuestionData, options: updatedOptions });
+  };
+
+  const isImageString = (val) => {
+    if (!val || typeof val !== "string") return false;
+    const lowered = val.toLowerCase();
+    // Accept data URIs, local file/content URIs from native pickers, URLs that end with common image extensions, or base64 data.
+    const urlImageExt = /https?:\/\/.+\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i;
+    return (
+      lowered.startsWith("data:image/") ||
+      lowered.startsWith("file://") ||
+      lowered.startsWith("content://") ||
+      lowered.startsWith("blob:") ||
+      lowered.includes("base64,") ||
+      urlImageExt.test(val)
+    );
+  };
+
+  const pickOptionImage = async (index) => {
+    try {
+      if (Platform.OS === "web") {
+        // Create file input dynamically for web
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.onchange = async (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result;
+            const updatedOptions = [...editingQuestionData.options];
+            updatedOptions[index] = dataUrl;
+            setEditingQuestionData({ ...editingQuestionData, options: updatedOptions });
+          };
+          reader.readAsDataURL(file);
+        };
+        input.click();
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission required", "Permission to access photos is required.");
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+        if (result.cancelled || result.canceled) return;
+        // expo-image-picker changed return shape; handle both
+        const picked = result.assets && result.assets[0] ? result.assets[0] : result;
+        const base64 = picked.base64;
+        const dataUrl = base64 ? `data:image/jpeg;base64,${base64}` : picked.uri;
+        const updatedOptions = [...editingQuestionData.options];
+        updatedOptions[index] = dataUrl;
+        setEditingQuestionData({ ...editingQuestionData, options: updatedOptions });
+      }
+    } catch (err) {
+      console.error("pickOptionImage error:", err);
+      Alert.alert("Error", "Failed to pick image");
+    }
+  };
+
+  const removeOptionImage = (index) => {
+    const updatedOptions = [...editingQuestionData.options];
+    updatedOptions[index] = "";
     setEditingQuestionData({ ...editingQuestionData, options: updatedOptions });
   };
 
@@ -1287,21 +1502,37 @@ export default function KnowledgeRelay() {
               {uploadResult.message}
             </Text>
 
-            <View style={styles.resultModalActions}>
-              <TouchableOpacity
-                style={[
-                  styles.resultModalButton,
-                  { backgroundColor: "#10b981" },
-                ]}
-                onPress={() => setUploadSuccessModalVisible(false)}
+            <View style={styles.teamSelectionActions}>
+              {isCreator && (
+                <AnimatedTouchableOpacity
+                  animation="pulse"
+                  iterationCount={1}
+                  duration={700}
+                  style={styles.startButton}
+                  onPress={startGame}
+                >
+                  <AnimatedText style={styles.startButtonText}>Start Game</AnimatedText>
+                </AnimatedTouchableOpacity>
+              )}
+              <AnimatedTouchableOpacity
+                animation="fadeIn"
+                duration={700}
+                style={[styles.leaveRoomButton, { marginTop: 12 }]}
+                onPress={leaveGame}
               >
-                <Text style={styles.resultModalButtonText}>Continue</Text>
-              </TouchableOpacity>
+                <MaterialCommunityIcons
+                  name="exit-to-app"
+                  size={20}
+                  color="#fff"
+                  style={{ marginRight: 8 }}
+                />
+                <AnimatedText style={styles.leaveRoomButtonText}>Leave Room</AnimatedText>
+              </AnimatedTouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    );
+  );
   };
 
   // Upload Failure Modal
@@ -1490,7 +1721,9 @@ export default function KnowledgeRelay() {
   // Instructor Editor Render Function
   const renderInstructorEditor = () => {
     return (
-      <ImageBackground
+      <AnimatedImageBackground
+        animation="fadeIn"
+        duration={900}
         source={RELAY_RACE_BG}
         style={styles.container}
         resizeMode="cover"
@@ -1500,9 +1733,13 @@ export default function KnowledgeRelay() {
           <SafeAreaView style={styles.safeArea}>
             {renderImportDocsModal?.()}
             {renderActionsMenuModal?.()}
+            {renderUIReferenceModal?.()}
             {/* Header */}
-            <View style={styles.header}>
-              <TouchableOpacity
+            <AnimatedView animation="fadeInDown" duration={700} style={styles.header}>
+              <AnimatedTouchableOpacity
+                animation="pulse"
+                iterationCount={1}
+                duration={700}
                 style={styles.backButton}
                 onPress={() => setGamePhase(PHASES.ROOM_SETUP)}
               >
@@ -1511,16 +1748,19 @@ export default function KnowledgeRelay() {
                   size={24}
                   color="#FFFFFF"
                 />
-              </TouchableOpacity>
-              <Text style={styles.title}>Question Editor</Text>
-              <Text style={styles.subtitle}>
+              </AnimatedTouchableOpacity>
+              <AnimatedText style={styles.title}>Question Editor</AnimatedText>
+              <AnimatedText style={styles.subtitle}>
                 Create, edit, and manage quiz questions
-              </Text>
-            </View>
+              </AnimatedText>
+            </AnimatedView>
 
             {/* More Menu Trigger */}
-            <View style={{ alignItems: "flex-end", marginBottom: 20 }}>
-              <TouchableOpacity
+            <AnimatedView style={{ alignItems: "flex-end", marginBottom: 20 }}>
+              <AnimatedTouchableOpacity
+                animation="pulse"
+                iterationCount={1}
+                duration={700}
                 style={styles.moreMenuButton}
                 onPress={() => setShowActionsMenu(true)}
               >
@@ -1529,11 +1769,14 @@ export default function KnowledgeRelay() {
                   size={26}
                   color="#000000"
                 />
-              </TouchableOpacity>
-            </View>
+              </AnimatedTouchableOpacity>
+            </AnimatedView>
 
             {/* Add New Question Button */}
-            <TouchableOpacity
+            <AnimatedTouchableOpacity
+              animation="pulse"
+              iterationCount={1}
+              duration={700}
               style={styles.addQuestionButton}
               onPress={() => openQuestionEditor()}
             >
@@ -1542,11 +1785,11 @@ export default function KnowledgeRelay() {
                 size={24}
                 color="#f8fafc"
               />
-              <Text style={styles.addQuestionText}>Add New Question</Text>
-            </TouchableOpacity>
+              <AnimatedText style={styles.addQuestionText}>Add New Question</AnimatedText>
+            </AnimatedTouchableOpacity>
 
             {/* Questions List */}
-            <ScrollView style={styles.questionsContainer}>
+            <AnimatedScrollView animation="fadeIn" duration={700} style={styles.questionsContainer}>
               {instructorQuestions.map((question, index) => (
                 <View key={question.id} style={styles.questionCard}>
                   <View style={styles.questionHeader}>
@@ -1557,6 +1800,9 @@ export default function KnowledgeRelay() {
                       <View style={styles.questionMeta}>
                         <Text style={styles.categoryBadge}>
                           {question.category}
+                        </Text>
+                        <Text style={styles.questionTypeBadge}>
+                          {getQuestionTypeLabel(question.type)}
                         </Text>
                         <Text style={styles.pointsBadge}>
                           {question.points} pts
@@ -1589,22 +1835,43 @@ export default function KnowledgeRelay() {
 
                   {/* Show options preview */}
                   <View style={styles.optionsPreview}>
-                    {question.options.map((option, optIndex) => (
-                      <Text
-                        key={optIndex}
-                        style={[
-                          styles.optionPreview,
-                          optIndex === question.correctAnswer &&
-                            styles.correctOptionPreview,
-                        ]}
-                      >
-                        {String.fromCharCode(65 + optIndex)}. {option}
+                    {question.type === "multipleChoice" ||
+                    question.type === "trueFalse" ? (
+                      question.options?.map((option, optIndex) => (
+                        isImageString(option) ? (
+                          <View key={optIndex} style={styles.optionPreviewImageRow}>
+                            <Text style={styles.optionPreviewIndex}>{String.fromCharCode(65 + optIndex)}.</Text>
+                            <AnimatedImage
+                              source={{ uri: option }}
+                              style={styles.optionPreviewImage}
+                              resizeMode="cover"
+                            />
+                          </View>
+                        ) : (
+                          <Text
+                            key={optIndex}
+                            style={[
+                              styles.optionPreview,
+                              optIndex === question.correctAnswer && styles.correctOptionPreview,
+                            ]}
+                          >
+                            {String.fromCharCode(65 + optIndex)}. {option}
+                          </Text>
+                        )
+                      ))
+                    ) : question.type === "scrambledWord" ? (
+                      <Text style={styles.optionPreview}>
+                        Scrambled: {question.scrambledWord}
                       </Text>
-                    ))}
+                    ) : question.type === "imageScramble" ? (
+                      <Text style={styles.optionPreview}>
+                        Image answer: {question.answerText || "(type answer)"}
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
               ))}
-            </ScrollView>
+            </AnimatedScrollView>
 
             {/* Question Editor Modal */}
             <Modal
@@ -1709,6 +1976,113 @@ export default function KnowledgeRelay() {
                       </View>
 
                       <View style={styles.inputContainer}>
+                        <Text style={styles.label}>Question Type</Text>
+                        <View style={styles.questionTypeSelector}>
+                          {[
+                            { key: "multipleChoice", label: "Multiple Choice" },
+                            { key: "trueFalse", label: "True / False" },
+                            { key: "scrambledWord", label: "Scrambled Word" },
+                            { key: "imageScramble", label: "Image Scramble" },
+                          ].map((typeOption) => (
+                            <TouchableOpacity
+                              key={typeOption.key}
+                              style={[
+                                styles.questionTypeOption,
+                                editingQuestionData.type === typeOption.key &&
+                                  styles.questionTypeOptionSelected,
+                              ]}
+                              onPress={() =>
+                                setEditingQuestionData({
+                                  ...editingQuestionData,
+                                  type: typeOption.key,
+                                  options:
+                                    typeOption.key === "trueFalse"
+                                      ? ["True", "False"]
+                                      : editingQuestionData.options || ["", "", "", ""],
+                                })
+                              }
+                            >
+                              <Text
+                                style={
+                                  editingQuestionData.type === typeOption.key
+                                    ? styles.questionTypeOptionTextSelected
+                                    : styles.questionTypeOptionText
+                                }
+                              >
+                                {typeOption.label}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+
+                      {editingQuestionData.type === "scrambledWord" && (
+                        <View style={styles.inputContainer}>
+                          <Text style={styles.label}>Scrambled Word *</Text>
+                          <TextInput
+                            style={styles.textInput}
+                            placeholder="e.g. HTRNAPSWO"
+                            placeholderTextColor="#64748b"
+                            value={editingQuestionData.scrambledWord}
+                            onChangeText={(text) =>
+                              setEditingQuestionData({
+                                ...editingQuestionData,
+                                scrambledWord: text,
+                              })
+                            }
+                          />
+                        </View>
+                      )}
+
+                      {editingQuestionData.type === "imageScramble" && (
+                        <View style={styles.inputContainer}>
+                          <Text style={styles.label}>Image URL *</Text>
+                          <TextInput
+                            style={styles.textInput}
+                            placeholder="Paste image URL"
+                            placeholderTextColor="#64748b"
+                            value={editingQuestionData.imageUri}
+                            onChangeText={(text) =>
+                              setEditingQuestionData({
+                                ...editingQuestionData,
+                                imageUri: text,
+                              })
+                            }
+                          />
+                          {editingQuestionData.imageUri ? (
+                            <View style={styles.imagePreviewWrapper}>
+                              <AnimatedImage
+                                animation="fadeIn"
+                                duration={500}
+                                source={{ uri: editingQuestionData.imageUri }}
+                                style={styles.imagePreview}
+                                resizeMode="cover"
+                              />
+                            </View>
+                          ) : null}
+                        </View>
+                      )}
+
+                      {(editingQuestionData.type === "scrambledWord" ||
+                        editingQuestionData.type === "imageScramble") && (
+                        <View style={styles.inputContainer}>
+                          <Text style={styles.label}>Answer Text *</Text>
+                          <TextInput
+                            style={styles.textInput}
+                            placeholder="Enter the correct answer"
+                            placeholderTextColor="#64748b"
+                            value={editingQuestionData.answerText}
+                            onChangeText={(text) =>
+                              setEditingQuestionData({
+                                ...editingQuestionData,
+                                answerText: text,
+                              })
+                            }
+                          />
+                        </View>
+                      )}
+
+                      <View style={styles.inputContainer}>
                         <Text style={styles.label}>Points</Text>
                         <TextInput
                           style={styles.textInput}
@@ -1728,55 +2102,88 @@ export default function KnowledgeRelay() {
 
 
 
-                      {/* Answer Options */}
-                      <View style={styles.inputContainer}>
-                        <Text style={styles.label}>Answer Options *</Text>
-                        {editingQuestionData.options.map((option, index) => (
-                          <View key={index} style={styles.optionContainer}>
-                            <TouchableOpacity
-                              style={[
-                                styles.correctAnswerButton,
-                                editingQuestionData.correctAnswer === index &&
-                                  styles.selectedCorrectAnswer,
-                              ]}
-                              onPress={() =>
-                                setEditingQuestionData({
-                                  ...editingQuestionData,
-                                  correctAnswer: index,
-                                })
-                              }
-                            >
-                              <MaterialCommunityIcons
-                                name={
-                                  editingQuestionData.correctAnswer === index
-                                    ? "check-circle"
-                                    : "circle-outline"
+                      {(editingQuestionData.type === "multipleChoice" ||
+                        editingQuestionData.type === "trueFalse") && (
+                        <View style={styles.inputContainer}>
+                          <Text style={styles.label}>Answer Options *</Text>
+                          {editingQuestionData.options.map((option, index) => (
+                            <View key={index} style={styles.optionContainer}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.correctAnswerButton,
+                                  editingQuestionData.correctAnswer === index &&
+                                    styles.selectedCorrectAnswer,
+                                ]}
+                                onPress={() =>
+                                  setEditingQuestionData({
+                                    ...editingQuestionData,
+                                    correctAnswer: index,
+                                  })
                                 }
-                                size={20}
-                                color={
-                                  editingQuestionData.correctAnswer === index
-                                    ? "#10b981"
-                                    : "#64748b"
-                                }
-                              />
-                            </TouchableOpacity>
-                            <TextInput
-                              style={[styles.textInput, styles.optionInput]}
-                              placeholder={`Option ${String.fromCharCode(
-                                65 + index
-                              )}`}
-                              placeholderTextColor="#64748b"
-                              value={option}
-                              onChangeText={(text) =>
-                                updateOptionText(index, text)
-                              }
-                            />
-                          </View>
-                        ))}
-                        <Text style={styles.helperText}>
-                          Tap the circle to mark the correct answer
-                        </Text>
-                      </View>
+                              >
+                                <MaterialCommunityIcons
+                                  name={
+                                    editingQuestionData.correctAnswer === index
+                                      ? "check-circle"
+                                      : "circle-outline"
+                                  }
+                                  size={20}
+                                  color={
+                                    editingQuestionData.correctAnswer === index
+                                      ? "#10b981"
+                                      : "#64748b"
+                                  }
+                                />
+                              </TouchableOpacity>
+                              {isImageString(option) ? (
+                                <View style={styles.imageOptionWrapper}>
+                                  <AnimatedImage
+                                    animation="fadeIn"
+                                    duration={300}
+                                    source={{ uri: option }}
+                                    style={styles.optionImagePreview}
+                                    resizeMode="cover"
+                                  />
+                                  <View style={styles.optionImageControls}>
+                                    <TouchableOpacity
+                                      style={styles.smallButton}
+                                      onPress={() => pickOptionImage(index)}
+                                    >
+                                      <MaterialCommunityIcons name="image-search" size={18} color="#2563eb" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                      style={styles.smallButton}
+                                      onPress={() => removeOptionImage(index)}
+                                    >
+                                      <MaterialCommunityIcons name="close" size={18} color="#ef4444" />
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+                              ) : (
+                                <View style={styles.optionTextAndUpload}>
+                                  <TextInput
+                                    style={[styles.textInput, styles.optionInput]}
+                                    placeholder={`Option ${String.fromCharCode(65 + index)}`}
+                                    placeholderTextColor="#64748b"
+                                    value={option}
+                                    onChangeText={(text) => updateOptionText(index, text)}
+                                    editable={editingQuestionData.type !== "trueFalse"}
+                                  />
+                                  <TouchableOpacity
+                                    style={styles.uploadOptionButton}
+                                    onPress={() => pickOptionImage(index)}
+                                  >
+                                    <MaterialCommunityIcons name="image-plus" size={18} color="#10b981" />
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+                          ))}
+                          <Text style={styles.helperText}>
+                            Tap the circle to mark the correct answer
+                          </Text>
+                        </View>
+                      )}
                     </ScrollView>
                   </SafeAreaView>
                 </LinearGradient>
@@ -1788,7 +2195,7 @@ export default function KnowledgeRelay() {
             {renderUploadModal()}
           </SafeAreaView>
         </LinearGradient>
-      </ImageBackground>
+      </AnimatedImageBackground>
     );
   };
 
@@ -1809,6 +2216,19 @@ export default function KnowledgeRelay() {
     }
 
     return gameData.questions[questionIndex];
+  };
+
+  const getQuestionTypeLabel = (type) => {
+    switch (type) {
+      case "trueFalse":
+        return "True / False";
+      case "scrambledWord":
+        return "Scrambled Word";
+      case "imageScramble":
+        return "Image Scramble";
+      default:
+        return "Multiple Choice";
+    }
   };
 
   const getCurrentPlayer = () => {
@@ -1888,7 +2308,9 @@ export default function KnowledgeRelay() {
 
   // Render functions
   const renderRoomSetup = () => (
-    <ImageBackground
+    <AnimatedImageBackground
+      animation="fadeIn"
+      duration={900}
       source={RELAY_RACE_BG}
       style={styles.container}
       resizeMode="cover"
@@ -1896,8 +2318,11 @@ export default function KnowledgeRelay() {
     >
       <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
         <SafeAreaView style={styles.safeArea}>
-          <View style={styles.header}>
-            <TouchableOpacity
+          <AnimatedView animation="fadeInDown" duration={700} delay={120} style={styles.header}>
+            <AnimatedTouchableOpacity
+              animation="pulse"
+              iterationCount={1}
+              duration={800}
               style={styles.backButton}
               onPress={() => router.push("/(tabs)/game")}
             >
@@ -1906,25 +2331,35 @@ export default function KnowledgeRelay() {
                 size={24}
                 color="#FFFFFF"
               />
-            </TouchableOpacity>
-            <Text style={styles.title}>Knowledge Relay</Text>
-          </View>
+            </AnimatedTouchableOpacity>
+            <AnimatedText style={styles.title}>Knowledge Relay</AnimatedText>
+            <AnimatedText style={styles.subtitle}>Jump into the relay with your team</AnimatedText>
+          </AnimatedView>
 
-          <View style={styles.content}>
-            <Text style={styles.pageTitle}>Join a Game Room</Text>
-            <View style={styles.setupCard}>
+          <AnimatedView animation="fadeInUp" duration={700} delay={200} style={styles.content}>
+            <AnimatedView animation="fadeInUp" duration={700} delay={260} style={styles.setupCard}>
+              <AnimatedText style={styles.pageTitle}>Enter Game Room</AnimatedText>
+              <AnimatedText style={styles.setupDescription}>
+                Use a Room ID to join an existing race or generate one to invite your squad.
+              </AnimatedText>
+
               <View style={styles.inputContainer}>
                 <View style={styles.labelRow}>
-                  <Text style={styles.label}>Room ID</Text>
-                  <TouchableOpacity
+                  <AnimatedText style={styles.label}>Room ID</AnimatedText>
+                  <AnimatedTouchableOpacity
+                    animation="pulse"
+                    iterationCount={1}
+                    duration={900}
                     style={styles.roomInfoButton}
                     onPress={() => setShowRoomInstructions(true)}
                     accessibilityLabel="Show Knowledge Relay game rules"
                   >
-                    <Text style={styles.roomInfoButtonText}>i</Text>
-                  </TouchableOpacity>
+                    <AnimatedText style={styles.roomInfoButtonText}>i</AnimatedText>
+                  </AnimatedTouchableOpacity>
                 </View>
-                <TextInput
+                <AnimatedTextInput
+                  animation="fadeIn"
+                  duration={700}
                   style={styles.textInput}
                   value={roomId}
                   onChangeText={setRoomId}
@@ -1934,15 +2369,18 @@ export default function KnowledgeRelay() {
               </View>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.label}>Player Name</Text>
-                <Text style={styles.playerNameDisplay}>{playerName}</Text>
+                <AnimatedText style={styles.label}>Player Name</AnimatedText>
+                <AnimatedText style={styles.playerNameDisplay}>{playerName}</AnimatedText>
               </View>
 
               {errorMessage ? (
-                <Text style={styles.errorText}>{errorMessage}</Text>
+                <AnimatedText animation="shake" duration={600} style={styles.errorText}>{errorMessage}</AnimatedText>
               ) : null}
 
-              <TouchableOpacity
+              <AnimatedTouchableOpacity
+                animation="pulse"
+                iterationCount={1}
+                duration={900}
                 style={[
                   styles.primaryButton,
                   isConnecting && styles.disabledButton,
@@ -1950,27 +2388,33 @@ export default function KnowledgeRelay() {
                 onPress={joinRoom}
                 disabled={isConnecting}
               >
-                <Text style={styles.primaryButtonText}>
+                <AnimatedText style={styles.primaryButtonText}>
                   {isConnecting ? "Joining..." : "Join Room"}
-                </Text>
-              </TouchableOpacity>
+                </AnimatedText>
+              </AnimatedTouchableOpacity>
 
               <View style={styles.divider}>
-                <Text style={styles.dividerText}>OR</Text>
+                <AnimatedText style={styles.dividerText}>OR</AnimatedText>
               </View>
 
-              <TouchableOpacity
+              <AnimatedTouchableOpacity
+                animation="pulse"
+                iterationCount={1}
+                duration={900}
                 style={styles.secondaryButton}
                 onPress={createNewRoom}
               >
-                <Text style={styles.secondaryButtonText}>Generate Room ID</Text>
-              </TouchableOpacity>
-            </View>
+                <AnimatedText style={styles.secondaryButtonText}>Generate Room ID</AnimatedText>
+              </AnimatedTouchableOpacity>
+            </AnimatedView>
 
             {(user?.privilege === "instructor" ||
               user?.privilege === "admin") && (
-              <View style={styles.instructorModeContainer}>
-                <TouchableOpacity
+              <AnimatedView style={styles.instructorModeContainer}>
+                <AnimatedTouchableOpacity
+                  animation="pulse"
+                  iterationCount={1}
+                  duration={700}
                   style={styles.instructorButton}
                   onPress={enterInstructorMode}
                 >
@@ -1979,21 +2423,23 @@ export default function KnowledgeRelay() {
                     size={20}
                     color="#d9cc03"
                   />
-                  <Text style={styles.instructorButtonText}>
+                  <AnimatedText style={styles.instructorButtonText}>
                     Instructor Mode
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  </AnimatedText>
+                </AnimatedTouchableOpacity>
+              </AnimatedView>
             )}
             {renderRoomInstructionsModal()}
-          </View>
+          </AnimatedView>
         </SafeAreaView>
       </LinearGradient>
-    </ImageBackground>
+    </AnimatedImageBackground>
   );
 
   const renderTeamSelection = () => (
-    <ImageBackground
+    <AnimatedImageBackground
+      animation="fadeIn"
+      duration={900}
       source={RELAY_RACE_BG}
       style={styles.container}
       resizeMode="cover"
@@ -2001,107 +2447,100 @@ export default function KnowledgeRelay() {
     >
       <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
         <SafeAreaView style={styles.safeArea}>
-          <View style={styles.teamSelectionHeader}>
-            <TouchableOpacity style={styles.backButton} onPress={leaveGame}>
+          <AnimatedView animation="fadeInDown" duration={700} delay={120} style={styles.teamSelectionHeader}>
+            <AnimatedTouchableOpacity animation="pulse" iterationCount={1} duration={800} style={styles.backButton} onPress={leaveGame}>
               <MaterialCommunityIcons
                 name="arrow-left"
                 size={24}
                 color="#FFFFFF"
               />
-            </TouchableOpacity>
-            <Text style={styles.teamSelectionTitle}>Select Your Team</Text>
-            <Text style={styles.teamSelectionSubtitle}>Choose your squad and get ready to relay</Text>
-            <View style={styles.roomBadge}>
-              <Text style={styles.roomBadgeText}>Room ID: {gameData.roomId}</Text>
-            </View>
-          </View>
+            </AnimatedTouchableOpacity>
+            <AnimatedText animation="fadeIn" duration={700} style={styles.teamSelectionTitle}>Choose Your Relay Squad</AnimatedText>
+            <AnimatedText style={styles.teamSelectionSubtitle}>Pick a team and get ready to race.</AnimatedText>
+            <AnimatedView animation="fadeIn" duration={700} delay={100} style={styles.roomBadge}>
+              <AnimatedText style={styles.roomBadgeText}>Room ID: {gameData.roomId}</AnimatedText>
+            </AnimatedView>
+          </AnimatedView>
 
           <ScrollView style={styles.content} contentContainerStyle={styles.teamSelectionContentContainer}>
             <View style={styles.teamSelectionPanel}>
-              <Text style={styles.teamSelectionHint}>Tap a team card to join</Text>
-            <View style={styles.teamsGrid}>
-              {Object.entries(TEAMS).map(([teamKey, team]) => {
-                const teamData = gameData.teams[teamKey] || { players: [] };
-                const isSelected = selectedTeam === teamKey;
+              <AnimatedText style={styles.teamSelectionHint}>Tap a team card to join the relay.</AnimatedText>
+              <View style={styles.teamsGrid}>
+                {Object.entries(TEAMS).map(([teamKey, team]) => {
+                  const teamData = gameData.teams[teamKey] || { players: [] };
+                  const isSelected = selectedTeam === teamKey;
 
-                return (
-                  <TouchableOpacity
-                    key={teamKey}
-                    style={[
-                      styles.teamCard,
-                      styles.teamCardBase,
-                      { borderColor: team.color },
-                      isSelected && styles.teamCardSelected,
-                    ]}
-                    onPress={() => selectTeam(teamKey)}
-                  >
-                    <LinearGradient
-                      colors={isSelected ? [`${team.color}2E`, `${team.color}14`] : ["rgba(255,255,255,0.96)", "rgba(248,250,252,0.94)"]}
-                      style={styles.teamCardGradient}
+                  return (
+                    <AnimatedTouchableOpacity
+                      animation={isSelected ? "pulse" : "fadeInUp"}
+                      iterationCount={1}
+                      duration={700}
+                      key={teamKey}
+                      style={[
+                        styles.teamCard,
+                        styles.teamCardBase,
+                        { borderColor: team.color },
+                        isSelected && styles.teamCardSelected,
+                      ]}
+                      onPress={() => selectTeam(teamKey)}
                     >
-                      <MaterialCommunityIcons
-                        name={team.icon}
-                        size={scaleTeamSelection(40)}
-                        color={team.color}
-                      />
-                      <Text style={[styles.teamName, { color: isSelected ? team.color : "#0f172a" }]}>
-                        {team.name}
-                      </Text>
-                      <Text style={styles.playerCount}>
-                        {teamData.players.length} players
-                      </Text>
+                      <LinearGradient
+                        colors={isSelected ? [`${team.color}2E`, `${team.color}14`] : ["rgba(255,255,255,0.96)", "rgba(248,250,252,0.94)"]}
+                        style={styles.teamCardGradient}
+                      >
+                        <MaterialCommunityIcons
+                          name={team.icon}
+                          size={scaleTeamSelection(40)}
+                          color={team.color}
+                        />
+                        <Text style={[styles.teamName, { color: isSelected ? team.color : "#0f172a" }]}> 
+                          {team.name}
+                        </Text>
+                        <Text style={styles.playerCount}>
+                          {teamData.players.length} players
+                        </Text>
 
-                      {teamData.players.length > 0 && (
-                        <View style={styles.playerList}>
-                          {teamData.players.map((player, index) => (
-                            <Text key={index} style={styles.playerNamePill}>
-                              {player.name}
-                            </Text>
-                          ))}
-                        </View>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                        {teamData.players.length > 0 && (
+                          <View style={styles.playerList}>
+                            {teamData.players.map((player, index) => (
+                              <Text key={index} style={styles.playerNamePill}>
+                                {player.name}
+                              </Text>
+                            ))}
+                          </View>
+                        )}
+                      </LinearGradient>
+                    </AnimatedTouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             <View style={styles.teamSelectionActions}>
               {isCreator && (
-                <TouchableOpacity
+                <AnimatedTouchableOpacity
+                  animation="pulse"
+                  iterationCount={1}
+                  duration={700}
                   style={styles.startButton}
                   onPress={startGame}
                 >
-                  <Text style={styles.startButtonText}>Start Game</Text>
-                </TouchableOpacity>
+                  <AnimatedText style={styles.startButtonText}>Start Game</AnimatedText>
+                </AnimatedTouchableOpacity>
               )}
-              {/* Leave button visible to everyone */}
-              <TouchableOpacity
-                style={[styles.leaveRoomButton, { marginTop: 12 }]}
-                onPress={leaveGame}
-              >
-                <MaterialCommunityIcons
-                  name="exit-to-app"
-                  size={20}
-                  color="#fff"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.leaveRoomButtonText}>Leave Room</Text>
-              </TouchableOpacity>
             </View>
-          </ScrollView>
-        </SafeAreaView>
-      </LinearGradient>
-    </ImageBackground>
-  );
+            </ScrollView>
+          </SafeAreaView>
+        </LinearGradient>
+      </AnimatedImageBackground>
+    );
 
   const renderGameplay = () => {
     const currentQuestion = getCurrentQuestion();
     const currentPlayer = getCurrentPlayer();
     const myTurn = isMyTurn();
     const isAndroidCompact = Platform.OS === "android";
-    const GameplayBodyWrapper = isAndroidCompact ? View : ScrollView;
+    const GameplayBodyWrapper = isAndroidCompact ? View : AnimatedScrollView;
     const gameplayBodyWrapperProps = isAndroidCompact
       ? { style: [styles.gameplayContentContainer, styles.androidGameplayFitContainer] }
       : {
@@ -2153,7 +2592,9 @@ export default function KnowledgeRelay() {
     }
 
     return (
-      <ImageBackground
+      <AnimatedImageBackground
+        animation="fadeIn"
+        duration={900}
         source={RELAY_RACE_BG}
         style={styles.container}
         resizeMode="cover"
@@ -2162,131 +2603,225 @@ export default function KnowledgeRelay() {
         <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
           <SafeAreaView style={styles.safeArea}>
             <GameplayBodyWrapper {...gameplayBodyWrapperProps}>
-            {/* Game Header */}
-            <View style={styles.gameHeader}>
-              <View style={styles.questionInfo}>
-                <Text style={styles.questionNumber}>
-                  Question{" "}
-                  {(gameData.currentQuestionIndex !== undefined
-                    ? gameData.currentQuestionIndex
-                    : gameData.currentQuestion) + 1}{" "}
-                  of {gameData.questions.length}
-                </Text>
-                <Text style={styles.questionCategory}>
-                  {currentQuestion.category}
-                </Text>
-              </View>
+              <AnimatedView animation="fadeInDown" duration={700} style={styles.gameplayHeader}>
+                <View>
+                  <AnimatedText style={styles.pageTitle}>Knowledge Relay</AnimatedText>
+                  <AnimatedText style={styles.subtitle}>Race through questions and keep the team momentum alive.</AnimatedText>
+                </View>
+                <AnimatedView style={styles.roomBadge}>
+                  <AnimatedText style={styles.roomBadgeText}>Room ID: {gameData.roomId}</AnimatedText>
+                </AnimatedView>
+              </AnimatedView>
 
-              <View style={styles.timerContainer}>
-                <Text style={styles.timerText}>{gameData.timer}s</Text>
-              </View>
-            </View>
+              <View style={styles.gameplayBodyRow}>
+                <AnimatedView animation="fadeInLeft" duration={700} style={styles.gameplaySidePanel}>
+                  <AnimatedText style={styles.sidePanelTitle}>Relay Dashboard</AnimatedText>
+                  <AnimatedView style={styles.teamStatusGrid}>
+                    {Object.entries(gameData.teams).map(([teamKey, team]) => {
+                      const score = team?.score || 0;
+                      return (
+                        <View key={teamKey} style={styles.teamStatusCard}>
+                          <Text style={[styles.teamStatusName, { color: team.color }]}>{team.name}</Text>
+                          <Text style={styles.teamStatusScore}>{score} pts</Text>
+                        </View>
+                      );
+                    })}
+                  </AnimatedView>
 
-            {/* Current Player */}
-            <View
-              style={[
-                styles.currentPlayerContainer,
-                myTurn && styles.myTurnContainer,
-              ]}
-            >
-              <Text
-                style={[styles.currentPlayerText, myTurn && styles.myTurnText]}
-              >
-                {myTurn ? "Your Turn!" : `${currentPlayer?.name}'s Turn`}
-              </Text>
-              <Text
-                style={[
-                  styles.currentTeamText,
-                  myTurn && styles.myTurnTeamText,
-                ]}
-              >
-                {gameData.teams[gameData.currentTeam]?.name}
-              </Text>
-            </View>
+                  <AnimatedView style={styles.teamProgressPanel}>
+                    <AnimatedText style={styles.progressTitle}>Progress</AnimatedText>
+                    {Object.entries(gameData.teams).map(([teamKey, team]) => {
+                      const score = team?.score || 0;
+                      const progress = Math.min(100, (score / Math.max(1, gameData.questions.length * 2)) * 100);
+                      return (
+                        <View key={teamKey} style={styles.teamProgressRow}>
+                          <AnimatedText style={styles.teamProgressLabel}>{team.name}</AnimatedText>
+                          <View style={styles.progressBarBackground}>
+                            <View style={[styles.progressBarFill, { width: `${progress}%`, backgroundColor: team.color }]} />
+                          </View>
+                          <AnimatedText style={styles.teamProgressScore}>{score}</AnimatedText>
+                        </View>
+                      );
+                    })}
+                  </AnimatedView>
 
-            {/* Question */}
-            <View style={styles.questionContainer}>
-              <Text style={styles.questionText}>
-                {currentQuestion.question}
-              </Text>
-            </View>
-
-            {/* Answer Options */}
-            {/* Answer Options */}
-            <View style={styles.optionsGridContainer}>
-              {currentQuestion.options.map((option, index) => {
-                // Updated option colors with white text and 100% opacity backgrounds
-                const optionColors = {
-                  0: {
-                    background: "#f59e0b", // Yellow background
-                    border: "#f59e0b", // Yellow border
-                    text: "#FFFFFF", // White text
-                  },
-                  1: {
-                    background: "#3b82f6", // Blue background
-                    border: "#3b82f6", // Blue border
-                    text: "#FFFFFF", // White text
-                  },
-                  2: {
-                    background: "#8b5cf6", // Purple background
-                    border: "#8b5cf6", // Purple border
-                    text: "#FFFFFF", // White text
-                  },
-                  3: {
-                    background: "#ef4444", // Red background
-                    border: "#ef4444", // Red border
-                    text: "#FFFFFF", // White text
-                  },
-                };
-
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.optionButtonGrid,
-                      {
-                        backgroundColor: optionColors[index].background,
-                        borderColor: optionColors[index].border,
-                      },
-                      selectedAnswer === index && styles.selectedOption,
-                      // Only highlight the correct answer if the last submitted answer was correct
-                      showResult &&
-                        lastAnswerCorrect &&
-                        answeredQuestionIndexRef.current ===
-                          (gameData.currentQuestionIndex !== undefined
-                            ? gameData.currentQuestionIndex
-                            : gameData.currentQuestion) &&
-                        index === currentQuestion.correctAnswer &&
-                        styles.correctOption,
-                      showResult &&
-                        selectedAnswer === index &&
-                        index !== currentQuestion.correctAnswer &&
-                        styles.wrongOption,
-                    ]}
-                    onPress={() => handleAnswerSelect(index)}
-                    disabled={!myTurn || selectedAnswer !== null || isAnswerLocked}
+                  <AnimatedTouchableOpacity
+                    animation="pulse"
+                    iterationCount={1}
+                    duration={800}
+                    style={styles.sidePanelButton}
+                    onPress={() => setShowLeaderboard(true)}
                   >
-                    <Text
-                      style={[
-                        styles.optionTextGrid,
-                        { color: optionColors[index].text },
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                    <MaterialCommunityIcons
+                      name="chart-bar"
+                      size={18}
+                      color="#ffffff"
+                      style={{ marginRight: 8 }}
+                    />
+                    <AnimatedText style={styles.sidePanelButtonText}>View Full Standings</AnimatedText>
+                  </AnimatedTouchableOpacity>
+                </AnimatedView>
 
-            {!isAndroidCompact && gameplayControls}
+                <View style={styles.gameplayMainPanel}>
+                  <AnimatedView animation="fadeInUp" duration={700} style={styles.questionCard}>
+                    <AnimatedView style={styles.questionCardHeader}>
+                      <AnimatedText style={styles.questionLabel}>Question {(gameData.currentQuestionIndex !== undefined ? gameData.currentQuestionIndex : gameData.currentQuestion) + 1} / {gameData.questions.length}</AnimatedText>
+                      <AnimatedText style={styles.questionCategory}>{currentQuestion.category}</AnimatedText>
+                    </AnimatedView>
+
+                    <AnimatedView animation="fadeInUp" duration={700} delay={120} style={[styles.questionContainer, styles.elevatedQuestionCard]}>
+                      <AnimatedText style={styles.questionText}>{currentQuestion.question}</AnimatedText>
+                      <AnimatedView style={[styles.currentPlayerContainer, myTurn && styles.myTurnContainer]}>
+                        <AnimatedText style={[styles.currentPlayerText, myTurn && styles.myTurnText]}>
+                          {myTurn ? "Your Turn" : `${currentPlayer?.name}'s Turn`}
+                        </AnimatedText>
+                        <AnimatedText style={[styles.currentTeamText, myTurn && styles.myTurnTeamText]}>
+                          {gameData.teams[gameData.currentTeam]?.name}
+                        </AnimatedText>
+                      </AnimatedView>
+                    </AnimatedView>
+
+                    <AnimatedView animation="fadeInUp" duration={700} delay={180} style={styles.answerArea}>
+                      {currentQuestion.type === "scrambledWord" || currentQuestion.type === "imageScramble" ? (
+                        <AnimatedView style={styles.scrambleAnswerContent}>
+                          {currentQuestion.type === "scrambledWord" ? (
+                            <AnimatedView style={styles.scrambledWordContainer}>
+                              <AnimatedText style={styles.scrambledLabel}>Scrambled Word</AnimatedText>
+                              <AnimatedText
+                                animation="pulse"
+                                iterationCount="infinite"
+                                easing="ease-out"
+                                style={styles.scrambledWordText}
+                              >
+                                {currentQuestion.scrambledWord || "----"}
+                              </AnimatedText>
+                            </AnimatedView>
+                          ) : (
+                            <AnimatedView animation="fadeIn" duration={600} style={styles.imageScrambleContainer}>
+                              <AnimatedText style={styles.scrambledLabel}>Image Scramble</AnimatedText>
+                              <AnimatedImage
+                                animation="fadeIn"
+                                duration={500}
+                                source={{ uri: currentQuestion.imageUri }}
+                                style={styles.imageScramblePreview}
+                                resizeMode="cover"
+                              />
+                            </AnimatedView>
+                          )}
+
+                          <AnimatedView style={styles.inputContainer}>
+                            <AnimatedText style={styles.label}>Type your answer</AnimatedText>
+                            <AnimatedTextInput
+                              animation="fadeIn"
+                              duration={700}
+                              style={[styles.textInput, styles.typedAnswerInput]}
+                              placeholder="Type answer here..."
+                              placeholderTextColor="#64748b"
+                              value={typedAnswer}
+                              onChangeText={setTypedAnswer}
+                              editable={!isAnswerLocked}
+                            />
+                            <AnimatedTouchableOpacity
+                              animation="pulse"
+                              iterationCount={1}
+                              duration={700}
+                              style={[
+                                styles.submitAnswerButton,
+                                (!typedAnswer.trim() || !myTurn || isAnswerLocked) && styles.disabledButton,
+                              ]}
+                              onPress={handleTypedAnswerSubmit}
+                              disabled={!typedAnswer.trim() || !myTurn || isAnswerLocked}
+                            >
+                              <AnimatedText style={styles.submitAnswerButtonText}>
+                                Submit Answer
+                              </AnimatedText>
+                            </AnimatedTouchableOpacity>
+                          </AnimatedView>
+                        </AnimatedView>
+                      ) : (
+                        <View style={styles.optionsGridWrapper}>
+                          {currentQuestion.options.map((option, index) => {
+                            const optionColors = {
+                              0: {
+                                background: "#f59e0b",
+                                border: "#f59e0b",
+                                text: "#ffffff",
+                              },
+                              1: {
+                                background: "#3b82f6",
+                                border: "#3b82f6",
+                                text: "#ffffff",
+                              },
+                              2: {
+                                background: "#8b5cf6",
+                                border: "#8b5cf6",
+                                text: "#ffffff",
+                              },
+                              3: {
+                                background: "#ef4444",
+                                border: "#ef4444",
+                                text: "#ffffff",
+                              },
+                            };
+
+                            const currentQIndex = (gameData.currentQuestionIndex !== undefined ? gameData.currentQuestionIndex : gameData.currentQuestion);
+                            const isSameQuestion = answeredQuestionIndexRef.current === currentQIndex;
+                            const isCorrect = showResult && lastAnswerCorrect && isSameQuestion && index === currentQuestion.correctAnswer;
+                            const isWrong = showResult && isSameQuestion && selectedAnswer === index && index !== currentQuestion.correctAnswer;
+
+                            return (
+                              <AnimatedTouchableOpacity
+                                animation={selectedAnswer === index ? "zoomIn" : undefined}
+                                iterationCount={1}
+                                duration={400}
+                                key={index}
+                                style={[
+                                  styles.optionButtonGrid,
+                                  !isCorrect && !isWrong && {
+                                    backgroundColor: optionColors[index]?.background || "#3b82f6",
+                                    borderColor: optionColors[index]?.border || "#3b82f6",
+                                  },
+                                  selectedAnswer === index && !isCorrect && !isWrong && styles.selectedOption,
+                                  isCorrect && styles.correctOption,
+                                  isWrong && styles.wrongOption,
+                                ]}
+                                onPress={() => handleAnswerSelect(index)}
+                                disabled={!myTurn || selectedAnswer !== null || isAnswerLocked}
+                              >
+                                {isImageString(option) ? (
+                                  <AnimatedImage
+                                    source={{ uri: option }}
+                                    style={styles.optionImageInGrid}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <AnimatedText
+                                    style={[
+                                      styles.optionTextGrid,
+                                      { color: optionColors[index]?.text || "#ffffff" },
+                                    ]}
+                                  >
+                                    {option}
+                                  </AnimatedText>
+                                )}
+                              </AnimatedTouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </AnimatedView>
+
+                    {!isAndroidCompact && gameplayControls}
+                  </AnimatedView>
+                </View>
+              </View>
             </GameplayBodyWrapper>
             {isAndroidCompact && (
               <View style={styles.androidControlsDock}>{gameplayControls}</View>
             )}
           </SafeAreaView>
         </LinearGradient>
-      </ImageBackground>
+      </AnimatedImageBackground>
     );
   };
 
@@ -2299,7 +2834,9 @@ export default function KnowledgeRelay() {
     const teamStats = getTeamStats().sort((a, b) => b.score - a.score);
 
     return (
-      <ImageBackground
+      <AnimatedImageBackground
+        animation="fadeIn"
+        duration={900}
         source={RELAY_RACE_BG}
         style={styles.container}
         resizeMode="cover"
@@ -2307,65 +2844,65 @@ export default function KnowledgeRelay() {
       >
         <LinearGradient colors={RELAY_BG_GRADIENT} style={styles.relayBackgroundOverlay}>
           <SafeAreaView style={styles.safeArea}>
-            <View style={styles.finishedContainer}>
+            <AnimatedView animation="fadeInUp" duration={700} style={styles.finishedContainer}>
               {/* Game Over Header */}
-              <View style={styles.gameOverHeader}>
+              <AnimatedView animation="fadeInDown" duration={700} style={styles.gameOverHeader}>
                 <MaterialCommunityIcons
                   name="flag-checkered"
                   size={isAndroidCompact ? 44 : 60}
                   color={isWinner ? "#10b981" : "#2acde6"}
                 />
-                <Text style={styles.gameOverTitle}>Game Over!</Text>
-                <Text style={styles.gameOverSubtitle}>Knowledge Relay Match Complete</Text>
-              </View>
+                <AnimatedText style={styles.gameOverTitle}>Game Over!</AnimatedText>
+                <AnimatedText style={styles.gameOverSubtitle}>Knowledge Relay Match Complete</AnimatedText>
+              </AnimatedView>
 
-              <View style={styles.finishedCard}>
+              <AnimatedView animation="fadeInUp" duration={700} delay={150} style={styles.finishedCard}>
 
               {/* Winner/Loser Message */}
-              <View style={styles.resultMessageContainer}>
+              <AnimatedView animation="fadeIn" duration={700} style={styles.resultMessageContainer}>
                 {isWinner ? (
-                  <View style={styles.winnerMessage}>
+                  <AnimatedView style={styles.winnerMessage}>
                     <MaterialCommunityIcons
                       name="trophy"
                       size={isAndroidCompact ? 30 : 40}
                       color="#2acde6"
                     />
-                    <Text style={styles.congratsText}>Congratulations!</Text>
-                    <Text style={styles.winnerText}>
+                    <AnimatedText style={styles.congratsText}>Congratulations!</AnimatedText>
+                    <AnimatedText style={styles.winnerText}>
                       {playerTeam.name} takes the crown!
-                    </Text>
-                    <Text style={styles.finalScoreText}>
+                    </AnimatedText>
+                    <AnimatedText style={styles.finalScoreText}>
                       Final Score: {playerTeam.score} points
-                    </Text>
-                  </View>
+                    </AnimatedText>
+                  </AnimatedView>
                 ) : (
-                  <View style={styles.loserMessage}>
+                  <AnimatedView style={styles.loserMessage}>
                     <MaterialCommunityIcons
                       name="emoticon-sad"
                       size={isAndroidCompact ? 30 : 40}
                       color="#64748b"
                     />
-                    <Text style={styles.lostText}>
+                    <AnimatedText style={styles.lostText}>
                       Your team didn&apos;t win this round.
-                    </Text>
-                    <Text style={styles.winnerAnnouncementText}>
+                    </AnimatedText>
+                    <AnimatedText style={styles.winnerAnnouncementText}>
                       Winner: {winningTeam?.name}
-                    </Text>
-                    <Text style={styles.encouragementText}>
+                    </AnimatedText>
+                    <AnimatedText style={styles.encouragementText}>
                       Better luck next time!
-                    </Text>
+                    </AnimatedText>
                     {playerTeam && (
-                      <Text style={styles.yourScoreText}>
+                      <AnimatedText style={styles.yourScoreText}>
                         Your team score: {playerTeam.score} points
-                      </Text>
+                      </AnimatedText>
                     )}
-                  </View>
+                  </AnimatedView>
                 )}
-              </View>
+              </AnimatedView>
 
               {/* Final Leaderboard */}
-              <View style={styles.finalLeaderboard}>
-                <Text style={styles.leaderboardTitle}>Final Rankings</Text>
+              <AnimatedView animation="fadeInUp" duration={700} delay={200} style={styles.finalLeaderboard}>
+                <AnimatedText style={styles.leaderboardTitle}>Final Rankings</AnimatedText>
                 {teamStats.map((team, index) => (
                   <View
                     key={team.teamId}
@@ -2379,7 +2916,7 @@ export default function KnowledgeRelay() {
                     ]}
                   >
                     <View style={styles.rankContainer}>
-                      <Text style={styles.rankText}>{index + 1}</Text>
+                      <AnimatedText style={styles.rankText}>{index + 1}</AnimatedText>
                       {index === 0 && (
                         <MaterialCommunityIcons
                           name="crown"
@@ -2394,15 +2931,18 @@ export default function KnowledgeRelay() {
                         { backgroundColor: team.color },
                       ]}
                     />
-                    <Text style={styles.finalTeamName}>{team.name}</Text>
-                    <Text style={styles.finalTeamScore}>{team.score} pts</Text>
+                    <AnimatedText style={styles.finalTeamName}>{team.name}</AnimatedText>
+                    <AnimatedText style={styles.finalTeamScore}>{team.score} pts</AnimatedText>
                   </View>
                 ))}
-              </View>
+              </AnimatedView>
 
               {/* Action Buttons */}
-              <View style={styles.finishedActions}>
-                <TouchableOpacity
+              <AnimatedView animation="fadeInUp" duration={700} delay={120} style={styles.finishedActions}>
+                <AnimatedTouchableOpacity
+                  animation="pulse"
+                  iterationCount={1}
+                  duration={800}
                   style={styles.playAgainButton}
                   onPress={() => {
                     setGamePhase(PHASES.ROOM_SETUP);
@@ -2428,10 +2968,12 @@ export default function KnowledgeRelay() {
                     size={isAndroidCompact ? 18 : 20}
                     color="#f8fafc"
                   />
-                  <Text style={styles.playAgainText}>Play Again</Text>
-                </TouchableOpacity>
+                  <AnimatedText style={styles.playAgainText}>Play Again</AnimatedText>
+                </AnimatedTouchableOpacity>
 
-                <TouchableOpacity
+                <AnimatedTouchableOpacity
+                  animation="fadeIn"
+                  duration={700}
                   style={styles.backToMenuButton}
                   onPress={() => router.push("/(tabs)/game")}
                 >
@@ -2440,14 +2982,14 @@ export default function KnowledgeRelay() {
                     size={isAndroidCompact ? 18 : 20}
                     color="#0f172a"
                   />
-                  <Text style={styles.backToMenuText}>Back to Menu</Text>
-                </TouchableOpacity>
-              </View>
-              </View>
-            </View>
+                  <AnimatedText style={styles.backToMenuText}>Back to Menu</AnimatedText>
+                </AnimatedTouchableOpacity>
+              </AnimatedView>
+              </AnimatedView>
+            </AnimatedView>
           </SafeAreaView>
         </LinearGradient>
-      </ImageBackground>
+      </AnimatedImageBackground>
     );
   };
 
@@ -2650,28 +3192,26 @@ const styles = StyleSheet.create({
     }),
   },
   optionButtonGrid: {
-    width: "48%", // Just under 50% to allow for spacing
-    aspectRatio: 1, // Make it square
-    borderRadius: 10,
-    marginBottom: 15,
+    width: "45%",
+    minWidth: 140,
+    aspectRatio: 1,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
     padding: 15,
+    backgroundColor: "#3b82f6",
     ...Platform.select({
       android: {
-        aspectRatio: 0.82,
+        width: "48%",
+        aspectRatio: 0.95,
         marginBottom: 8,
         padding: 10,
       },
       web: {
-        transition: "0.2s all ease",
         cursor: "pointer",
-        maxWidth: scaleWeb(220),
-        maxHeight: scaleWeb(220),
-        width: "calc(45% - 12px)",
-        marginHorizontal: scaleWeb(8),
+        transition: "all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)",
       },
       default: {},
     }),
@@ -2685,11 +3225,109 @@ const styles = StyleSheet.create({
         fontSize: 14,
       },
       web: {
-        maxWidth: "100%", // Ensure text doesn't overflow
-        overflow: "hidden", // Hide overflowing text
+        maxWidth: "100%",
+        overflow: "hidden",
       },
       default: {},
     }),
+  },
+  questionTypeBadge: {
+    fontSize: scaleWeb(12),
+    color: "#ffffff",
+    backgroundColor: "rgba(59, 130, 246, 0.16)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: "flex-start",
+    marginTop: 6,
+    fontWeight: "700",
+  },
+  scrambleAnswerContent: {
+    width: "100%",
+    alignItems: "center",
+  },
+  scrambledWordContainer: {
+    backgroundColor: "rgba(59, 130, 246, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+    borderRadius: 16,
+    padding: 20,
+    width: "100%",
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  scrambledLabel: {
+    color: "#0f172a",
+    fontWeight: "700",
+    marginBottom: 10,
+  },
+  scrambledWordText: {
+    fontSize: scaleWeb(28),
+    color: "#0f172a",
+    letterSpacing: 1.8,
+    fontWeight: "900",
+  },
+  imageScrambleContainer: {
+    width: "100%",
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  imageScramblePreview: {
+    width: "100%",
+    height: scaleWeb(220),
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+    overflow: "hidden",
+  },
+  typedAnswerInput: {
+    backgroundColor: "rgba(255,255,255,0.94)",
+    marginTop: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.5)",
+  },
+  submitAnswerButton: {
+    backgroundColor: "#3b82f6",
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginTop: 14,
+    width: "100%",
+    alignItems: "center",
+  },
+  submitAnswerButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  questionTypeSelector: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 10,
+  },
+  questionTypeOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(15, 23, 42, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.35)",
+  },
+  questionTypeOptionSelected: {
+    backgroundColor: "#3b82f6",
+    borderColor: "#2563eb",
+  },
+  questionTypeOptionText: {
+    fontSize: 13,
+    color: "#0f172a",
+    fontWeight: "700",
+  },
+  questionTypeOptionTextSelected: {
+    fontSize: 13,
+    color: "#ffffff",
+    fontWeight: "700",
   },
   currentPlayerContainer: {
     backgroundColor: "rgba(255, 255, 255, 0.9)",
@@ -2795,6 +3433,138 @@ const styles = StyleSheet.create({
     ...Platform.select({
       android: {
         paddingBottom: 4,
+      },
+      default: {},
+    }),
+  },
+  gameplayHeader: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: scaleWeb(12),
+  },
+  gameplayBodyRow: {
+    flexDirection: "row",
+    gap: 16,
+    alignItems: "flex-start",
+  },
+  gameplaySidePanel: {
+    width: 240,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 12,
+    padding: 12,
+  },
+  sidePanelTitle: {
+    fontSize: 16,
+    color: "#f8fafc",
+    fontWeight: "800",
+    marginBottom: 10,
+  },
+  teamStatusGrid: {
+    marginBottom: 12,
+  },
+  teamStatusCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  teamStatusName: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  teamStatusScore: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#f8fafc",
+  },
+  teamProgressPanel: {
+    marginTop: 6,
+  },
+  progressTitle: {
+    fontSize: 12,
+    color: "#e2eef0",
+    marginBottom: 8,
+    fontWeight: "700",
+  },
+  teamProgressRow: {
+    marginBottom: 8,
+  },
+  teamProgressLabel: {
+    fontSize: 12,
+    color: "#dbeafe",
+    marginBottom: 4,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: 8,
+    borderRadius: 6,
+  },
+  teamProgressScore: {
+    fontSize: 12,
+    marginTop: 6,
+    color: "#f8fafc",
+    fontWeight: "700",
+  },
+  sidePanelButton: {
+    marginTop: 12,
+    backgroundColor: "#0f766e",
+    padding: 10,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sidePanelButtonText: {
+    color: "#fff",
+    fontWeight: "800",
+  },
+  gameplayMainPanel: {
+    flex: 1,
+    minWidth: 360,
+  },
+  questionCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  questionLabel: {
+    fontSize: 14,
+    color: "#3cbda2",
+    fontWeight: "800",
+  },
+  elevatedQuestionCard: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  answerArea: {
+    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 12,
+    width: "100%",
+  },
+  optionsGridWrapper: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 16,
+    width: "100%",
+    ...Platform.select({
+      web: {
+        maxWidth: 600,
+        marginHorizontal: "auto",
       },
       default: {},
     }),
@@ -2942,6 +3712,13 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     textAlign: "center",
     marginBottom: scaleWeb(20),
+  },
+  setupDescription: {
+    fontSize: scaleWeb(14),
+    color: "#e2eef0",
+    textAlign: "center",
+    marginBottom: scaleWeb(12),
+    fontWeight: "500",
   },
   inputContainer: {
     width: "100%",
@@ -3459,15 +4236,41 @@ const styles = StyleSheet.create({
     }),
   },
   selectedOption: {
-    borderColor: "#3cbda2",
+    borderWidth: 3,
+    borderColor: "#dbeafe",
+    transform: [{ scale: 1.05 }],
   },
   correctOption: {
-    backgroundColor: "rgba(16, 185, 129, 0.3)",
+    backgroundColor: "#10b981",
     borderColor: "#10b981",
+    borderWidth: 3,
+    shadowColor: "#10b981",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 15,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 0 30px 8px rgba(16, 185, 129, 0.6)",
+      },
+      default: {},
+    }),
   },
   wrongOption: {
-    backgroundColor: "rgba(239, 68, 68, 0.3)",
+    backgroundColor: "#ef4444",
     borderColor: "#ef4444",
+    borderWidth: 3,
+    shadowColor: "#ef4444",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 15,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 0 30px 8px rgba(239, 68, 68, 0.6)",
+      },
+      default: {},
+    }),
   },
   optionText: {
     fontSize: 16,
@@ -4068,6 +4871,59 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#1a5344",
     marginBottom: 2,
+  optionPreviewImageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  optionPreviewIndex: {
+    fontWeight: "700",
+    marginRight: 8,
+  },
+  optionPreviewImage: {
+    width: 120,
+    height: 72,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+  },
+  imageOptionWrapper: {
+    width: "100%",
+  },
+  optionImagePreview: {
+    width: "100%",
+    height: 110,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+    marginBottom: 6,
+  },
+  optionImageControls: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  smallButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  optionTextAndUpload: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  uploadOptionButton: {
+    marginLeft: 8,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "rgba(16,185,129,0.1)",
+  },
+  optionImageInGrid: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 12,
+  },
     paddingLeft: 10,
   },
   correctOptionPreview: {

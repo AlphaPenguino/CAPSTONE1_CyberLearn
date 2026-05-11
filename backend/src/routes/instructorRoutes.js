@@ -3,6 +3,7 @@ import User from "../models/Users.js";
 import Progress from "../models/Progress.js";
 import Quiz from "../models/Quiz.js";
 import Section from "../models/Section.js";
+import AuditLog from "../models/AuditLog.js";
 import { protectRoute, authorizeRole } from "../middleware/auth.middleware.js";
 import {
   logActivity,
@@ -159,7 +160,7 @@ router.get(
 
         const students = await User.find(userFilter)
             // Include gamification for leaderboard-style combined score
-            .select("_id fullName email section analytics gamification")
+          .select("_id username fullName email section analytics gamification")
             .lean();
 
         if (!students.length) {
@@ -231,6 +232,107 @@ router.get(
         const quizMap = new Map();
         quizzes.forEach((q) => quizMap.set(q._id.toString(), q));
         cyberQuests.forEach((cq) => quizMap.set(cq._id.toString(), cq)); // No recent game results are collected/returned
+
+        const normalizeGameType = (value) => {
+          if (typeof value !== "string") return null;
+          const normalized = value.trim().toLowerCase().replace(/[-\s]/g, "_");
+          if (!normalized) return null;
+
+          if (normalized === "digital_defenders") return "digital_defenders";
+          if (normalized === "rain_of_words") return "rain_of_words";
+          if (normalized === "quickplay" || normalized === "quick_play") return "quickplay";
+          if (normalized === "rps" || normalized === "rock_paper_scissors") return "rps";
+          return null;
+        };
+
+        const deriveAuditGameType = (log) => {
+          const fromDetails = normalizeGameType(log?.details?.gameType);
+          if (fromDetails) return fromDetails;
+          if (log?.resource === AUDIT_RESOURCES.DIGITAL_DEFENDERS) return "digital_defenders";
+          return null;
+        };
+
+        const gameplayAuditLogs = await AuditLog.find({
+          $or: [
+            {
+              resource: {
+                $in: [
+                  AUDIT_RESOURCES.DIGITAL_DEFENDERS,
+                  AUDIT_RESOURCES.MULTIPLAYER_GAME,
+                  AUDIT_RESOURCES.GAME,
+                  AUDIT_RESOURCES.QUIZ_SHOWDOWN,
+                ],
+              },
+            },
+            {
+              "details.gameType": {
+                $in: [
+                  "digital_defenders",
+                  "digital-defenders",
+                  "rain_of_words",
+                  "rain-of-words",
+                  "quickplay",
+                  "quick-play",
+                  "rps",
+                ],
+              },
+            },
+          ],
+        })
+            .select(
+                "_id userId username action resource resourceId details success errorMessage createdAt"
+            )
+            .sort({ createdAt: -1 })
+            .limit(12000)
+            .lean();
+
+        const logsByUserId = new Map();
+        const logsByUsername = new Map();
+
+        const pushToMapArray = (map, key, value) => {
+          if (!key) return;
+          if (!map.has(key)) map.set(key, []);
+          map.get(key).push(value);
+        };
+
+        gameplayAuditLogs.forEach((log, index) => {
+          const gameType = deriveAuditGameType(log);
+          if (!gameType) return;
+
+          const id = log?._id?.toString?.() || `log-${index}`;
+          const normalizedUsername =
+              typeof log.username === "string" ? log.username.trim().toLowerCase() : null;
+          const normalizedAction =
+              typeof log.action === "string" ? log.action.toLowerCase() : "event";
+
+          const logEntry = {
+            id,
+            gameType,
+            action: log.action,
+            timestamp: log.createdAt,
+            roomCode:
+                log.details?.roomCode || log.details?.roomId || log.resourceId || null,
+            score:
+                typeof log.details?.score === "number"
+                    ? log.details.score
+                    : typeof log.details?.finalScore === "number"
+                        ? log.details.finalScore
+                        : null,
+            success: log.success !== false,
+            errorMessage: log.errorMessage || null,
+            eventSummary:
+                log.details?.message ||
+                log.details?.event ||
+                (log.details?.cardId
+                    ? `Card ${log.details.cardId}`
+                    : normalizedAction.replace(/_/g, " ")),
+            details: log.details || {},
+          };
+
+          const userIdKey = log.userId?.toString?.();
+          pushToMapArray(logsByUserId, userIdKey, logEntry);
+          pushToMapArray(logsByUsername, normalizedUsername, logEntry);
+        });
 
         // First pass: compute raw stats & collect quiz ids needed
         const studentStats = students.map((stu) => {
@@ -635,8 +737,32 @@ router.get(
           // Recalculate gamesPlayed strictly as number of CyberQuest entries
           gamesPlayed = cyberQuestHistory.length;
 
+          const studentIdKey = stu._id.toString();
+          const usernameKeys = [stu.username, stu.fullName, stu.email]
+              .filter((value) => typeof value === "string" && value.trim())
+              .map((value) => value.trim().toLowerCase());
+
+          const mergedLogs = [];
+          const seenLogIds = new Set();
+          const addLogs = (logs) => {
+            (logs || []).forEach((entry) => {
+              if (!entry?.id || seenLogIds.has(entry.id)) return;
+              seenLogIds.add(entry.id);
+              mergedLogs.push(entry);
+            });
+          };
+
+          addLogs(logsByUserId.get(studentIdKey));
+          usernameKeys.forEach((key) => addLogs(logsByUsername.get(key)));
+
+          mergedLogs.sort(
+              (a, b) =>
+                  new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+
           return {
             id: stu._id.toString(),
+            username: stu.username || null,
             studentName: stu.fullName,
             email: stu.email,
             section: stu.section,
@@ -657,6 +783,7 @@ router.get(
                     new Date(b.completedAt).getTime() -
                     new Date(a.completedAt).getTime()
             ),
+            gameplayLogs: mergedLogs.slice(0, 300),
             // No recentAttempts
           };
         });

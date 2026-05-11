@@ -97,6 +97,54 @@ class QuickPlayApiService {
       throw error;
     }
   }
+
+  async logGameplayEvent(payload) {
+    const token = await this.getAuthToken();
+    try {
+      const res = await fetch(`${this.baseUrl}/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to log Quick Play gameplay event");
+      }
+
+      return data;
+    } catch (error) {
+      console.error("QuickPlay logGameplayEvent failed", error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  async completeGame(payload) {
+    const token = await this.getAuthToken();
+    try {
+      const res = await fetch(`${this.baseUrl}/complete`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to track Quick Play completion");
+      }
+
+      return data;
+    } catch (error) {
+      console.error("QuickPlay completeGame failed", error);
+      return { success: false, message: error.message };
+    }
+  }
 }
 
 export default new QuickPlayApiService();

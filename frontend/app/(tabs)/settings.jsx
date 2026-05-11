@@ -905,7 +905,7 @@ export default function Settings() {
           App Version
         </Text>
         <Text style={[styles.aboutValue, { color: colors.textSecondary }]}>
-          1.0.10-alpha
+          1.0.12-alpha
         </Text>
       </View>
 

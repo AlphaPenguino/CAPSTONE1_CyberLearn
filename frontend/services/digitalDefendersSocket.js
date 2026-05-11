@@ -89,6 +89,11 @@ class DigitalDefendersSocketService {
       this.emit("room-joined", data);
     });
 
+    this.socket.on("room-watched", (data) => {
+      console.log("Digital Defenders Room watched:", data);
+      this.emit("room-watched", data);
+    });
+
     this.socket.on("player-joined", (data) => {
       console.log("Digital Defenders Player joined:", data);
       this.emit("player-joined", data);
@@ -213,6 +218,16 @@ class DigitalDefendersSocketService {
     );
     this.currentRoomCode = roomId;
     this.socket.emit("join-room", { roomCode: roomId, playerName });
+  }
+
+  watchRoom(roomId) {
+    if (!this.socket?.connected) {
+      console.error("Socket not connected when trying to watch room");
+      throw new Error("Socket not connected");
+    }
+    console.log("Watching Digital Defenders room:", roomId);
+    this.currentRoomCode = roomId;
+    this.socket.emit("watch-room", { roomCode: roomId });
   }
 
   startGame(roomId) {

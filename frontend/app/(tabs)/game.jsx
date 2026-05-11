@@ -9,15 +9,17 @@ import {
   Dimensions,
   useWindowDimensions,
 } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { AudioContext } from "react-native-audio-api";
 import COLORS from "@/constants/custom-colors";
-import { useAuthStore } from "@/store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
-import { API_URL } from "@/constants/api";
+
+const ARCADE_PAGE_BGM = require("../../assets/sounds/arcadepage_bgm.mp3");
+const ARCADE_PAGE_BGM_VOLUME = 0.24;
 
 const { width } = Dimensions.get("window");
 const isWeb = Platform.OS === "web";
@@ -81,7 +83,7 @@ const FeaturedGame = ({ onPress, compactWeb, narrowWeb }) => {
               Quick Play
             </Text>
             <Text style={[styles.featuredDescription, featuredDescResponsive]}>
-              Solo practice with randomized questions from all levels!
+              Tile Matching Game for Memorization and Definition!
             </Text>
             <View style={styles.featuredButton}>
               <Text style={styles.featuredButtonText}>PLAY SOLO</Text>
@@ -347,8 +349,8 @@ const LeaderboardCard = ({ onViewAll, colors, compactWeb, narrowWeb }) => {
 
 export default function GameArcade() {
   const router = useRouter();
+  const pathname = usePathname();
   const { width: viewportWidth } = useWindowDimensions();
-  const { user, token } = useAuthStore();
   // Pull isDarkMode so we can adapt the points badge for proper contrast in light mode
   const { colors, isDarkMode } = useTheme();
   const highlightColor = isDarkMode ? colors.primary : colors.textPrimary;
@@ -359,64 +361,108 @@ export default function GameArcade() {
     ? Math.min(1400, viewportWidth * (narrowWeb ? 0.98 : 0.95))
     : "100%";
 
-  // State for user's leaderboard points
-  const [userLeaderboardData, setUserLeaderboardData] = useState(null);
+  const arcadeBgmContextRef = useRef(null);
+  const arcadeBgmSourceRef = useRef(null);
 
-  // Check if user is instructor or admin
-  const isInstructor =
-    user?.privilege === "instructor" || user?.privilege === "admin";
-
-  // Fetch user's leaderboard data to get their current combined score
   useEffect(() => {
-    const fetchUserLeaderboardData = async () => {
-      if (!token || isInstructor) return; // Don't fetch for instructors
+    const isGameActive = pathname?.endsWith("/game") || pathname === "/game";
+    let cancelled = false;
 
-      try {
-        const response = await fetch(`${API_URL}/users/leaderboard`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+    const stopArcadeBgm = async () => {
+      const source = arcadeBgmSourceRef.current;
+      arcadeBgmSourceRef.current = null;
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.data.rankings) {
-            // Find current user in rankings
-            const currentUserData = data.data.rankings.find(
-              (ranking) =>
-                ranking.username === user?.username || ranking._id === user?._id
-            );
-            setUserLeaderboardData(currentUserData);
-          }
+      if (source) {
+        try {
+          source.stop();
+        } catch {
+          // ignore stop failures during teardown
         }
-      } catch (error) {
-        console.error("Error fetching user leaderboard data:", error);
+
+        try {
+          source.disconnect();
+        } catch {
+          // ignore disconnect failures during teardown
+        }
+      }
+
+      const context = arcadeBgmContextRef.current;
+      arcadeBgmContextRef.current = null;
+
+      if (context) {
+        try {
+          await context.close();
+        } catch {
+          // ignore close failures during teardown
+        }
       }
     };
 
-    fetchUserLeaderboardData();
-  }, [token, user, isInstructor]);
+    const syncArcadeBgm = async () => {
+      if (!isGameActive) {
+        await stopArcadeBgm();
+        return;
+      }
+
+      await stopArcadeBgm();
+      if (cancelled) return;
+
+      try {
+        const audioContext = new AudioContext();
+        const audioBuffer = await audioContext.decodeAudioData(ARCADE_PAGE_BGM);
+        if (cancelled) {
+          await audioContext.close().catch(() => {});
+          return;
+        }
+
+        const playerNode = audioContext.createBufferSource();
+        const gainNode = audioContext.createGain?.();
+        playerNode.buffer = audioBuffer;
+        playerNode.loop = true;
+        if (gainNode) {
+          gainNode.gain.value = ARCADE_PAGE_BGM_VOLUME;
+          playerNode.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+        } else {
+          playerNode.connect(audioContext.destination);
+        }
+        playerNode.start(audioContext.currentTime);
+
+        playerNode.onended = () => {
+          if (arcadeBgmSourceRef.current === playerNode) {
+            arcadeBgmSourceRef.current = null;
+          }
+          if (arcadeBgmContextRef.current === audioContext) {
+            arcadeBgmContextRef.current = null;
+          }
+        };
+
+        arcadeBgmContextRef.current = audioContext;
+        arcadeBgmSourceRef.current = playerNode;
+      } catch (error) {
+        console.warn("Failed to start Arcade background music:", error);
+      }
+    };
+
+    void syncArcadeBgm();
+
+    return () => {
+      cancelled = true;
+      void stopArcadeBgm();
+    };
+  }, [pathname]);
 
   const multiplayerModes = [
     {
-      id: "knowledge-relay",
-      title: "🏃‍♂️ Knowledge Relay Race",
-      description: "Team vs Team - Most Points Wins!",
-      icon: require("../../assets/images/happy1.png"),
-      color: "#10B981",
-      players: "Team vs Team",
-      mode: "Turn-based",
-    },
-    {
-      id: "quiz-showdown",
-      title: "⚡ Quiz Showdown",
-      description: "Buzzer battle - race to answer first!",
+      id: "rain-of-words",
+      title: "💧 Rain of Words",
+      description: "1v1 typing race - type the falling answers!",
       icon: require("../../assets/images/happy2.png"),
-      color: "#F59E0B",
-      players: "Team vs Team",
-      mode: "Real-time",
+      color: "#00d4ff",
+      players: "1v1",
+      mode: "Real-time Typing",
     },
+   
     {
       id: "digital-defenders",
       title: "🛡️ Digital Defenders",
@@ -426,6 +472,8 @@ export default function GameArcade() {
       players: "2-4 Co-op",
       mode: "Turn-based Card Game",
     },
+
+  
   ];
 
   const handleGameSelect = (gameId) => {
@@ -439,6 +487,10 @@ export default function GameArcade() {
       router.push("/(tabs)/quiz-showdown");
     } else if (gameId === "digital-defenders") {
       router.push("/(tabs)/digital-defenders");
+    } else if (gameId === "rps") {
+      router.push("/multiplayer/rps");
+    } else if (gameId === "rain-of-words") {
+      router.push("/multiplayer/rain-of-words");
     } else if (multiplayerModes.find((mode) => mode.id === gameId)) {
       router.push(`/multiplayer/${gameId}`);
     } else {

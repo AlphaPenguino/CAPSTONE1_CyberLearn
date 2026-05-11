@@ -6353,48 +6353,49 @@ export default function Create() {
                       <>
                         {/* Search and Add Students */}
                         <View style={styles.studentSearchContainer}>
-                          <View style={styles.sectionFilterRow}>
+                          <View style={styles.sectionFilterContainer}>
                             <Text
                               style={[styles.sectionFilterLabel, { color: colors.textSecondary }]}
                             >
                               Select Section:
                             </Text>
-                            <ScrollView
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                              contentContainerStyle={styles.sectionFilterChips}
-                            >
-                              {sectionFilterOptions.map((sectionOption) => {
-                                const isActive =
-                                  selectedStudentSectionFilter === sectionOption;
-                                return (
-                                  <TouchableOpacity
-                                    key={`section-filter-${sectionOption}`}
-                                    style={[
-                                      styles.sectionFilterChip,
-                                      isActive && {
-                                        backgroundColor: colors.primary,
-                                        borderColor: colors.primary,
-                                      },
-                                    ]}
-                                    onPress={() =>
-                                      setSelectedStudentSectionFilter(sectionOption)
-                                    }
-                                  >
-                                    <Text
+                            <View style={styles.sectionButtonsWrapper}>
+                              <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.sectionFilterButtons}
+                              >
+                                {sectionFilterOptions.map((sectionOption) => {
+                                  const isActive =
+                                    selectedStudentSectionFilter === sectionOption;
+                                  return (
+                                    <TouchableOpacity
+                                      key={`section-filter-${sectionOption}`}
                                       style={[
-                                        styles.sectionFilterChipText,
-                                        isActive && { color: colors.background },
+                                        styles.sectionFilterButton,
+                                        isActive && styles.sectionFilterButtonActive,
+                                        !isActive && { backgroundColor: colors.background, borderColor: colors.border },
                                       ]}
+                                      onPress={() =>
+                                        setSelectedStudentSectionFilter(sectionOption)
+                                      }
                                     >
-                                      {sectionOption === "all"
-                                        ? "All"
-                                        : formatStudentSectionLabel(sectionOption)}
-                                    </Text>
-                                  </TouchableOpacity>
-                                );
-                              })}
-                            </ScrollView>
+                                      <Text
+                                        style={[
+                                          styles.sectionFilterButtonText,
+                                          isActive && { color: colors.background },
+                                          !isActive && { color: colors.textSecondary },
+                                        ]}
+                                      >
+                                        {sectionOption === "all"
+                                          ? "All"
+                                          : formatStudentSectionLabel(sectionOption)}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </ScrollView>
+                            </View>
                           </View>
 
                           <TextInput
@@ -9163,28 +9164,48 @@ const styles = StyleSheet.create({
     position: "relative",
     marginBottom: 16,
   },
-  sectionFilterRow: {
-    marginBottom: 10,
-    gap: 8,
+  sectionFilterContainer: {
+    marginBottom: 15,
+    gap: 10,
   },
   sectionFilterLabel: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 6,
   },
-  sectionFilterChips: {
+  sectionButtonsWrapper: {
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  sectionFilterButtons: {
     gap: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
-  sectionFilterChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.35)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+  sectionFilterButton: {
+    borderRadius: 8,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    minHeight: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  sectionFilterChipText: {
-    fontSize: 12,
+  sectionFilterButtonActive: {
+    backgroundColor: "#14B8A6",
+    borderColor: "#14B8A6",
+    shadowColor: "#14B8A6",
+    shadowOpacity: 0.25,
+    elevation: 5,
+  },
+  sectionFilterButtonText: {
+    fontSize: 13,
     fontWeight: "600",
     color: "#4a7c59",
   },

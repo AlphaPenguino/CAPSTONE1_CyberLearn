@@ -1,6 +1,13 @@
 import express from "express";
 import { protectRoute, authorizeRole } from "../middleware/auth.middleware.js";
+import { trackGameCompletion } from "../middleware/analytics.middleware.js";
 import QuickPlay from "../models/QuickPlay.js";
+import {
+  logActivity,
+  AUDIT_ACTIONS,
+  AUDIT_RESOURCES,
+  extractRequestInfo,
+} from "../lib/auditLogger.js";
 
 const router = express.Router();
 
@@ -134,6 +141,15 @@ const normalizeSavedPairs = (pairs) =>
 
 const requireInstructorOrAdmin = authorizeRole(["instructor", "admin"]);
 
+const QUICKPLAY_EVENT_TO_ACTION = {
+  game_start: AUDIT_ACTIONS.GAME_START,
+  game_end: AUDIT_ACTIONS.GAME_END,
+  round_complete: AUDIT_ACTIONS.GAME_END,
+  tile_select: AUDIT_ACTIONS.STUDENT_GAME_ACCESS,
+  pair_match: AUDIT_ACTIONS.STUDENT_GAME_ACCESS,
+  pair_mismatch: AUDIT_ACTIONS.STUDENT_GAME_ACCESS,
+};
+
 router.get("/slots", protectRoute, requireInstructorOrAdmin, async (req, res) => {
   try {
     const owner = req.user.id;
@@ -250,6 +266,82 @@ router.get("/code/:quizCode", protectRoute, async (req, res) => {
   } catch (error) {
     console.error("QuickPlay quizCode lookup failed:", error);
     return res.status(500).json({ success: false, message: "Failed to load Quick Play set." });
+  }
+});
+
+router.post("/events", protectRoute, async (req, res) => {
+  try {
+    const {
+      event = "event",
+      quizCode = null,
+      score = null,
+      details = {},
+    } = req.body || {};
+
+    const eventName = typeof event === "string" ? event.trim().toLowerCase() : "event";
+    const action = QUICKPLAY_EVENT_TO_ACTION[eventName] || AUDIT_ACTIONS.STUDENT_GAME_ACCESS;
+    const requestInfo = extractRequestInfo(req);
+
+    await logActivity({
+      userId: req.user?.id || null,
+      username: req.user?.username || req.user?.fullName || "Unknown Player",
+      userRole: req.user?.privilege || "student",
+      action,
+      resource: AUDIT_RESOURCES.GAME,
+      resourceId: quizCode || undefined,
+      details: {
+        gameType: "quickplay",
+        event: eventName,
+        quizCode,
+        score,
+        ...details,
+      },
+      ...requestInfo,
+    });
+
+    return res.json({ success: true, message: "Quick Play gameplay event logged" });
+  } catch (error) {
+    console.error("Quick Play gameplay event logging failed:", error);
+    return res.status(500).json({ success: false, message: "Failed to log Quick Play gameplay event" });
+  }
+});
+
+router.post("/complete", protectRoute, trackGameCompletion("quickplay"), async (req, res) => {
+  try {
+    const { quizCode = null, score = null, result = {}, details = {} } = req.body || {};
+    const requestInfo = extractRequestInfo(req);
+
+    await logActivity({
+      userId: req.user?.id || null,
+      username: req.user?.username || req.user?.fullName || "Unknown Player",
+      userRole: req.user?.privilege || "student",
+      action: AUDIT_ACTIONS.GAME_END,
+      resource: AUDIT_RESOURCES.GAME,
+      resourceId: quizCode || undefined,
+      details: {
+        gameType: "quickplay",
+        event: "game_completed",
+        quizCode,
+        score,
+        result,
+        ...details,
+      },
+      ...requestInfo,
+    });
+
+    return res.json({
+      success: true,
+      message: "Quick Play completion tracked",
+      data: {
+        quizCode,
+        score,
+        result,
+        completedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("Quick Play completion tracking failed:", error);
+    return res.status(500).json({ success: false, message: "Failed to track Quick Play completion" });
   }
 });
 

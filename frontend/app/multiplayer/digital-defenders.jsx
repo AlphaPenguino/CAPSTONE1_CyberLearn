@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, memo, useRef } from "react";
+import * as Animatable from "react-native-animatable";
 import {
   View,
   Text,
@@ -12,19 +13,22 @@ import {
   Vibration,
   Platform,
   TextInput,
+  
   ImageBackground,
   useWindowDimensions,
 } from "react-native";
 // Removed unused AsyncStorage import
 // import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Asset } from "expo-asset";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import { AudioContext } from "react-native-audio-api";
 import COLORS from "@/constants/custom-colors";
 import digitalDefendersSocket from "@/services/digitalDefendersSocket";
 import digitalDefendersAPI from "@/services/digitalDefendersAPI";
@@ -57,6 +61,31 @@ const PREMIUM_TEXT = "#0f172a";
 const PREMIUM_MUTED = "#334155";
 const PREMIUM_ACCENT = "#1f8f6a";
 const PREMIUM_ACCENT_DARK = "#0f6b50";
+const DD_AUDIO_ASSETS = {
+  bgm: require("../../assets/sounds/dd/dd_bg.mp3"),
+  click: require("../../assets/sounds/dd/click_se_game.wav"),
+  correct: require("../../assets/sounds/dd/dd_correct_ans.wav"),
+  incorrect: require("../../assets/sounds/dd/dd_incorrect_ans.mp3"),
+  gameover: require("../../assets/sounds/dd/game_over.wav"),
+  nextplayer: require("../../assets/sounds/dd/nextplayer_se.wav"),
+  runout: require("../../assets/sounds/dd/runout_time_se.wav"),
+  timer: require("../../assets/sounds/dd/timer_se.wav"),
+};
+const DD_AUDIO_VOLUME = {
+  bgm: 0.24,
+  click: 0.35,
+  correct: 0.5,
+  incorrect: 0.5,
+  gameover: 0.6,
+  nextplayer: 0.45,
+  runout: 0.55,
+  timer: 0.16,
+};
+const DD_ENEMY_SPRITES = [
+  require("../../assets/images/dd/blue.gif"),
+  require("../../assets/images/dd/green.gif"),
+  require("../../assets/images/dd/pink.gif"),
+];
 
 // Dummy data for testing
 const DUMMY_QUESTION_CARDS = [
@@ -249,6 +278,18 @@ const SAMPLE_DD_QUESTIONS = [
 
 function DigitalDefenders() {
   const router = useRouter();
+    const params = useLocalSearchParams();
+    const roomCodeParam = Array.isArray(params?.roomCode)
+      ? params.roomCode[0]
+      : params?.roomCode;
+    const spectateParam = Array.isArray(params?.spectate)
+      ? params.spectate[0]
+      : params?.spectate;
+    const isSpectateRoute =
+      typeof spectateParam === "string" &&
+      ["1", "true", "yes"].includes(spectateParam.toLowerCase());
+    const normalizedSpectateRoomCode =
+      typeof roomCodeParam === "string" ? roomCodeParam.trim().toUpperCase() : "";
   const navigation = useNavigation();
   const { setNavigationLocked } = useNavigationLock();
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
@@ -274,9 +315,62 @@ function DigitalDefenders() {
   const isCompactGameplayLayout = isWebMobileViewport;
   const isMountedRef = useRef(true);
   const isQuittingRef = useRef(false);
+  const audioContextRef = useRef(null);
+  const audioBufferCacheRef = useRef({});
+  const bgmSourceRef = useRef(null);
   const { user, token } = useAuthStore();
   const { settings } = useSettings();
   const { showNotification } = useNotifications();
+
+  // Cross-platform alert function
+  const showAlert = useCallback((title, message, buttons = [{ text: "OK" }]) => {
+    if (Platform.OS === "web") {
+      if (buttons.length > 1) {
+        const confirmed = window.confirm(`${title}\n\n${message}`);
+        if (confirmed && buttons[1]?.onPress) {
+          buttons[1].onPress();
+        } else if (!confirmed && buttons[0]?.onPress) {
+          buttons[0].onPress();
+        }
+      } else {
+        const lowerTitle = title.toLowerCase();
+        const isSuccess = [
+          "correct",
+          "success",
+          "victory",
+          "saved",
+          "updated",
+          "created",
+          "wave cleared",
+          "completed",
+        ].some((kw) => lowerTitle.includes(kw));
+        const isError = ["error", "failed", "fail", "exhausted"].some((kw) =>
+            lowerTitle.includes(kw)
+        );
+
+        setFeedbackData({
+          isCorrect: isSuccess && !isError,
+          message,
+          title,
+        });
+        setShowFeedback(true);
+
+        if (
+            !title.toLowerCase().includes("error") &&
+            !title.toLowerCase().includes("exhausted")
+        ) {
+          setTimeout(() => {
+            setShowFeedback(false);
+            if (buttons[0]?.onPress) {
+              buttons[0].onPress();
+            }
+          }, 2000);
+        }
+      }
+    } else {
+      Alert.alert(title, message, buttons);
+    }
+  }, []);
 
   // Debug user state
   useEffect(() => {
@@ -305,7 +399,7 @@ function DigitalDefenders() {
             console.error("❌ Auth check failed:", error);
           });
     }
-  }, [user, token]);
+  }, [user, token, showAlert]);
 
   // Early UI for unsupported platform AFTER hooks are declared
   // Removed previously unused renderUnsupportedPlatform (platform gating handled elsewhere)
@@ -319,6 +413,7 @@ function DigitalDefenders() {
   const [roomId, setRoomId] = useState("");
   const [playerId, setPlayerId] = useState(null);
   const [isCreator, setIsCreator] = useState(false);
+  const [isSpectator, setIsSpectator] = useState(false);
 
   // Game state
   const [gameState, setGameState] = useState("lobby"); // lobby, waiting, turnOrder, playing, gameOver, victory
@@ -341,6 +436,29 @@ function DigitalDefenders() {
   const [usedCards, setUsedCards] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [showInstructorEditor, setShowInstructorEditor] = useState(false);
+  const [enemySprite, setEnemySprite] = useState(DD_ENEMY_SPRITES[0]);
+
+  // Animations refs
+  const containerRef = useRef(null);
+  const enemyRef = useRef(null);
+  const cardRefs = useRef({});
+
+  useEffect(() => {
+    // register a simple roaming animation for enemy sprite
+    try {
+      if (Animatable.initializeRegistryWithDefinitions) {
+        Animatable.initializeRegistryWithDefinitions({
+          roam: {
+            0: { translateX: 0 },
+            0.5: { translateX: 8 },
+            1: { translateX: 0 },
+          },
+        });
+      }
+    } catch (_err) {
+      // ignore
+    }
+  }, []);
 
   // Turn order selection state
   const [turnOrderSelections, setTurnOrderSelections] = useState(new Map()); // playerId -> position
@@ -507,11 +625,32 @@ function DigitalDefenders() {
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [, /* playerStats */ setPlayerStats] = useState({});
 
+  useEffect(() => {
+    if (!isSpectateRoute || !normalizedSpectateRoomCode) {
+      return;
+    }
+
+    setIsSpectator(true);
+    setRoomId(normalizedSpectateRoomCode);
+    setIsDataLoading(true);
+  }, [isSpectateRoute, normalizedSpectateRoomCode]);
+
   const [selectedCard, setSelectedCard] = useState(null);
   const [freezeCountdown, setFreezeCountdown] = useState(0);
   const [gameOverReason, setGameOverReason] = useState(null); // Track why the game ended
   const [questionAnsweredThisTurn, setQuestionAnsweredThisTurn] =
       useState(false); // Track if question was answered correctly this turn
+
+  useEffect(() => {
+    if (!currentQuestion) {
+      setEnemySprite(DD_ENEMY_SPRITES[0]);
+      return;
+    }
+
+    const randomSprite =
+        DD_ENEMY_SPRITES[Math.floor(Math.random() * DD_ENEMY_SPRITES.length)];
+    setEnemySprite(randomSprite);
+  }, [currentQuestion]);
 
   // Game ending data for points-based wins
   const [gameEndData, setGameEndData] = useState(null); // Store winner, scores, etc.
@@ -534,63 +673,132 @@ function DigitalDefenders() {
   const [showWaveTransition, setShowWaveTransition] = useState(false);
   const [, setQuestionsUsedInCurrentWave] = useState([]); // Track questions used this wave (value currently unused)
 
-  // Cross-platform alert function
-  const showAlert = (title, message, buttons = [{ text: "OK" }]) => {
-    if (Platform.OS === "web") {
-      // For web, handle multi-button alerts properly
-      if (buttons.length > 1) {
-        // This is a confirmation dialog, use browser confirm for multi-button
-        const confirmed = window.confirm(`${title}\n\n${message}`);
-        if (confirmed && buttons[1]?.onPress) {
-          // Execute the action button (usually the second button)
-          buttons[1].onPress();
-        } else if (!confirmed && buttons[0]?.onPress) {
-          // Execute the cancel button (usually the first button)
-          buttons[0].onPress();
-        }
-      } else {
-        // Single button alert - use custom modal
-        const lowerTitle = title.toLowerCase();
-        const isSuccess = [
-          "correct",
-          "success", // Will now match "Successfully" in our modified title
-          "victory",
-          "saved",
-          "updated",
-          "created",
-          "wave cleared",
-          "completed",
-        ].some((kw) => lowerTitle.includes(kw));
-        const isError = ["error", "failed", "fail", "exhausted"].some((kw) =>
-            lowerTitle.includes(kw)
-        );
-
-        setFeedbackData({
-          isCorrect: isSuccess && !isError,
-          message,
-          title,
-        });
-        setShowFeedback(true);
-
-        // Auto-hide after 2 seconds for non-critical messages
-        if (
-            !title.toLowerCase().includes("error") &&
-            !title.toLowerCase().includes("exhausted")
-        ) {
-          setTimeout(() => {
-            setShowFeedback(false);
-            // Execute button callback if provided
-            if (buttons[0]?.onPress) {
-              buttons[0].onPress();
-            }
-          }, 2000);
-        }
-      }
-    } else {
-      // Use native Alert for mobile
-      Alert.alert(title, message, buttons);
+  const getAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
     }
-  };
+
+    return audioContextRef.current;
+  }, []);
+
+  const loadAudioBuffer = useCallback(
+      async (soundKey) => {
+        const asset = DD_AUDIO_ASSETS[soundKey];
+        if (!asset) return null;
+
+        const context = getAudioContext();
+
+        if (!audioBufferCacheRef.current[soundKey]) {
+          const uri = Asset.fromModule(asset).uri;
+          const response = await fetch(uri);
+          const arrayBuffer = await response.arrayBuffer();
+          audioBufferCacheRef.current[soundKey] = context.decodeAudioData(arrayBuffer);
+        }
+
+        return audioBufferCacheRef.current[soundKey];
+      },
+      [getAudioContext]
+  );
+
+  const playSound = useCallback(
+      async (soundKey, { volume, loop = false, keepSource = false } = {}) => {
+        try {
+          const context = getAudioContext();
+          const buffer = await loadAudioBuffer(soundKey);
+          if (!buffer) return;
+
+          if (keepSource && bgmSourceRef.current) {
+            try {
+              bgmSourceRef.current.stop();
+            } catch {}
+            try {
+              bgmSourceRef.current.disconnect();
+            } catch {}
+            bgmSourceRef.current = null;
+          }
+
+          const source = context.createBufferSource();
+          const gainNode = context.createGain?.();
+          source.buffer = buffer;
+          source.loop = loop;
+
+          const resolvedVolume =
+              typeof volume === "number" ? volume : DD_AUDIO_VOLUME[soundKey] ?? 0.4;
+
+          if (gainNode) {
+            gainNode.gain.value = resolvedVolume;
+            source.connect(gainNode);
+            gainNode.connect(context.destination);
+          } else {
+            source.connect(context.destination);
+          }
+
+          source.start(context.currentTime || 0);
+
+          if (keepSource) {
+            bgmSourceRef.current = source;
+          }
+
+          source.onended = () => {
+            if (keepSource) {
+              return;
+            }
+
+            try {
+              source.disconnect();
+            } catch {}
+            try {
+              if (gainNode) gainNode.disconnect();
+            } catch {}
+          };
+        } catch (error) {
+          console.warn("Digital Defenders sound failed:", soundKey, error);
+        }
+      },
+      [getAudioContext, loadAudioBuffer]
+  );
+
+  useEffect(() => {
+    if (gameState === "playing") {
+      void playSound("bgm", {
+        volume: DD_AUDIO_VOLUME.bgm,
+        loop: true,
+        keepSource: true,
+      });
+      return;
+    }
+
+    if (bgmSourceRef.current) {
+      try {
+        bgmSourceRef.current.stop();
+      } catch {}
+      try {
+        bgmSourceRef.current.disconnect();
+      } catch {}
+      bgmSourceRef.current = null;
+    }
+  }, [gameState, playSound]);
+
+  useEffect(() => {
+    return () => {
+      if (bgmSourceRef.current) {
+        try {
+          bgmSourceRef.current.stop();
+        } catch {}
+        try {
+          bgmSourceRef.current.disconnect();
+        } catch {}
+        bgmSourceRef.current = null;
+      }
+
+      if (audioContextRef.current) {
+        try {
+          audioContextRef.current.close();
+        } catch {}
+        audioContextRef.current = null;
+      }
+    };
+  }, []);
 
   const isInvalidSessionPayload = useCallback((payload) => {
     const rawMessage =
@@ -719,7 +927,7 @@ function DigitalDefenders() {
     } finally {
       setIsDataLoading(false);
     }
-  }, [user, token]);
+  }, [user, token, showAlert]);
 
   // Load data when component mounts
   useEffect(() => {
@@ -873,11 +1081,13 @@ function DigitalDefenders() {
     if (gameState === "playing" && countdown > 0 && freezeCountdown === 0) {
       const timer = setTimeout(() => {
         if (isMountedRef.current) {
+          void playSound("timer", { volume: DD_AUDIO_VOLUME.timer });
           setCountdown((prev) => prev - 1);
         }
       }, 1000);
       return () => clearTimeout(timer);
     } else if (countdown === 0 && gameState === "playing") {
+      void playSound("runout", { volume: DD_AUDIO_VOLUME.runout });
       // Check if player has any way to continue before handling countdown expired
       if (deck.length === 0 && playerHand.length === 0) {
         // No cards available - trigger immediate game over
@@ -894,6 +1104,7 @@ function DigitalDefenders() {
     handleCountdownExpired,
     deck.length,
     playerHand.length,
+    playSound,
   ]);
 
   // Freeze countdown effect
@@ -1066,7 +1277,26 @@ function DigitalDefenders() {
       setRoomId(data.room.id);
       setPlayerId(data.playerId);
       setIsCreator(false);
+      setIsSpectator(false);
       setGameState("waiting");
+    };
+
+    const handleRoomWatched = (data) => {
+      console.log("Room watched:", data);
+      setRoomData(data.room);
+      setRoomId(data.room?.id || normalizedSpectateRoomCode);
+      setPlayerId(null);
+      setIsCreator(false);
+      setIsSpectator(true);
+      setPlayerHand([]);
+      setActionsLeft(0);
+      setIsMyTurn(false);
+      setIsDataLoading(false);
+
+      if (data.gameState) {
+        setServerGameState(data.gameState);
+        syncWithServerState(data.gameState);
+      }
     };
 
     const handlePlayerJoined = (data) => {
@@ -1093,7 +1323,14 @@ function DigitalDefenders() {
     const handleGameState = (data) => {
       console.log("Game state received:", data);
       setServerGameState(data);
+      if (isSpectator || isSpectateRoute) {
+        setPlayerHand([]);
+        setActionsLeft(0);
+        setIsMyTurn(false);
+        setPlayerId(null);
+      }
       syncWithServerState(data);
+      setIsDataLoading(false);
     };
 
     const handleCardPlayed = (data) => {
@@ -1101,6 +1338,12 @@ function DigitalDefenders() {
       if (data.gameState) {
         setServerGameState(data.gameState);
         syncWithServerState(data.gameState);
+      }
+
+      if (data.effect?.questionSolved) {
+        void playSound("correct", { volume: DD_AUDIO_VOLUME.correct });
+      } else if (data.effect?.healthLost) {
+        void playSound("incorrect", { volume: DD_AUDIO_VOLUME.incorrect });
       }
 
       // Show feedback for card effects
@@ -1111,6 +1354,20 @@ function DigitalDefenders() {
                 ? "Wrong Answer!"
                 : "Card Effect";
         showAlert(alertTitle, data.effect.message);
+      }
+
+      // Visual feedback: screen shake / enemy attack / enemy damage
+      try {
+        if (data.effect?.healthLost && containerRef.current?.animate) {
+          containerRef.current.animate("shake", 700);
+          enemyRef.current?.animate && enemyRef.current.animate("pulse", 700);
+        }
+
+        if (data.effect?.questionSolved && enemyRef.current?.animate) {
+          enemyRef.current.animate("bounce", 700);
+        }
+      } catch (_err) {
+        // ignore animation errors on unsupported platforms
       }
     };
 
@@ -1155,6 +1412,7 @@ function DigitalDefenders() {
                 data.gameState.currentTurn % data.gameState.playerOrder.length
                     ]
                 : "Next player";
+            void playSound("nextplayer", { volume: DD_AUDIO_VOLUME.nextplayer });
             showAlert("Turn Ended", `${nextPlayerName}'s turn now.`);
           }
         }, 100);
@@ -1238,6 +1496,7 @@ function DigitalDefenders() {
 
     const handleGameOver = async (data) => {
       console.log("Game over:", data);
+      void playSound("gameover", { volume: DD_AUDIO_VOLUME.gameover });
       setGameState("gameOver");
       setGameOverReason(data.reason || "unknown");
 
@@ -1370,6 +1629,7 @@ function DigitalDefenders() {
     // Register event handlers
     digitalDefendersSocket.on("room-created", handleRoomCreated);
     digitalDefendersSocket.on("room-joined", handleRoomJoined);
+    digitalDefendersSocket.on("room-watched", handleRoomWatched);
     digitalDefendersSocket.on("player-joined", handlePlayerJoined);
     digitalDefendersSocket.on("room-updated", handleRoomUpdated);
     digitalDefendersSocket.on("game-started", handleGameStarted);
@@ -1410,6 +1670,7 @@ function DigitalDefenders() {
       clearInterval(connectionInterval);
       digitalDefendersSocket.off("room-created", handleRoomCreated);
       digitalDefendersSocket.off("room-joined", handleRoomJoined);
+      digitalDefendersSocket.off("room-watched", handleRoomWatched);
       digitalDefendersSocket.off("player-joined", handlePlayerJoined);
       digitalDefendersSocket.off("room-updated", handleRoomUpdated);
       digitalDefendersSocket.off("game-started", handleGameStarted);
@@ -1464,10 +1725,15 @@ function DigitalDefenders() {
     user,
     token,
     isMyTurn,
+    isSpectator,
+    isSpectateRoute,
+    normalizedSpectateRoomCode,
     playerId,
     roomData?.id,
     settings,
     showNotification,
+    showAlert,
+    playSound,
   ]);
 
   // Check for automatic loss condition when deck is empty
@@ -1496,10 +1762,14 @@ function DigitalDefenders() {
 
       return () => clearTimeout(timer);
     }
-  }, [deck.length, playerHand.length, gameState]);
+  }, [deck.length, playerHand.length, gameState, showAlert]);
 
   // Lobby action functions
   const createRoom = async () => {
+        if (isSpectator) {
+          return;
+        }
+
     console.log(
         "Create room called, playerName:",
         playerName,
@@ -1531,6 +1801,10 @@ function DigitalDefenders() {
   };
 
   const joinRoom = async () => {
+        if (isSpectator) {
+          return;
+        }
+
     console.log(
         "Join room called, playerName:",
         playerName,
@@ -1579,6 +1853,11 @@ function DigitalDefenders() {
   };
 
   const startGameMultiplayer = () => {
+        if (isSpectator) {
+          return;
+        }
+
+    void playSound("click", { volume: DD_AUDIO_VOLUME.click });
     if (roomData && isCreator) {
       try {
         digitalDefendersSocket.startGame(roomData.id);
@@ -1659,7 +1938,7 @@ function DigitalDefenders() {
           },
         ]);
       },
-      [performQuitAndDisconnect]
+      [performQuitAndDisconnect, showAlert]
   );
 
   useEffect(() => {
@@ -1686,6 +1965,8 @@ function DigitalDefenders() {
       return; // Already selected or not in room
     }
 
+    void playSound("click", { volume: DD_AUDIO_VOLUME.click });
+
     try {
       digitalDefendersSocket.selectTurnPosition(roomData.id, position);
       setMySelectedPosition(position);
@@ -1695,12 +1976,11 @@ function DigitalDefenders() {
     }
   };
 
-  const startGame = () => {
-    setGameState("playing");
-    initializeGame();
-  };
-
   const handleCardTap = (card) => {
+        if (isSpectator) {
+          return;
+        }
+
     // Check if it's multiplayer and not player's turn
     if (roomData && !isMyTurn) {
       showAlert("Not Your Turn", "Wait for your turn to play cards.");
@@ -1725,6 +2005,8 @@ function DigitalDefenders() {
       return;
     }
 
+    void playSound("click", { volume: DD_AUDIO_VOLUME.click });
+
     // If card is already selected, activate it
     if (selectedCard && selectedCard.id === card.id) {
       // Add haptic feedback for successful card play (mobile only)
@@ -1739,6 +2021,11 @@ function DigitalDefenders() {
       // Play card through backend if in multiplayer mode
       if (roomData && playerId) {
         try {
+          // card play animation (small feedback)
+          try {
+            cardRefs.current[card.id]?.animate && cardRefs.current[card.id].animate("bounce", 400);
+          } catch (_err) {}
+
           digitalDefendersSocket.playCard(roomData.id, card.id);
           setSelectedCard(null); // Clear selection immediately
         } catch (error) {
@@ -1751,11 +2038,21 @@ function DigitalDefenders() {
     } else {
       // Select the card
       setSelectedCard(card);
+      // animate selection pulse
+      try {
+        cardRefs.current[card.id]?.animate && cardRefs.current[card.id].animate("pulse", 600);
+      } catch (_err) {
+        // ignore
+      }
     }
   };
 
   // Local card play for solo mode (fallback)
   const handleLocalCardPlay = (card) => {
+        if (isSpectator) {
+          return;
+        }
+
     // Handle card effect first
     if (card.type === "tool") {
       handleToolCard(card);
@@ -1814,6 +2111,7 @@ function DigitalDefenders() {
         showAlert("Heal Used!", `PC Health restored to ${newHealth}/5!`);
         break;
       case "Pass":
+        void playSound("click", { volume: DD_AUDIO_VOLUME.click });
         setQuestionAnsweredThisTurn(true); // Mark that question was resolved (passed)
         nextQuestion();
         showAlert("Pass Used!", "Question skipped!");
@@ -1824,13 +2122,23 @@ function DigitalDefenders() {
   };
 
   const handleAnswerCard = (card) => {
+        if (isSpectator) {
+          return;
+        }
+
     if (currentQuestion && card.questionId === currentQuestion._id) {
       // Correct answer - clear the question
+      void playSound("correct", { volume: DD_AUDIO_VOLUME.correct });
       setQuestionAnsweredThisTurn(true); // Mark that question was answered correctly
       nextQuestion();
       showAlert("Correct!", "Question answered correctly!");
+      // enemy damaged animation
+      try {
+        enemyRef.current?.animate && enemyRef.current.animate("bounce", 700);
+      } catch (_err) {}
     } else {
       // Wrong answer - reduce health and show feedback
+      void playSound("incorrect", { volume: DD_AUDIO_VOLUME.incorrect });
       setPcHealth((prev) => {
         const newHealth = prev - 1;
         if (newHealth <= 0) {
@@ -1843,6 +2151,11 @@ function DigitalDefenders() {
               `Wrong answer! Lost 1 health. Health: ${newHealth}/5`
           );
         }
+        // screen shake + enemy attack animation
+        try {
+          containerRef.current?.animate && containerRef.current.animate("shake", 700);
+          enemyRef.current?.animate && enemyRef.current.animate("swing", 700);
+        } catch (_err) {}
         return newHealth;
       });
     }
@@ -1872,6 +2185,9 @@ function DigitalDefenders() {
     }
 
     const currentPlayerCount = roomData?.players?.length || 1;
+    if (!roomData) {
+      void playSound("nextplayer", { volume: DD_AUDIO_VOLUME.nextplayer });
+    }
     setCurrentTurn((prev) => (prev + 1) % currentPlayerCount);
     setActionsLeft(2);
     setSelectedCard(null); // Clear any selection when turn ends
@@ -1885,6 +2201,10 @@ function DigitalDefenders() {
   };
 
   const skipTurn = () => {
+        if (isSpectator) {
+          return;
+        }
+
     // Check if it's multiplayer and not player's turn
     if (roomData && !isMyTurn) {
       showAlert("Not Your Turn", "Wait for your turn to skip.");
@@ -1892,6 +2212,7 @@ function DigitalDefenders() {
     }
 
     if (actionsLeft > 0) {
+      void playSound("click", { volume: DD_AUDIO_VOLUME.click });
       setSelectedCard(null); // Clear selection when skipping turn
 
       // Skip turn through backend if in multiplayer mode
@@ -1933,6 +2254,10 @@ function DigitalDefenders() {
   };
 
   const reshuffle = () => {
+        if (isSpectator) {
+          return;
+        }
+
     // Check if it's multiplayer and not player's turn
     if (roomData && !isMyTurn) {
       showAlert("Not Your Turn", "Wait for your turn to reshuffle cards.");
@@ -1951,6 +2276,8 @@ function DigitalDefenders() {
       );
       return;
     }
+
+    void playSound("click", { volume: DD_AUDIO_VOLUME.click });
 
     // Reshuffle through backend if in multiplayer mode
     if (roomData && playerId) {
@@ -2855,12 +3182,23 @@ function DigitalDefenders() {
           </View>
 
           {/* Question Card Area */}
-          <View style={[styles.questionArea, isCompactGameplayLayout && styles.questionAreaCompact]}>
+          <Animatable.View ref={containerRef} style={[styles.questionArea, isCompactGameplayLayout && styles.questionAreaCompact]}>
             {currentQuestion && (
                 <View style={[styles.questionCard, isCompactGameplayLayout && styles.questionCardCompact]}>
-                  <Text style={[styles.questionText, isCompactGameplayLayout && styles.questionTextCompact]}>
-                    {currentQuestion.text}
-                  </Text>
+                  <View style={styles.questionHeaderRow}>
+                    <Animatable.Image
+                        ref={enemyRef}
+                        source={enemySprite}
+                        style={styles.enemySprite}
+                        resizeMode="contain"
+                        animation="roam"
+                        iterationCount={"infinite"}
+                        duration={3000}
+                    />
+                    <Text style={[styles.questionText, isCompactGameplayLayout && styles.questionTextCompact]}>
+                      {currentQuestion.text}
+                    </Text>
+                  </View>
                   {selectedCard && (
                       <View style={styles.instructionIndicator}>
                         <MaterialCommunityIcons
@@ -2887,7 +3225,7 @@ function DigitalDefenders() {
                   )}
                 </View>
             )}
-          </View>
+          </Animatable.View>
 
           {/* Player Hand */}
           <View style={[styles.handContainer, isCompactGameplayLayout && styles.handContainerCompact]}>
@@ -2964,16 +3302,20 @@ function DigitalDefenders() {
                             activeOpacity={isDisabled ? 0.3 : 0.8}
                             disabled={isDisabled}
                         >
-                          <LinearGradient
-                              colors={
-                                card.type === "tool"
-                                    ? ["rgba(139, 92, 246, 0.7)", "rgba(79, 32, 166, 0.8)"]
-                                    : ["rgba(253, 241, 187, 1)", "rgba(248, 212, 158, 0.9)"]
-                              }
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.cardGradient}
+                          <Animatable.View
+                              ref={(ref) => (cardRefs.current[card.id] = ref)}
+                              style={{ width: "100%" }}
                           >
+                            <LinearGradient
+                                colors={
+                                  card.type === "tool"
+                                      ? ["rgba(139, 92, 246, 0.7)", "rgba(79, 32, 166, 0.8)"]
+                                      : ["rgba(253, 241, 187, 1)", "rgba(248, 212, 158, 0.9)"]
+                                }
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.cardGradient}
+                            >
                             {card.type === "tool" ? (
                                 // Tool cards keep their header and description
                                 <>
@@ -3016,7 +3358,8 @@ function DigitalDefenders() {
                                   />
                                 </View>
                             )}
-                          </LinearGradient>
+                            </LinearGradient>
+                          </Animatable.View>
                         </TouchableOpacity>
                     );
                   })
@@ -4548,7 +4891,19 @@ const styles = StyleSheet.create({
     minHeight: 120,
     padding: 16,
   },
+  questionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+  },
+  enemySprite: {
+    width: 64,
+    height: 64,
+    flexShrink: 0,
+  },
   questionText: {
+    flex: 1,
     fontSize: 18,
     color: PREMIUM_TEXT,
     textAlign: "center",

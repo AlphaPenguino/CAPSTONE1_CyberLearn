@@ -46,6 +46,8 @@ export default function InstructorDashboard() {
     averageScore: 0,
     recentActivity: [],
   });
+  const [liveRooms, setLiveRooms] = useState([]);
+  const [liveRoomsLoading, setLiveRoomsLoading] = useState(false);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [profileModalLoading, setProfileModalLoading] = useState(false);
   const [profileModalError, setProfileModalError] = useState(null);
@@ -126,6 +128,25 @@ export default function InstructorDashboard() {
       setLoading(false);
     }
   }, [token]);
+
+  const fetchLiveRooms = useCallback(async () => {
+    try {
+      setLiveRoomsLoading(true);
+      const response = await fetch(`${API_URL}/digital-defenders/debug/rooms`);
+      const payload = await response.json();
+
+      if (payload?.success && Array.isArray(payload.activeRooms)) {
+        setLiveRooms(payload.activeRooms);
+      } else {
+        setLiveRooms([]);
+      }
+    } catch (error) {
+      console.warn("Failed to load live Digital Defenders rooms:", error);
+      setLiveRooms([]);
+    } finally {
+      setLiveRoomsLoading(false);
+    }
+  }, []);
 
   const getNormalizedRole = (account) =>
       (account?.privilege || account?.role || "student").toLowerCase();
@@ -403,6 +424,16 @@ export default function InstructorDashboard() {
     fetchSummary();
   }, [fetchSummary]);
 
+  useEffect(() => {
+    fetchLiveRooms();
+
+    const refreshTimer = setInterval(() => {
+      fetchLiveRooms();
+    }, 15000);
+
+    return () => clearInterval(refreshTimer);
+  }, [fetchLiveRooms]);
+
   // Check if user is instructor or admin
   if (user?.privilege !== "instructor" && user?.privilege !== "admin") {
     return (
@@ -508,6 +539,67 @@ export default function InstructorDashboard() {
                 color={highlightColor}
             />
 
+          </View>
+        </View>
+
+        <View style={styles.activityContainer}>
+          <Text style={[styles.sectionTitle, { color: highlightColor }]}>
+            🎮 Live Digital Defenders Rooms
+          </Text>
+          <Text style={[styles.toolsSubtitle, { color: colors.textSecondary }]}>Watch active matches in real time.</Text>
+          <View style={styles.activityList}>
+            {liveRoomsLoading && (
+                <Text style={{ opacity: 0.7, marginBottom: 8 }}>Loading live rooms...</Text>
+            )}
+            {!liveRoomsLoading && liveRooms.length === 0 && (
+                <Text style={{ opacity: 0.7 }}>No live rooms right now</Text>
+            )}
+            {liveRooms.map((room) => {
+              const playerNames = Array.isArray(room.players)
+                  ? room.players.map((player) => player.name).filter(Boolean)
+                  : [];
+              const isLive = room.gameState && room.gameState !== "lobby";
+
+              return (
+                  <View
+                      key={room.roomCode}
+                      style={[styles.activityItem, { backgroundColor: colors.card }]}
+                  >
+                    <View style={styles.activityInfo}>
+                      <Text style={[styles.activityStudent, { color: colors.text }]}>
+                        Room {room.roomCode}
+                      </Text>
+                      <Text style={[styles.activityAction, { color: colors.textSecondary }]}>
+                        {room.playerCount} players • {room.gameState || "unknown"}
+                      </Text>
+                      <Text style={[styles.activityTime, { color: colors.textSecondary }]}>
+                        {playerNames.length > 0 ? playerNames.join(", ") : "Waiting for players"}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[
+                          styles.profileCloseButton,
+                          { backgroundColor: highlightColor + "18" },
+                        ]}
+                        onPress={() =>
+                            router.push({
+                              pathname: "/(tabs)/digital-defenders",
+                              params: {
+                                roomCode: room.roomCode,
+                                spectate: "1",
+                              },
+                            })
+                        }
+                    >
+                      <MaterialCommunityIcons
+                          name={isLive ? "play-circle-outline" : "eye-outline"}
+                          size={22}
+                          color={highlightColor}
+                      />
+                    </TouchableOpacity>
+                  </View>
+              );
+            })}
           </View>
         </View>
 

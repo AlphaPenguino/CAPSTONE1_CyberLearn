@@ -595,6 +595,20 @@ export default function QuickPlay() {
     ]);
   }, [stopAudioChannel]);
 
+  const logQuickPlayEvent = useCallback(
+    (event, details = {}) => {
+      const quizCode =
+        roundDefinition?.quizCode || roundParams.quizCode || instructorConfig.quizCode || null;
+
+      void quickPlayApi.logGameplayEvent({
+        event,
+        quizCode,
+        details,
+      });
+    },
+    [instructorConfig.quizCode, roundDefinition?.quizCode, roundParams.quizCode]
+  );
+
   const finalizeRound = useCallback(
     (won) => {
       if (hasEndedRef.current) return;
@@ -615,12 +629,44 @@ export default function QuickPlay() {
         quizCode: roundDefinition?.quizCode || roundParams.quizCode || "",
       });
 
+      const completionPayload = {
+        quizCode: roundDefinition?.quizCode || roundParams.quizCode || "",
+        score: won
+          ? Math.max(0, Math.round((matchedPairIds.length / Math.max(1, roundDefinition?.pairs?.length || 1)) * 100))
+          : 0,
+        result: {
+          won,
+          timeTaken,
+          mistakes,
+          moves,
+          matchedPairs: matchedPairIds.length,
+          totalPairs: roundDefinition?.pairs?.length || 0,
+        },
+        details: {
+          source: roundDefinition?.source || "quickplay",
+        },
+      };
+
+      logQuickPlayEvent("round_complete", completionPayload.result);
+      void quickPlayApi.completeGame(completionPayload);
+
       setPhase("results");
       setIsResolving(false);
       setSelectedTileIds([]);
       setNavigationLocked(false);
     },
-    [clearResolutionTimer, initialTimer, mistakes, matchedPairIds.length, moves, roundDefinition, roundParams.quizCode, setNavigationLocked, timer]
+    [
+      clearResolutionTimer,
+      initialTimer,
+      logQuickPlayEvent,
+      mistakes,
+      matchedPairIds.length,
+      moves,
+      roundDefinition,
+      roundParams.quizCode,
+      setNavigationLocked,
+      timer,
+    ]
   );
 
   const prepareRound = useCallback(async () => {
@@ -845,7 +891,13 @@ export default function QuickPlay() {
     setIsResolving(false);
     setTiles(shuffle(buildTilesFromPairs(roundDefinition.pairs)));
     setPhase("playing");
-  }, [clearResolutionTimer, roundDefinition]);
+
+    logQuickPlayEvent("game_start", {
+      pairCount: roundDefinition.pairs.length,
+      timerSeconds: roundDefinition.timerSeconds,
+      source: roundDefinition.source || "quickplay",
+    });
+  }, [clearResolutionTimer, logQuickPlayEvent, roundDefinition]);
 
   useEffect(() => {
     const shouldPlayBackground = phase === "playing";
@@ -1017,6 +1069,7 @@ export default function QuickPlay() {
 
       const nextSelection = [...selectedTileIds, tileId];
       setSelectedTileIds(nextSelection);
+      logQuickPlayEvent("tile_select", { tileId, selectedCount: nextSelection.length });
 
       if (nextSelection.length < 2) return;
 
@@ -1035,6 +1088,7 @@ export default function QuickPlay() {
 
       if (isMatch) {
         void playSfx("correct");
+        logQuickPlayEvent("pair_match", { pairId: firstTile.pairId, moves: moves + 1 });
         resolutionTimeoutRef.current = setTimeout(() => {
           setMatchedPairIds((current) =>
             current.includes(firstTile.pairId) ? current : [...current, firstTile.pairId]
@@ -1045,13 +1099,28 @@ export default function QuickPlay() {
       } else {
         void playSfx("incorrect");
         setMistakes((value) => value + 1);
+        logQuickPlayEvent("pair_mismatch", {
+          firstTileId: firstTile.id,
+          secondTileId: secondTile.id,
+          moves: moves + 1,
+        });
         resolutionTimeoutRef.current = setTimeout(() => {
           setSelectedTileIds([]);
           setIsResolving(false);
         }, 650);
       }
     },
-    [clearResolutionTimer, isResolving, matchedPairSet, phase, playSfx, selectedTileIds, tileMap]
+    [
+      clearResolutionTimer,
+      isResolving,
+      logQuickPlayEvent,
+      matchedPairSet,
+      moves,
+      phase,
+      playSfx,
+      selectedTileIds,
+      tileMap,
+    ]
   );
 
   const handleExitPress = useCallback(() => {

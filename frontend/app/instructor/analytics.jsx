@@ -39,22 +39,13 @@ export default function InstructorAnalytics({ embedded = false, onBack = null })
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expandedStudent, setExpandedStudent] = useState(null);
+  const [selectedGameLogTab, setSelectedGameLogTab] = useState("digital_defenders");
+  const [showCyberQuestHistory, setShowCyberQuestHistory] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubjectId, setSelectedSubjectId] = useState("all");
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [subjectsLoaded, setSubjectsLoaded] = useState(false);
   // Removed card expansion state (recent game results hidden)
-
-  // Compute average leaderboard (combined) score across students
-  const avgLeaderboardScore = studentData?.students?.length
-    ? Math.round(
-        studentData.students.reduce(
-          (sum, s) =>
-            sum + (typeof s.combinedScore === "number" ? s.combinedScore : 0),
-          0
-        ) / studentData.students.length
-      )
-    : 0;
 
   const fetchAvailableSubjects = useCallback(async () => {
     if (!token) {
@@ -239,6 +230,12 @@ export default function InstructorAnalytics({ embedded = false, onBack = null })
   const normalizeText = (value) =>
     typeof value === "string" && value.trim() ? value.trim().toLowerCase() : null;
 
+  const GAME_LOG_TABS = [
+    { id: "digital_defenders", label: "Digital Defenders" },
+    { id: "quickplay", label: "Quick Play" },
+    { id: "rain_of_words", label: "Rain of Words" },
+  ];
+
   const matchesSelectedSubject = (game) => {
     if (!selectedSubjectId || selectedSubjectId === "all") return true;
 
@@ -259,6 +256,50 @@ export default function InstructorAnalytics({ embedded = false, onBack = null })
     }
 
     return false;
+  };
+
+  const computeGameStats = (student, gameType) => {
+    const logs = (student.gameplayLogs || []).filter((l) => l?.gameType === gameType);
+    const gamesPlayed = logs.length;
+    let latestScore = null;
+    let latestTime = 0;
+    let sum = 0;
+    let count = 0;
+    const players = new Set();
+
+    logs.forEach((l) => {
+      const ts = l?.timestamp ? new Date(l.timestamp).getTime() : 0;
+      const score = typeof l.score === "number" ? l.score : l?.details?.score ?? l?.details?.playerScore ?? l?.details?.finalScore;
+      if (typeof score === "number") {
+        sum += score;
+        count += 1;
+        if (ts > latestTime) {
+          latestTime = ts;
+          latestScore = score;
+        }
+      }
+
+      const det = l.details || {};
+      if (Array.isArray(det.players)) {
+        det.players.forEach((p) => {
+          if (!p) return;
+          const name = typeof p === "string" ? p : p.username || p.name || p.playerName;
+          if (name) players.add(name);
+        });
+      }
+      if (det.playerName && det.playerName !== student.studentName) players.add(det.playerName);
+      if (det.opponent && det.opponent !== student.studentName) players.add(det.opponent);
+      if (l.username && l.username !== student.studentName) players.add(l.username);
+    });
+
+    const avgScore = count ? Math.round(sum / count) : null;
+
+    return {
+      gamesPlayed,
+      latestScore,
+      avgScore,
+      players: Array.from(players).slice(0, 8),
+    };
   };
 
   // Load data on component mount
@@ -578,6 +619,94 @@ export default function InstructorAnalytics({ embedded = false, onBack = null })
         textAlign: "center",
         paddingVertical: 20,
       },
+      gameplayLogsContainer: {
+        marginTop: 16,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+      },
+      gameplayLogsTitle: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: colors.text,
+        marginBottom: 10,
+      },
+      globalGameTabsWrap: {
+        marginTop: 4,
+        marginBottom: 12,
+      },
+      globalGameTabsTitle: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: colors.text,
+        marginBottom: 8,
+      },
+      gameTabsContainer: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 8,
+        marginBottom: 10,
+      },
+      gameTabButton: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+      },
+      gameTabButtonActive: {
+        borderColor: colors.primary,
+        backgroundColor: `${colors.primary}20`,
+      },
+      gameTabButtonText: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: colors.textSecondary,
+      },
+      gameTabButtonTextActive: {
+        color: colors.primary,
+      },
+      monitorStatsRow: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 8,
+        marginBottom: 12,
+      },
+      monitorStatChip: {
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+      },
+      monitorStatLabel: {
+        fontSize: 11,
+        color: colors.textSecondary,
+      },
+      monitorStatValue: {
+        marginTop: 2,
+        fontSize: 12,
+        fontWeight: "700",
+        color: colors.text,
+      },
+      gameplayLogItem: {
+        marginBottom: 10,
+        paddingLeft: 8,
+        borderLeftWidth: 2,
+        borderLeftColor: colors.primary,
+      },
+      gameplayLogHeadline: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: colors.text,
+      },
+      gameplayLogMeta: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        marginTop: 2,
+      },
     });
   };
 
@@ -685,6 +814,52 @@ export default function InstructorAnalytics({ embedded = false, onBack = null })
                     <Text style={styles.statLabel}>Total Games Recorded</Text>
                   </View>
                 </View>
+
+                <View style={styles.globalGameTabsWrap}>
+                  <Text style={styles.globalGameTabsTitle}>
+                    Game Log Sort
+                  </Text>
+                  <View style={styles.gameTabsContainer}>
+                    {GAME_LOG_TABS.map((tab) => {
+                      const isActive = selectedGameLogTab === tab.id;
+                      return (
+                        <TouchableOpacity
+                          key={`global-${tab.id}`}
+                          style={[
+                            styles.gameTabButton,
+                            isActive && styles.gameTabButtonActive,
+                          ]}
+                          onPress={() => setSelectedGameLogTab(tab.id)}
+                        >
+                          <Text
+                            style={[
+                              styles.gameTabButtonText,
+                              isActive && styles.gameTabButtonTextActive,
+                            ]}
+                          >
+                            {tab.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setShowCyberQuestHistory((v) => !v)}
+                    style={[
+                      styles.gameTabButton,
+                      showCyberQuestHistory && styles.gameTabButtonActive,
+                    ]}
+                  >
+                    <Text style={[styles.gameTabButtonText, showCyberQuestHistory && styles.gameTabButtonTextActive]}>
+                      {showCyberQuestHistory ? "Hide CyberQuest History" : "Show CyberQuest History"}
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                    Toggle CyberQuest history visible in expanded student cards
+                  </Text>
+                </View>
               </View>
 
               {/* Student List */}
@@ -791,7 +966,31 @@ export default function InstructorAnalytics({ embedded = false, onBack = null })
                         ?.toLowerCase()
                         .includes(searchQuery.toLowerCase().trim())
                     )
-                    .sort((a, b) => a.studentName.localeCompare(b.studentName))
+                    .sort((a, b) => {
+                      const aLogs = (a.gameplayLogs || []).filter(
+                        (log) => log?.gameType === selectedGameLogTab
+                      );
+                      const bLogs = (b.gameplayLogs || []).filter(
+                        (log) => log?.gameType === selectedGameLogTab
+                      );
+
+                      if (bLogs.length !== aLogs.length) {
+                        return bLogs.length - aLogs.length;
+                      }
+
+                      const aLatest = aLogs[0]?.timestamp
+                        ? new Date(aLogs[0].timestamp).getTime()
+                        : 0;
+                      const bLatest = bLogs[0]?.timestamp
+                        ? new Date(bLogs[0].timestamp).getTime()
+                        : 0;
+
+                      if (bLatest !== aLatest) {
+                        return bLatest - aLatest;
+                      }
+
+                      return a.studentName.localeCompare(b.studentName);
+                    })
                     .map((student) => (
                       <View key={student.id} style={styles.studentCard}>
                         <View style={styles.studentHeader}>
@@ -849,80 +1048,172 @@ export default function InstructorAnalytics({ embedded = false, onBack = null })
 
                         {expandedStudent === student.id && (
                           <View style={styles.historyContainer}>
-                            {((student.cyberQuestHistory?.length > 0
-                              ? student.cyberQuestHistory
-                              : student.gameHistory?.filter(
-                                  (game) => game.type === "cyberQuest"
-                                ) || [])
-                              .filter(matchesSelectedSubject)).length > 0 ? (
-                              (student.cyberQuestHistory?.length > 0
+                            {showCyberQuestHistory ? (
+                              ((student.cyberQuestHistory?.length > 0
                                 ? student.cyberQuestHistory
                                 : student.gameHistory?.filter(
                                     (game) => game.type === "cyberQuest"
                                   ) || [])
-                                .filter(matchesSelectedSubject)
-                                .map((game, index) => {
-                                  const resolvedTitle = resolveGameTitle(game);
-                                  const resolvedLevelLabel = resolveGameLevelLabel(game);
-                                   const resolvedCorrect = getCyberQuestCount(
-                                     game,
-                                     "correctAnswers"
-                                   );
-                                   const resolvedIncorrect =
-                                    typeof game.incorrectAnswers === "number"
-                                      ? game.incorrectAnswers
-                                      : typeof game.totalQuestions === "number" &&
-                                        typeof resolvedCorrect === "number"
-                                      ? Math.max(
-                                          game.totalQuestions - resolvedCorrect,
-                                          0
-                                        )
-                                      : null;
+                                .filter(matchesSelectedSubject)).length > 0 ? (
+                                (student.cyberQuestHistory?.length > 0
+                                  ? student.cyberQuestHistory
+                                  : student.gameHistory?.filter(
+                                      (game) => game.type === "cyberQuest"
+                                    ) || [])
+                                  .filter(matchesSelectedSubject)
+                                  .map((game, index) => {
+                                    const resolvedTitle = resolveGameTitle(game);
+                                    const resolvedLevelLabel = resolveGameLevelLabel(game);
+                                     const resolvedCorrect = getCyberQuestCount(
+                                       game,
+                                       "correctAnswers"
+                                     );
+                                     const resolvedIncorrect =
+                                      typeof game.incorrectAnswers === "number"
+                                        ? game.incorrectAnswers
+                                        : typeof game.totalQuestions === "number" &&
+                                          typeof resolvedCorrect === "number"
+                                        ? Math.max(
+                                            game.totalQuestions - resolvedCorrect,
+                                            0
+                                          )
+                                        : null;
 
-                                   return (
-                                     <View
-                                       key={game.id || index}
-                                       style={styles.historyItem}
-                                     >
-                                       <Text style={styles.historyTitle}>
-                                        {resolvedTitle}
-                                       </Text>
+                                     return (
+                                       <View
+                                         key={game.id || index}
+                                         style={styles.historyItem}
+                                       >
+                                         <Text style={styles.historyTitle}>
+                                          {resolvedTitle}
+                                         </Text>
  
-                                       <Text style={styles.historyDetails}>
-                                        Level: {resolvedLevelLabel} • Attempt: {game.attemptNumber ?? index + 1}
-                                       </Text>
-                                       <Text style={styles.historyDetails}>
-                                         Score: {" "}
-                                        {typeof toNum(game.score) === "number"
-                                          ? `${toNum(game.score)}%`
-                                          : "N/A"}
-                                        {typeof game.passed === "boolean"
-                                          ? ` • ${game.passed ? "Passed" : "In progress"}`
-                                          : ""}
-                                       </Text>
-                                       <Text style={styles.historyDetails}>
-                                        Correct: {formatCount(resolvedCorrect)} • Incorrect: {formatCount(resolvedIncorrect)}
-                                        {typeof toNum(game.totalQuestions) === "number"
-                                          ? ` • Total: ${toNum(game.totalQuestions)}`
-                                          : ""}
-                                       </Text>
-                                       <Text style={styles.historyDetails}>
-                                        Difficulty: {game.difficulty || "medium"}
-                                       </Text>
-                                       <Text style={styles.historyDetails}>
-                                        Finished: {" "}
-                                        {game.completedAt
-                                          ? new Date(game.completedAt).toLocaleString()
-                                          : "N/A"}
-                                       </Text>
-                                    </View>
-                                  );
-                                })
-                            ) : (
-                              <Text style={styles.noGamesText}>
-                                No CyberQuest history available.
+                                         <Text style={styles.historyDetails}>
+                                          Level: {resolvedLevelLabel} • Attempt: {game.attemptNumber ?? index + 1}
+                                         </Text>
+                                         <Text style={styles.historyDetails}>
+                                           Score: {" "}
+                                          {typeof toNum(game.score) === "number"
+                                            ? `${toNum(game.score)}%`
+                                            : "N/A"}
+                                          {typeof game.passed === "boolean"
+                                            ? ` • ${game.passed ? "Passed" : "In progress"}`
+                                            : ""}
+                                         </Text>
+                                         <Text style={styles.historyDetails}>
+                                          Correct: {formatCount(resolvedCorrect)} • Incorrect: {formatCount(resolvedIncorrect)}
+                                          {typeof toNum(game.totalQuestions) === "number"
+                                            ? ` • Total: ${toNum(game.totalQuestions)}`
+                                            : ""}
+                                         </Text>
+                                         <Text style={styles.historyDetails}>
+                                          Difficulty: {game.difficulty || "medium"}
+                                         </Text>
+                                         <Text style={styles.historyDetails}>
+                                          Finished: {" "}
+                                          {game.completedAt
+                                            ? new Date(game.completedAt).toLocaleString()
+                                            : "N/A"}
+                                         </Text>
+                                      </View>
+                                    );
+                                  })
+                              ) : (
+                                <Text style={styles.noGamesText}>
+                                  No CyberQuest history available.
+                                </Text>
+                              )) : null}
+
+                            <View style={styles.gameplayLogsContainer}>
+                              <Text style={styles.gameplayLogsTitle}>
+                                Gameplay Logs and Monitoring
                               </Text>
-                            )}
+
+                              {(() => {
+                                const selectedLogs = (student.gameplayLogs || [])
+                                  .filter((log) => log?.gameType === selectedGameLogTab)
+                                  .sort((a, b) => {
+                                    const aTime = new Date(a?.timestamp || 0).getTime();
+                                    const bTime = new Date(b?.timestamp || 0).getTime();
+                                    return bTime - aTime;
+                                  });
+
+                                const successCount = selectedLogs.filter((log) => log?.success !== false).length;
+                                const failedCount = selectedLogs.filter((log) => log?.success === false).length;
+                                const lastEventTime = selectedLogs[0]?.timestamp
+                                  ? new Date(selectedLogs[0].timestamp).toLocaleString()
+                                  : "N/A";
+
+                                const stats = computeGameStats(student, selectedGameLogTab);
+
+                                return (
+                                  <>
+                                    <View style={styles.monitorStatsRow}>
+                                      <View style={styles.monitorStatChip}>
+                                        <Text style={styles.monitorStatLabel}>Events</Text>
+                                        <Text style={styles.monitorStatValue}>{selectedLogs.length}</Text>
+                                      </View>
+                                      <View style={styles.monitorStatChip}>
+                                        <Text style={styles.monitorStatLabel}>Success</Text>
+                                        <Text style={styles.monitorStatValue}>{successCount}</Text>
+                                      </View>
+                                      <View style={styles.monitorStatChip}>
+                                        <Text style={styles.monitorStatLabel}>Failed</Text>
+                                        <Text style={styles.monitorStatValue}>{failedCount}</Text>
+                                      </View>
+                                      <View style={styles.monitorStatChip}>
+                                        <Text style={styles.monitorStatLabel}>Last Activity</Text>
+                                        <Text style={styles.monitorStatValue}>{lastEventTime}</Text>
+                                      </View>
+                                      <View style={styles.monitorStatChip}>
+                                        <Text style={styles.monitorStatLabel}>Avg Score</Text>
+                                        <Text style={styles.monitorStatValue}>{stats.avgScore ?? "N/A"}</Text>
+                                      </View>
+                                      <View style={styles.monitorStatChip}>
+                                        <Text style={styles.monitorStatLabel}>Latest Score</Text>
+                                        <Text style={styles.monitorStatValue}>{stats.latestScore ?? "N/A"}</Text>
+                                      </View>
+                                    </View>
+
+                                    {stats.players.length > 0 && (
+                                      <View style={{ marginBottom: 10 }}>
+                                        <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 6 }}>Players seen with this student</Text>
+                                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                                          {stats.players.map((p) => (
+                                            <View key={p} style={[styles.monitorStatChip, { paddingHorizontal: 10 }]}>
+                                              <Text style={{ color: colors.text, fontWeight: "700" }}>{p}</Text>
+                                            </View>
+                                          ))}
+                                        </View>
+                                      </View>
+                                    )}
+
+                                    {selectedLogs.length > 0 ? (
+                                      selectedLogs.slice(0, 80).map((log, logIndex) => (
+                                  <View key={log.id || `${student.id}-log-${logIndex}`} style={styles.gameplayLogItem}>
+                                    <Text style={styles.gameplayLogHeadline}>
+                                      {(log.gameType || "game").replace(/_/g, " ")} • {(log.action || "event").replace(/_/g, " ")}
+                                    </Text>
+                                    <Text style={styles.gameplayLogMeta}>
+                                      {log.eventSummary || "Event recorded"}
+                                    </Text>
+                                    <Text style={styles.gameplayLogMeta}>
+                                      {log.roomCode ? `Room: ${log.roomCode} • ` : ""}
+                                      {typeof log.score === "number" ? `Score: ${log.score} • ` : ""}
+                                      {log.success === false ? "Failed" : "Success"}
+                                    </Text>
+                                    <Text style={styles.gameplayLogMeta}>
+                                      {log.timestamp ? new Date(log.timestamp).toLocaleString() : "N/A"}
+                                    </Text>
+                                  </View>
+                                      ))
+                                    ) : (
+                                      <Text style={styles.noGamesText}>No gameplay logs recorded yet for this game.</Text>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </View>
                           </View>
                         )}
                       </View>

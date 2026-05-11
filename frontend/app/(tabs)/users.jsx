@@ -73,6 +73,7 @@ export default function UsersScreen({ hideHeader = false }) {
     section: "",
     role: "student", // Default role
   });
+  const [emailDomain, setEmailDomain] = useState("@lpunetwork.edu.ph");
   const [sendAccountNotification, setSendAccountNotification] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [imageErrors, setImageErrors] = useState({});
@@ -1230,16 +1231,64 @@ export default function UsersScreen({ hideHeader = false }) {
                   </TouchableOpacity>
                 </View>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="email-address"
-                  value={newUser.email}
-                  onChangeText={(text) =>
-                    setNewUser({ ...newUser, email: text })
-                  }
-                />
+                <View style={styles.emailInputContainer}>
+                  <View style={styles.emailInputWrapper}>
+                    <TextInput
+                      style={styles.emailInputField}
+                      placeholder="username"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="email-address"
+                      value={newUser.email.replace(/@lpunetwork\.edu\.ph|@lpu\.edu\.ph/g, "")}
+                      onChangeText={(text) => {
+                        const emailUsername = text.replace(/[^a-zA-Z0-9.\-_]/g, "").toLowerCase();
+                        setNewUser({ ...newUser, email: emailUsername + emailDomain });
+                      }}
+                    />
+                    <Text style={styles.emailDomainText}>{emailDomain}</Text>
+                  </View>
+                  <View style={styles.emailDomainSelector}>
+                    <TouchableOpacity
+                      style={[
+                        styles.emailDomainButton,
+                        emailDomain === "@lpunetwork.edu.ph" && styles.emailDomainButtonActive,
+                      ]}
+                      onPress={() => {
+                        const username = newUser.email.replace(/@lpunetwork\.edu\.ph|@lpu\.edu\.ph/g, "");
+                        setEmailDomain("@lpunetwork.edu.ph");
+                        setNewUser({ ...newUser, email: username + "@lpunetwork.edu.ph" });
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.emailDomainButtonText,
+                          emailDomain === "@lpunetwork.edu.ph" && styles.emailDomainButtonTextActive,
+                        ]}
+                      >
+                        @lpunetwork.edu.ph
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.emailDomainButton,
+                        emailDomain === "@lpu.edu.ph" && styles.emailDomainButtonActive,
+                      ]}
+                      onPress={() => {
+                        const username = newUser.email.replace(/@lpunetwork\.edu\.ph|@lpu\.edu\.ph/g, "");
+                        setEmailDomain("@lpu.edu.ph");
+                        setNewUser({ ...newUser, email: username + "@lpu.edu.ph" });
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.emailDomainButtonText,
+                          emailDomain === "@lpu.edu.ph" && styles.emailDomainButtonTextActive,
+                        ]}
+                      >
+                        @lpu.edu.ph
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
                 <TextInput
                   style={styles.input}
                   placeholder="Full Name"
@@ -3003,6 +3052,59 @@ const createStyles = (colors) => {
       borderColor: colors.border,
       color: colors.text,
       fontSize: 16,
+    },
+    emailInputContainer: {
+      marginBottom: 16,
+      gap: 10,
+    },
+    emailInputWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      overflow: "hidden",
+    },
+    emailInputField: {
+      flex: 1,
+      paddingVertical: 14,
+      color: colors.text,
+      fontSize: 16,
+    },
+    emailDomainText: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      fontWeight: "500",
+      marginLeft: 4,
+    },
+    emailDomainSelector: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    emailDomainButton: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    emailDomainButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    emailDomainButtonText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    emailDomainButtonTextActive: {
+      color: colors.background,
     },
     roleLabel: {
       fontSize: 16,

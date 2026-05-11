@@ -78,7 +78,6 @@ const quickPlaySchema = new mongoose.Schema(
       required: true,
       trim: true,
       uppercase: true,
-      index: true,
     },
     timerSeconds: {
       type: Number,

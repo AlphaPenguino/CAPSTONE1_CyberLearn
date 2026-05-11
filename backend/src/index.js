@@ -24,6 +24,8 @@ import quizShowdownRoutes from "./routes/quizShowdownRoutes.js";
 import digitalDefendersRoutes from "./routes/digitalDefendersRoutes.js";
 import instructorRoutes from "./routes/instructorRoutes.js";
 import quickplayRoutes from "./routes/quickplayRoutes.js";
+import rpsRoutes from "./routes/rpsRoutes.js";
+import rainOfWordsRoutes from "./routes/rainOfWordsRoutes.js";
 import { connectDB } from "./lib/db.js";
 import { trackUserActivity } from "./middleware/analytics.middleware.js";
 import { KnowledgeRelayQuestion } from "./models/KnowledgeRelayQuestion.js";
@@ -32,6 +34,8 @@ import { initializeGameSocket } from "./controllers/gameController.js";
 import { initializeKnowledgeRelaySocket } from "./controllers/knowledgeRelayController.js";
 import { initializeQuizShowdownSocket } from "./controllers/quizShowdownController.js";
 import { initializeDigitalDefendersSocket } from "./controllers/digitalDefendersController.js";
+import { initializeRpsSocket } from "./controllers/rpsController.js";
+import { initializeRainOfWordsSocket } from "./controllers/rainOfWordsController.js";
 
 // Game initialization functions
 import { DigitalDefendersQuestion } from "./models/DigitalDefenders.js";
@@ -90,6 +94,26 @@ const io = new Server(server, {
   },
 });
 
+// Global process-level error handlers to avoid unhandled crashes and improve logging
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err && err.stack ? err.stack : err);
+  // Keep process alive for debugging; in production you might restart the process manager
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+// HTTP server error listener to handle listen errors (EADDRINUSE, EACCES, etc.)
+server.on("error", (err) => {
+  console.error("HTTP Server Error:", err && err.stack ? err.stack : err);
+  if (err && err.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} is already in use.`);
+    // exit so a supervisor (pm2/systemd) can restart or the developer can investigate
+    process.exit(1);
+  }
+});
+
 job.start();
 
 app.use(express.json({ limit: "50mb" }));
@@ -141,12 +165,16 @@ app.use("/api/quiz-showdown", trackUserActivity, quizShowdownRoutes);
 app.use("/api/digital-defenders", trackUserActivity, digitalDefendersRoutes);
 app.use("/api/instructor", trackUserActivity, instructorRoutes);
 app.use("/api/quickplay", trackUserActivity, quickplayRoutes);
+app.use("/api/rps", trackUserActivity, rpsRoutes);
+app.use("/api/rain-of-words", trackUserActivity, rainOfWordsRoutes);
 
 // Initialize Socket.IO game handlers
 initializeGameSocket(io);
 initializeKnowledgeRelaySocket(io);
 initializeQuizShowdownSocket(io);
 initializeDigitalDefendersSocket(io);
+initializeRpsSocket(io);
+initializeRainOfWordsSocket(io);
 
 // Use server.listen instead of app.listen to support Socket.IO
 server.listen(PORT, "0.0.0.0", async () => {

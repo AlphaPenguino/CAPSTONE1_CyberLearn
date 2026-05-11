@@ -45,6 +45,8 @@ const battlefieldImages = [
 
 const AnimatableOptionButton =
   Animatable.createAnimatableComponent(TouchableOpacity);
+const AnimatableVersusPanel = Animatable.createAnimatableComponent(View);
+const AnimatableSpriteShell = Animatable.createAnimatableComponent(View);
 
 const IMAGE_CONTENT_PREFIX = "__img__::";
 
@@ -87,6 +89,7 @@ const CYBERQUEST_SFX_VOLUME = {
 };
 
 const CYBERQUEST_BG_MUSIC_VOLUME = 0.34;
+const CYBERQUEST_INTRO_BG_MUSIC = require("../../../assets/sounds/cyberquest/vs_battle_bgm.mp3");
 const DEFAULT_QUEST_COUNTDOWN_SECONDS = 300;
 const MIN_QUEST_COUNTDOWN_SECONDS = 5;
 const MAX_QUEST_COUNTDOWN_SECONDS = 3600;
@@ -100,7 +103,7 @@ const USE_DUMMY_GAME_DATA = false;
 
 export default function ModuleGameQuest() {
   const { id, returnSubjectId, returnModuleId } = useLocalSearchParams(); // Module ID + map return context
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const router = useRouter();
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const isMobileWeb = Platform.OS === "web" && viewportWidth <= 768;
@@ -645,8 +648,10 @@ export default function ModuleGameQuest() {
     }
   };
 
-    useEffect(() => {
-    const shouldPlayMusic =
+  useEffect(() => {
+    const shouldPlayIntroMusic =
+      !gameStarted && !loading && !error && !gameCompleted && !completionInProgress;
+    const shouldPlayBattleMusic =
       gameStarted &&
       !gameCompleted &&
       !completionInProgress &&
@@ -654,7 +659,7 @@ export default function ModuleGameQuest() {
       !loading &&
       !error;
 
-    if (!shouldPlayMusic) {
+    if (!shouldPlayIntroMusic && !shouldPlayBattleMusic) {
       stopBackgroundMusic();
       return;
     }
@@ -665,7 +670,9 @@ export default function ModuleGameQuest() {
       try {
         stopBackgroundMusic();
 
-        const musicAsset = isLessonQuest
+        const musicAsset = shouldPlayIntroMusic
+          ? CYBERQUEST_INTRO_BG_MUSIC
+          : isLessonQuest
           ? require("../../../assets/sounds/lesson-bg.mp3")
           : enemyAppearanceVariant === "hard"
           ? require("../../../assets/sounds/cyberquest/hard-monster-bg.mp3")
@@ -700,7 +707,7 @@ export default function ModuleGameQuest() {
         bgMusicSourceRef.current = source;
         bgMusicGainRef.current = gainNode;
       } catch (musicError) {
-        console.warn("Failed to start gameplay background music:", musicError);
+        console.warn("Failed to start background music:", musicError);
         stopBackgroundMusic();
       }
     };
@@ -710,7 +717,7 @@ export default function ModuleGameQuest() {
     return () => {
       isCancelled = true;
     };
-    }, [
+  }, [
     completionInProgress,
     enemyAppearanceVariant,
     error,
@@ -720,7 +727,7 @@ export default function ModuleGameQuest() {
     loading,
     showDeathAnimation,
     stopBackgroundMusic,
-    ]);
+  ]);
 
   useEffect(() => {
     return () => {
@@ -2418,10 +2425,12 @@ function hashPassword(password) {
   }
 
   if (!gameStarted) {
+    const introEnemySprites = isLessonQuest ? null : getEnemySprites();
+
     return (
       <ImageBackground source={currentBackground} style={styles.container}>
         <LinearGradient
-          colors={["rgba(0,0,0,0.7)", "rgba(0,0,0,0.5)"]}
+          colors={["rgba(0,0,0,0.78)", "rgba(0,0,0,0.55)"]}
           style={styles.overlay}
         >
           <Animated.View
@@ -2430,16 +2439,71 @@ function hashPassword(password) {
               { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
             ]}
           >
-            <MaterialCommunityIcons
-              name="sword-cross"
-              size={80}
-              color="#FFD700"
-            />
-            <Text style={styles.questTitle}>{module?.title}</Text>
+            <Animatable.Text
+              animation="fadeInDown"
+              duration={550}
+              style={styles.questTitle}
+            >
+              {module?.title}
+            </Animatable.Text>
             <Text style={styles.questDescription}>{module?.description}</Text>
 
-            <View style={styles.questStats}>
+            {!isLessonQuest && (
+              <AnimatableVersusPanel
+                animation="pulse"
+                duration={1800}
+                iterationCount="infinite"
+                direction="alternate"
+                style={styles.versusIntroPanel}
+              >
+                <AnimatableSpriteShell
+                  animation="slideInLeft"
+                  duration={700}
+                  easing="ease-out-cubic"
+                  style={styles.versusCombatant}
+                >
+                  <CharacterSprite
+                    spriteSet={cyborg_sprites}
+                    frames={cyborg_frames}
+                    action="idle"
+                    size={Platform.OS === "web" ? 260 : 150}
+                    flipped={false}
+                    speed={150}
+                    style={styles.versusSprite}
+                  />
+                  <Text style={styles.versusName}>{user?.username || "PLAYER"}</Text>
+                </AnimatableSpriteShell>
 
+                <Animatable.Text
+                  animation="tada"
+                  duration={1450}
+                  iterationCount="infinite"
+                  style={styles.versusText}
+                >
+                  VS
+                </Animatable.Text>
+
+                <AnimatableSpriteShell
+                  animation="slideInRight"
+                  duration={700}
+                  easing="ease-out-cubic"
+                  style={styles.versusCombatant}
+                >
+                  <CharacterSprite
+                    spriteSet={introEnemySprites.sprites}
+                    frames={introEnemySprites.frames}
+                    action="idle"
+                    size={Platform.OS === "web" ? 260 : 150}
+                    flipped={true}
+                    speed={150}
+                    style={styles.versusSprite}
+                  />
+                  <Text style={styles.versusName}>{introEnemySprites.name}</Text>
+                </AnimatableSpriteShell>
+              </AnimatableVersusPanel>
+            )}
+
+            <View style={styles.questStats}>
               <View style={styles.statItem}>
                 <MaterialCommunityIcons
                   name="target"
@@ -2465,7 +2529,6 @@ function hashPassword(password) {
                   </Text>
                 </View>
               )}
-
             </View>
 
             <TouchableOpacity
@@ -3107,39 +3170,40 @@ function hashPassword(password) {
               },
             ]}
           >
+            <Animatable.View ref={playerHealthBarAnimRef}>
+              <View style={styles.healthBarContainer}>
+                <Text style={styles.healthLabel}>{user?.username || "Player"}</Text>
+                <View style={styles.healthBar}>
+                  <Animated.View
+                    style={[
+                      styles.healthFill,
+                      styles.playerHealthFill,
+                      {
+                        width: animatedPlayerHealth.interpolate({
+                          inputRange: [0, 100],
+                          outputRange: ["0%", "100%"],
+                        }),
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.healthPoints}>{playerHealth}/100</Text>
+              </View>
+            </Animatable.View>
+
             <Animatable.View ref={playerSpriteAnimRef}>
               <CharacterSprite
                 spriteSet={cyborg_sprites}
                 frames={cyborg_frames}
                 action={playerAction}
-                size={Platform.OS === "web" ? 96 : 120}
+                size={Platform.OS === "web" ? 340 : 120}
                 flipped={false}
                 speed={150}
                 style={[
                   styles.characterSprite,
-                  { alignSelf: "center", marginLeft: -10 },
+                  { alignSelf: "center", marginLeft: -10, marginTop: Platform.OS === "web" ? -90 : -52 },
                 ]}
               />
-            </Animatable.View>
-            <Animatable.View ref={playerHealthBarAnimRef}>
-              <View style={styles.healthBarContainer}>
-              <Text style={styles.healthLabel}>Player</Text>
-              <View style={styles.healthBar}>
-                <Animated.View
-                  style={[
-                    styles.healthFill,
-                    styles.playerHealthFill,
-                    {
-                      width: animatedPlayerHealth.interpolate({
-                        inputRange: [0, 100],
-                        outputRange: ["0%", "100%"],
-                      }),
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={styles.healthPoints}>{playerHealth}/100</Text>
-              </View>
             </Animatable.View>
           </Animated.View>
           </View>
@@ -3167,39 +3231,40 @@ function hashPassword(password) {
               },
             ]}
           >
+            <Animatable.View ref={enemyHealthBarAnimRef}>
+              <View style={styles.healthBarContainer}>
+                <Text style={styles.healthLabel}>{getEnemySprites().name}</Text>
+                <View style={styles.healthBar}>
+                  <Animated.View
+                    style={[
+                      styles.healthFill,
+                      styles.enemyHealthFill,
+                      {
+                        width: animatedEnemyHealth.interpolate({
+                          inputRange: [0, 100],
+                          outputRange: ["0%", "100%"],
+                        }),
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.healthPoints}>{enemyHealth}/100</Text>
+              </View>
+            </Animatable.View>
+
             <Animatable.View ref={enemySpriteAnimRef}>
               <CharacterSprite
                 spriteSet={getEnemySprites().sprites}
                 frames={getEnemySprites().frames}
                 action={enemyAction}
-                size={Platform.OS === "web" ? 96 : 120}
+                size={Platform.OS === "web" ? 340 : 120}
                 flipped={true}
                 speed={150}
                 style={[
                   styles.characterSprite,
-                  { alignSelf: "center", marginLeft: 10 },
+                  { alignSelf: "center", marginLeft: 10, marginTop: Platform.OS === "web" ? -90 : -52 },
                 ]}
               />
-            </Animatable.View>
-            <Animatable.View ref={enemyHealthBarAnimRef}>
-              <View style={styles.healthBarContainer}>
-              <Text style={styles.healthLabel}>{getEnemySprites().name}</Text>
-              <View style={styles.healthBar}>
-                <Animated.View
-                  style={[
-                    styles.healthFill,
-                    styles.enemyHealthFill,
-                    {
-                      width: animatedEnemyHealth.interpolate({
-                        inputRange: [0, 100],
-                        outputRange: ["0%", "100%"],
-                      }),
-                    },
-                  ]}
-                />
-              </View>
-              <Text style={styles.healthPoints}>{enemyHealth}/100</Text>
-              </View>
             </Animatable.View>
           </Animated.View>
         </View>
@@ -3270,11 +3335,7 @@ function hashPassword(password) {
               {/* Render different question types */}
               {currentQuestion.questionType === "multipleChoice" &&
                 currentQuestion.options && (
-                  <ScrollView
-                    style={styles.optionsScrollContainer}
-                    showsVerticalScrollIndicator={true}
-                    nestedScrollEnabled={true}
-                  >
+                  <View style={styles.optionsScrollContainer}>
                     <View style={styles.optionsContainer}>
                       {currentQuestion.options.map((option, index) => (
                         <AnimatableOptionButton
@@ -3345,7 +3406,7 @@ function hashPassword(password) {
                         </AnimatableOptionButton>
                       ))}
                     </View>
-                  </ScrollView>
+                  </View>
                 )}
 
               {/* Code Missing Question */}
@@ -3916,8 +3977,8 @@ const styles = {
   // Add to styles object
   healthPoints: {
     color: "#fff",
-    fontSize: Platform.OS === "web" ? 14 : 12,
-    marginTop: 4,
+    fontSize: Platform.OS === "web" ? 20 : 12,
+    marginTop: Platform.OS === "web" ? 8 : 4,
     fontWeight: "bold",
     textShadowColor: "rgba(0, 0, 0, 0.8)",
     textShadowOffset: { width: 1, height: 1 },
@@ -3974,9 +4035,16 @@ const styles = {
   },
   questIntro: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "space-evenly",
     alignItems: "center",
     padding: 20,
+    ...(Platform.OS === "web" && {
+      maxWidth: 1180,
+      alignSelf: "center",
+      width: "100%",
+      paddingTop: 16,
+      paddingBottom: 16,
+    }),
   },
   questTitle: {
     fontSize: 32,
@@ -3992,7 +4060,56 @@ const styles = {
     fontSize: 16,
     color: "#ccc",
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 8,
+  },
+  versusIntroPanel: {
+    width: "100%",
+    minHeight: Platform.OS === "web" ? 360 : 220,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Platform.OS === "web" ? 32 : 12,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.25)",
+    backgroundColor: "rgba(18,8,4,0.55)",
+    shadowColor: "#FF6A00",
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  versusCombatant: {
+    flex: 1,
+    minHeight: Platform.OS === "web" ? 320 : 180,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.32)",
+    borderWidth: 1,
+    borderColor: "rgba(255,215,0,0.35)",
+  },
+  versusSprite: {
+    alignSelf: "center",
+    marginTop: Platform.OS === "web" ? -12 : -6,
+  },
+  versusName: {
+    color: "#fff",
+    fontSize: Platform.OS === "web" ? 28 : 16,
+    fontWeight: "900",
+    letterSpacing: 1,
+    marginTop: Platform.OS === "web" ? -8 : -4,
+    textShadowColor: "rgba(0,0,0,0.9)",
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 5,
+  },
+  versusText: {
+    color: "#FF3D00",
+    fontSize: Platform.OS === "web" ? 104 : 56,
+    fontWeight: "900",
+    marginHorizontal: Platform.OS === "web" ? 26 : 10,
+    textShadowColor: "rgba(255,220,120,0.7)",
+    textShadowOffset: { width: 2, height: 3 },
+    textShadowRadius: 14,
   },
   questStats: {
     flexDirection: "row",
@@ -4072,20 +4189,27 @@ const styles = {
   battleArena: {
     flexDirection: "row",
     justifyContent: "center",
-    alignItems: "center",
-    height: Platform.OS === "web" ? 280 : 220, // Increased height for web
+    alignItems: Platform.OS === "web" ? "flex-end" : "center",
+    height: Platform.OS === "web" ? 480 : 220,
     marginBottom: 20,
-    backgroundColor: "rgba(0,0,0,0.3)",
-    borderRadius: 12,
+    backgroundColor: Platform.OS === "web" ? "rgba(92, 64, 29, 0.62)" : "rgba(0,0,0,0.3)",
+    borderRadius: 10,
     paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderWidth: 2,
-    borderColor: "rgba(255,215,0,0.3)",
-    gap: Platform.OS === "web" ? 100 : 60, // Increased gap for web
+    paddingVertical: Platform.OS === "web" ? 16 : 10,
+    borderWidth: 3,
+    borderColor: Platform.OS === "web" ? "rgba(214, 164, 94, 0.65)" : "rgba(255,215,0,0.3)",
+    borderBottomWidth: Platform.OS === "web" ? 8 : 2,
+    borderBottomColor: Platform.OS === "web" ? "rgba(68, 42, 14, 0.95)" : "rgba(255,215,0,0.3)",
+    gap: Platform.OS === "web" ? 48 : 60,
+    overflow: "visible",
     ...(Platform.OS === "web" && {
-      minWidth: 600,
-      maxWidth: 800,
+      minWidth: 800,
+      maxWidth: 1000,
       alignSelf: "center",
+      shadowColor: "rgba(0,0,0,0.6)",
+      shadowOpacity: 0.6,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 12 },
     }),
   },
   playerStreakWrapper: {
@@ -4095,8 +4219,8 @@ const styles = {
   streakMeterContainer: {
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
-    paddingHorizontal: 4,
+    marginRight: Platform.OS === "web" ? 28 : 12,
+    paddingHorizontal: Platform.OS === "web" ? 12 : 4,
   },
   streakMeterReady: {
     shadowColor: "#FFD700",
@@ -4107,69 +4231,75 @@ const styles = {
   },
   streakMeterLabel: {
     color: "#FFD700",
-    fontSize: 12,
+    fontSize: Platform.OS === "web" ? 18 : 12,
     fontWeight: "bold",
-    marginBottom: 6,
+    marginBottom: Platform.OS === "web" ? 12 : 6,
   },
   streakMeterTrack: {
-    width: 12,
-    height: Platform.OS === "web" ? 120 : 100,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,215,0,0.45)",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    width: Platform.OS === "web" ? 28 : 12,
+    height: Platform.OS === "web" ? 300 : 100,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "rgba(255,215,0,0.65)",
+    backgroundColor: "rgba(255,255,255,0.12)",
     overflow: "hidden",
     justifyContent: "flex-end",
+    shadowColor: "rgba(255,215,0,0.3)",
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
   streakMeterFill: {
     width: "100%",
     backgroundColor: "#FFD700",
-    borderRadius: 8,
+    borderRadius: 12,
     shadowColor: "#FFD700",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 5,
+    shadowOpacity: Platform.OS === "web" ? 0.85 : 0.7,
+    shadowRadius: Platform.OS === "web" ? 12 : 5,
   },
   playerCharacter: {
     alignItems: "center",
     justifyContent: "center",
-    width: Platform.OS === "web" ? 160 : 120, // Increased width for web
-    height: Platform.OS === "web" ? 200 : 160, // Increased height for web
+    width: Platform.OS === "web" ? 380 : 120,
+    height: Platform.OS === "web" ? 440 : 160,
     overflow: "visible",
   },
   enemyCharacter: {
     alignItems: "center",
     justifyContent: "center",
-    width: Platform.OS === "web" ? 160 : 120, // Increased width for web
-    height: Platform.OS === "web" ? 200 : 160, // Increased height for web
+    width: Platform.OS === "web" ? 380 : 120,
+    height: Platform.OS === "web" ? 440 : 160,
     overflow: "visible",
   },
   characterSprite: {
-    marginBottom: 15,
-    width: Platform.OS === "web" ? 150 : 120, // Increased width for web
-    height: Platform.OS === "web" ? 150 : 120, // Increased height for web
+    marginBottom: Platform.OS === "web" ? 0 : 15,
+    width: Platform.OS === "web" ? 340 : 120,
+    height: Platform.OS === "web" ? 340 : 120,
     alignSelf: "center",
   },
   healthBarContainer: {
     alignItems: "center",
-    width: Platform.OS === "web" ? 140 : 100, // Increased width for web
+    width: Platform.OS === "web" ? 280 : 100,
   },
   healthLabel: {
     color: "#fff",
-    fontSize: Platform.OS === "web" ? 16 : 14, // Increased font size for web
-    marginBottom: 8,
+    fontSize: Platform.OS === "web" ? 22 : 14,
+    marginBottom: Platform.OS === "web" ? 12 : 8,
     fontWeight: "bold",
     textShadowColor: "rgba(0, 0, 0, 0.8)",
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
   healthBar: {
-    width: Platform.OS === "web" ? 130 : 90, // Increased width for web
-    height: Platform.OS === "web" ? 14 : 10, // Increased height for web
+    width: Platform.OS === "web" ? 260 : 90,
+    height: Platform.OS === "web" ? 28 : 10,
     backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.4)",
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.5)",
+    shadowColor: "rgba(0,0,0,0.4)",
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
   },
   healthFill: {
     height: "100%",
@@ -4183,21 +4313,27 @@ const styles = {
   },
   battleMessageContainer: {
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: Platform.OS === "web" ? 20 : 80,
     zIndex: 10,
+    minHeight: Platform.OS === "web" ? 60 : 40,
+    justifyContent: "center",
   },
   battleMessage: {
     color: "#FFD700",
-    fontSize: 16,
+    fontSize: Platform.OS === "web" ? 20 : 12,
     fontWeight: "bold",
     textAlign: "center",
-    backgroundColor: "rgba(0,0,0,0.8)",
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,215,0,0.5)",
-    minHeight: 40,
-    minWidth: 200,
+    backgroundColor: "rgba(0,0,0,0.9)",
+    paddingVertical: Platform.OS === "web" ? 12 : 2,
+    paddingHorizontal: Platform.OS === "web" ? 24 : 8,
+    borderRadius: Platform.OS === "web" ? 12 : 6,
+    borderWidth: Platform.OS === "web" ? 2 : 1,
+    borderColor: "rgba(255,215,0,0.8)",
+    minHeight: Platform.OS === "web" ? 50 : 24,
+    minWidth: Platform.OS === "web" ? 300 : 120,
+    shadowColor: "#FFD700",
+    shadowOpacity: Platform.OS === "web" ? 0.6 : 0,
+    shadowRadius: Platform.OS === "web" ? 10 : 0,
   },
     questionSection: {
     flex: 1,
@@ -4274,13 +4410,17 @@ const styles = {
     lineHeight: 24,
   },
   optionsScrollContainer: {
-    maxHeight: 400, // Limit height to ensure scrollability
+    width: "100%",
   },
   optionsContainer: {
-    gap: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 8,
   },
   optionButton: {
-    borderRadius: 8,
+    width: "48.5%",
+    borderRadius: 7,
     overflow: "hidden",
   },
   optionButtonSelected: {
@@ -4292,26 +4432,27 @@ const styles = {
   optionGradient: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 15,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
   },
   optionLetter: {
     color: COLORS.primary,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "bold",
-    marginRight: 15,
-    width: 20,
+    marginRight: 10,
+    width: 16,
   },
   optionText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 13,
     flex: 1,
   },
   optionImage: {
     width: "100%",
-    height: 120,
-    borderRadius: 8,
+    height: 84,
+    borderRadius: 6,
     backgroundColor: "rgba(255,255,255,0.08)",
   },
   optionTextDisabled: {
@@ -4695,13 +4836,13 @@ const styles = {
   },
   deathAnimationText: {
     color: "#fff",
-    fontSize: 20,
+    fontSize: Platform.OS === "web" ? 48 : 20,
     fontWeight: "bold",
     textAlign: "center",
-    marginTop: 20,
+    marginTop: Platform.OS === "web" ? 32 : 20,
     textShadowColor: "rgba(0, 0, 0, 0.8)",
     textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
+    textShadowRadius: Platform.OS === "web" ? 8 : 4,
   },
 
   // Sorting question styles
