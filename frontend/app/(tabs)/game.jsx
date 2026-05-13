@@ -17,6 +17,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { AudioContext } from "react-native-audio-api";
 import COLORS from "@/constants/custom-colors";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useSettings } from "../../contexts/SettingsContext";
 
 const ARCADE_PAGE_BGM = require("../../assets/sounds/arcadepage_bgm.mp3");
 const ARCADE_PAGE_BGM_VOLUME = 0.24;
@@ -453,7 +454,7 @@ export default function GameArcade() {
   }, [pathname]);
 
   const multiplayerModes = [
-    {
+    /*{
       id: "knowledge-relay",
       title: "🏃‍♂️ Knowledge Relay Race",
       description: "Team vs Team - Most Points Wins!",
@@ -461,9 +462,9 @@ export default function GameArcade() {
       color: "#10B981",
       players: "Team vs Team",
       mode: "Turn-based",
-    },
+    },*/
     
-    {
+    /*{
       id: "quiz-showdown",
       title: "⚡ Quiz Showdown",
       description: "Buzzer battle - race to answer first!",
@@ -471,7 +472,7 @@ export default function GameArcade() {
       color: "#00d4ff",
       players: "1v1",
       mode: "Real-time Typing",
-    },
+    },*/
 
     {
       id: "rain-of-words",

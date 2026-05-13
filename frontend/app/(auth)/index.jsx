@@ -20,6 +20,7 @@ import * as Animatable from "react-native-animatable";
 import COLORS from "../../constants/custom-colors.js";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../store/authStore.js";
+import { useSettings } from "../../contexts/SettingsContext";
 
 const AnimatedRobotImage = Animatable.createAnimatableComponent(Image);
 const AnimatedView = Animatable.createAnimatableComponent(View);
@@ -38,12 +39,24 @@ export default function Login() {
 
   const { isLoading, login, sayHello } = useAuthStore();
   const { colors } = useTheme();
+  const { settings } = useSettings();
   const router = useRouter();
 
   useEffect(() => {
     let isCancelled = false;
 
     const startIntroMusic = async () => {
+      // Skip music if disabled in settings
+      if (!settings.music) {
+        // Still show jingle screen and transition after 4.5 seconds
+        setTimeout(() => {
+          if (!isCancelled) {
+            setShowJingle(false);
+          }
+        }, 4500);
+        return;
+      }
+
       try {
         const audioContext = new AudioContext();
         audioContextRef.current = audioContext;
@@ -92,6 +105,11 @@ export default function Login() {
     };
 
     const startLoginMusic = async (existingContext = null) => {
+      // Skip music if disabled in settings
+      if (!settings.music) {
+        return;
+      }
+
       try {
         const audioContext = existingContext || new AudioContext();
         if (!existingContext) {

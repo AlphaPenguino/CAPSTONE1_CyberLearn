@@ -413,6 +413,9 @@ const initializeDigitalDefendersSocket = (io) => {
 
       // Check for game over due to wrong answer
       if (result.effect && result.effect.gameOver) {
+        // Stop countdown timer
+        game.stopCountdownTimer();
+
         logDigitalDefendersActivity({
           socket,
           action: AUDIT_ACTIONS.MULTIPLAYER_GAME_END,
@@ -729,6 +732,9 @@ const initializeDigitalDefendersSocket = (io) => {
             setTimeout(async () => {
               const gameResult = await game.initializeGame();
               if (gameResult.success) {
+                // Start the server-side countdown timer
+                game.startCountdownTimer(digitalDefendersNamespace);
+
                 // Notify all players that the game has started
                 digitalDefendersNamespace.to(roomCode).emit("game-started", {
                   gameState: game.getPublicGameState(),

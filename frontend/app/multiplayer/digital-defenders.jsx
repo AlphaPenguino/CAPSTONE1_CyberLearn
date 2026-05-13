@@ -28,7 +28,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { AudioContext } from "react-native-audio-api";
+import { AudioContext } from 'react-native-audio-api';
 import COLORS from "@/constants/custom-colors";
 import digitalDefendersSocket from "@/services/digitalDefendersSocket";
 import digitalDefendersAPI from "@/services/digitalDefendersAPI";
@@ -67,9 +67,12 @@ const DD_AUDIO_ASSETS = {
   correct: require("../../assets/sounds/dd/dd_correct_ans.wav"),
   incorrect: require("../../assets/sounds/dd/dd_incorrect_ans.mp3"),
   gameover: require("../../assets/sounds/dd/game_over.wav"),
+  freeze: require("../../assets/sounds/dd/freeze_se.wav"),
   nextplayer: require("../../assets/sounds/dd/nextplayer_se.wav"),
   runout: require("../../assets/sounds/dd/runout_time_se.wav"),
+  slow: require("../../assets/sounds/dd/slow_se.wav"),
   timer: require("../../assets/sounds/dd/timer_se.wav"),
+  hurt: require("../../assets/sounds/dd/player-hurt-sound.wav"),
 };
 const DD_AUDIO_VOLUME = {
   bgm: 0.24,
@@ -77,8 +80,11 @@ const DD_AUDIO_VOLUME = {
   correct: 0.5,
   incorrect: 0.5,
   gameover: 0.6,
+  freeze: 0.5,
   nextplayer: 0.45,
   runout: 0.55,
+  hurt: 0.65,
+  slow: 0.5,
   timer: 0.16,
 };
 const DD_ENEMY_SPRITES = [
@@ -86,6 +92,13 @@ const DD_ENEMY_SPRITES = [
   require("../../assets/images/dd/green.gif"),
   require("../../assets/images/dd/pink.gif"),
 ];
+const QUESTION_BOX = require("../../assets/images/dd/question-box.png");
+const CARD_CONTAINER = require("../../assets/images/dd/card-container.jpg");
+const CARD_FLOAT_ANIMATION = {
+  0: { translateY: 0 },
+  0.5: { translateY: -6 },
+  1: { translateY: 0 },
+};
 
 // Dummy data for testing
 const DUMMY_QUESTION_CARDS = [
@@ -206,6 +219,7 @@ const TOOL_CARDS = [
     name: "Overclock",
     description: "Reset countdown to 30",
     icon: "clock-fast",
+    image: require("../../assets/images/dd/slow.png"),
   },
   {
     id: "tool2",
@@ -213,6 +227,7 @@ const TOOL_CARDS = [
     name: "Slow Down",
     description: "Freeze countdown for next 2 turns",
     icon: "clock-time-eight",
+    image: require("../../assets/images/dd/freeze.png"),
   },
   {
     id: "tool3",
@@ -334,22 +349,13 @@ function DigitalDefenders() {
         }
       } else {
         const lowerTitle = title.toLowerCase();
-        const isSuccess = [
-          "correct",
-          "success",
-          "victory",
-          "saved",
-          "updated",
-          "created",
-          "wave cleared",
-          "completed",
-        ].some((kw) => lowerTitle.includes(kw));
         const isError = ["error", "failed", "fail", "exhausted"].some((kw) =>
-            lowerTitle.includes(kw)
+          lowerTitle.includes(kw)
         );
 
         setFeedbackData({
-          isCorrect: isSuccess && !isError,
+          isCorrect: !isError,
+          isError,
           message,
           title,
         });
@@ -428,6 +434,7 @@ function DigitalDefenders() {
 
   const [currentWave, setCurrentWave] = useState(1);
   const [pcHealth, setPcHealth] = useState(5);
+  const [healthDamaged, setHealthDamaged] = useState(false);
   const [countdown, setCountdown] = useState(30);
   const [actionsLeft, setActionsLeft] = useState(2);
   const [currentTurn, setCurrentTurn] = useState(0);
@@ -442,6 +449,7 @@ function DigitalDefenders() {
   const containerRef = useRef(null);
   const enemyRef = useRef(null);
   const cardRefs = useRef({});
+  const healthBarRef = useRef(null);
 
   useEffect(() => {
     // register a simple roaming animation for enemy sprite
@@ -653,13 +661,24 @@ function DigitalDefenders() {
   const [gameOverReason, setGameOverReason] = useState(null); // Track why the game ended
   const [questionAnsweredThisTurn, setQuestionAnsweredThisTurn] =
       useState(false); // Track if question was answered correctly this turn
+  const previousQuestionKeyRef = useRef(null);
+  const previousServerTurnRef = useRef(null);
 
   useEffect(() => {
-    if (!currentQuestion) {
+    const questionKey =
+        currentQuestion?._id ?? currentQuestion?.id ?? currentQuestion?.text ?? null;
+
+    if (!questionKey) {
+      previousQuestionKeyRef.current = null;
       setEnemySprite(DD_ENEMY_SPRITES[0]);
       return;
     }
 
+    if (questionKey === previousQuestionKeyRef.current) {
+      return;
+    }
+
+    previousQuestionKeyRef.current = questionKey;
     const randomSprite =
         DD_ENEMY_SPRITES[Math.floor(Math.random() * DD_ENEMY_SPRITES.length)];
     setEnemySprite(randomSprite);
@@ -678,6 +697,7 @@ function DigitalDefenders() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackData, setFeedbackData] = useState({
     isCorrect: false,
+    isError: false,
     message: "",
     title: "",
   });
@@ -701,14 +721,24 @@ function DigitalDefenders() {
 
         const context = getAudioContext();
 
-        if (!audioBufferCacheRef.current[soundKey]) {
-          const uri = Asset.fromModule(asset).uri;
-          const response = await fetch(uri);
-          const arrayBuffer = await response.arrayBuffer();
-          audioBufferCacheRef.current[soundKey] = context.decodeAudioData(arrayBuffer);
-        }
+        try {
+          if (!audioBufferCacheRef.current[soundKey]) {
+            console.debug("Loading audio buffer:", soundKey);
+            const uri = Asset.fromModule(asset).uri;
+            const response = await fetch(uri);
+            const arrayBuffer = await response.arrayBuffer();
+            // store promise to prevent duplicate decode attempts
+            audioBufferCacheRef.current[soundKey] = context.decodeAudioData(arrayBuffer);
+            const resolved = await audioBufferCacheRef.current[soundKey];
+            console.debug("Loaded audio buffer:", soundKey);
+            audioBufferCacheRef.current[soundKey] = resolved;
+          }
 
-        return audioBufferCacheRef.current[soundKey];
+          return audioBufferCacheRef.current[soundKey];
+        } catch (err) {
+          console.warn("Failed to load audio buffer:", soundKey, err);
+          return null;
+        }
       },
       [getAudioContext]
   );
@@ -717,8 +747,14 @@ function DigitalDefenders() {
       async (soundKey, { volume, loop = false, keepSource = false } = {}) => {
         try {
           const context = getAudioContext();
+          if (context.state === "suspended" && context.resume) {
+            await context.resume();
+          }
           const buffer = await loadAudioBuffer(soundKey);
-          if (!buffer) return;
+          if (!buffer) {
+            console.debug("No audio buffer available for:", soundKey);
+            return;
+          }
 
           if (keepSource && bgmSourceRef.current) {
             try {
@@ -791,6 +827,24 @@ function DigitalDefenders() {
       bgmSourceRef.current = null;
     }
   }, [gameState, playSound]);
+
+  // Preload important SFX on game start to improve reliability
+  useEffect(() => {
+    if (gameState === "playing") {
+      void (async () => {
+        try {
+          await loadAudioBuffer("freeze");
+        } catch (err) {
+          console.warn("Preload freeze failed:", err);
+        }
+        try {
+          await loadAudioBuffer("slow");
+        } catch (err) {
+          console.warn("Preload slow failed:", err);
+        }
+      })();
+    }
+  }, [gameState, loadAudioBuffer]);
 
   useEffect(() => {
     return () => {
@@ -956,7 +1010,7 @@ function DigitalDefenders() {
   }, [loadGameData, user, token]);
 
   // Define callback functions first
-  const nextQuestion = useCallback(() => {
+  const nextQuestion = useCallback((skipCountdownReset = false) => {
     // This function is now primarily for local testing/fallback
     // In multiplayer mode, question progression is handled by the backend
     console.log(
@@ -973,8 +1027,12 @@ function DigitalDefenders() {
             Math.random() * availableQuestions.length
         );
         setCurrentQuestion(availableQuestions[randomIndex]);
-        setCountdown(Math.max(15, 30 - currentWave));
+        if (!skipCountdownReset) {
+          setCountdown(Math.max(15, 30 - currentWave));
+        }
         setQuestionAnsweredThisTurn(false);
+        // If a freeze is active, consume one turn of the freeze when moving to next question
+        setFreezeCountdown((prev) => (prev > 0 ? prev - 1 : prev));
       }
     }
   }, [questionCards, currentWave, gameState]);
@@ -1089,8 +1147,11 @@ function DigitalDefenders() {
     }
   }, [user]);
 
-  // Countdown timer effect
+  // Countdown timer effect - only runs in single-player mode
   useEffect(() => {
+    // In multiplayer mode, server manages countdown
+    if (roomData) return;
+
     if (gameState === "playing" && countdown > 0 && freezeCountdown === 0) {
       const timer = setTimeout(() => {
         if (isMountedRef.current) {
@@ -1099,7 +1160,7 @@ function DigitalDefenders() {
         }
       }, 1000);
       return () => clearTimeout(timer);
-    } else if (countdown === 0 && gameState === "playing") {
+    } else if (!roomData && countdown === 0 && gameState === "playing") {
       void playSound("runout", { volume: DD_AUDIO_VOLUME.runout });
       // Check if player has any way to continue before handling countdown expired
       if (deck.length === 0 && playerHand.length === 0) {
@@ -1118,19 +1179,45 @@ function DigitalDefenders() {
     deck.length,
     playerHand.length,
     playSound,
+    roomData,
   ]);
 
-  // Freeze countdown effect
   useEffect(() => {
-    if (freezeCountdown > 0) {
-      const timer = setTimeout(() => {
-        if (isMountedRef.current) {
-          setFreezeCountdown((prev) => prev - 1);
-        }
-      }, 1000);
-      return () => clearTimeout(timer);
+    if (roomData && countdown === 0 && gameState === "playing") {
+      void playSound("runout", { volume: DD_AUDIO_VOLUME.runout });
     }
-  }, [freezeCountdown]);
+  }, [roomData, countdown, gameState, playSound]);
+
+  // Freeze now decrements by turns (handled in turn updates), not by seconds.
+  // This keeps the countdown frozen for N full turns as intended.
+
+  const previousPcHealthRef = useRef(pcHealth);
+
+  // Health damage animation and hurt sound on health decrease
+  useEffect(() => {
+    const previousHealth = previousPcHealthRef.current;
+    if (pcHealth < previousHealth) {
+      if (healthBarRef.current && typeof healthBarRef.current.shake === "function") {
+        healthBarRef.current.shake(500).catch(() => {
+          // Animation might fail on unsupported platforms, ignore
+        });
+      }
+
+      void playSound("hurt", { volume: DD_AUDIO_VOLUME.hurt });
+      setHealthDamaged(true);
+      previousPcHealthRef.current = pcHealth;
+
+      const damageReset = setTimeout(() => {
+        if (isMountedRef.current) {
+          setHealthDamaged(false);
+        }
+      }, 600);
+
+      return () => clearTimeout(damageReset);
+    }
+
+    previousPcHealthRef.current = pcHealth;
+  }, [pcHealth, playSound]);
 
   // Sync local state with server state updates
   const syncWithServerState = useCallback(
@@ -1415,6 +1502,19 @@ function DigitalDefenders() {
         setServerGameState(data.gameState);
         syncWithServerState(data.gameState);
 
+        // If server advanced the currentTurn, consume one freeze turn
+        try {
+          const newTurn = data.gameState.currentTurn;
+          if (typeof newTurn === "number") {
+            if (previousServerTurnRef.current !== null && previousServerTurnRef.current !== newTurn) {
+              setFreezeCountdown((prev) => (prev > 0 ? prev - 1 : prev));
+            }
+            previousServerTurnRef.current = newTurn;
+          }
+        } catch (err) {
+          console.warn("Error handling freeze decrement on turn update:", err);
+        }
+
         // Show turn change notification after state update
         setTimeout(() => {
           if (data.gameState.isPlayerTurn && !wasMyTurn) {
@@ -1565,6 +1665,37 @@ function DigitalDefenders() {
       showAlert("Victory!", data.message || "Congratulations! You won!");
     };
 
+    const handleCountdownUpdated = (data) => {
+      console.log("Countdown updated:", data);
+      if (typeof data.countdown === "number") {
+        setCountdown(data.countdown);
+      }
+      if (data.gameState) {
+        setServerGameState(data.gameState);
+        syncWithServerState(data.gameState);
+      }
+    };
+
+    const handleQuestionChanged = (data) => {
+      console.log("Question changed:", data);
+      if (data.currentQuestion) {
+        setCurrentQuestion(data.currentQuestion);
+      }
+      if (typeof data.pcHealth === "number") {
+        setPcHealth(data.pcHealth);
+      }
+      if (typeof data.countdown === "number") {
+        setCountdown(data.countdown);
+      }
+      if (data.gameState) {
+        setServerGameState(data.gameState);
+        syncWithServerState(data.gameState);
+      }
+      if (data.reason === "timeout") {
+        showAlert("Time's Up!", "Question changed due to timeout!");
+      }
+    };
+
     const handlePlayerDisconnected = (data) => {
       console.log("Player disconnected:", data);
       setRoomData(data.room);
@@ -1662,6 +1793,8 @@ function DigitalDefenders() {
     digitalDefendersSocket.on("turn-order-finalized", handleTurnOrderFinalized);
     digitalDefendersSocket.on("game-over", handleGameOver);
     digitalDefendersSocket.on("victory", handleVictory);
+    digitalDefendersSocket.on("countdown-updated", handleCountdownUpdated);
+    digitalDefendersSocket.on("question-changed", handleQuestionChanged);
     digitalDefendersSocket.on("player-disconnected", handlePlayerDisconnected);
     digitalDefendersSocket.on("player-left", handlePlayerLeft);
     digitalDefendersSocket.on("socket-game-error", handleSocketError);
@@ -1706,6 +1839,8 @@ function DigitalDefenders() {
       );
       digitalDefendersSocket.off("game-over", handleGameOver);
       digitalDefendersSocket.off("victory", handleVictory);
+      digitalDefendersSocket.off("countdown-updated", handleCountdownUpdated);
+      digitalDefendersSocket.off("question-changed", handleQuestionChanged);
       digitalDefendersSocket.off(
           "player-disconnected",
           handlePlayerDisconnected
@@ -2102,10 +2237,12 @@ function DigitalDefenders() {
     switch (card.name) {
       case "Overclock":
         setCountdown(30);
+        void playSound("slow", { volume: DD_AUDIO_VOLUME.slow });
         showAlert("Overclock Used!", "Countdown reset to 30!");
         break;
       case "Slow Down":
         setFreezeCountdown(2);
+        void playSound("freeze", { volume: DD_AUDIO_VOLUME.freeze });
         showAlert("Slow Down Used!", "Countdown frozen for 2 turns!");
         break;
       case "Super Shuffle":
@@ -2126,7 +2263,7 @@ function DigitalDefenders() {
       case "Pass":
         void playSound("click", { volume: DD_AUDIO_VOLUME.click });
         setQuestionAnsweredThisTurn(true); // Mark that question was resolved (passed)
-        nextQuestion();
+        nextQuestion(true); // Skip countdown reset - keep timer running
         showAlert("Pass Used!", "Question skipped!");
         break;
       default:
@@ -2143,7 +2280,7 @@ function DigitalDefenders() {
       // Correct answer - clear the question
       void playSound("correct", { volume: DD_AUDIO_VOLUME.correct });
       setQuestionAnsweredThisTurn(true); // Mark that question was answered correctly
-      nextQuestion();
+      nextQuestion(true); // Skip countdown reset - keep timer running
       showAlert("Correct!", "Question answered correctly!");
       // enemy damaged animation
       try {
@@ -3123,7 +3260,13 @@ function DigitalDefenders() {
               <Text style={[styles.waveText, isCompactGameplayLayout && styles.waveTextCompact]}>
                 Wave {currentWave}/10
               </Text>
-              <View style={styles.healthContainer}>
+              <Animatable.View 
+                ref={healthBarRef}
+                style={[
+                  styles.healthContainer,
+                  healthDamaged ? styles.healthContainerDamaged : styles.healthContainerDefault,
+                ]}
+              >
                 {Array.from({ length: 5 }, (_, i) => (
                     <MaterialCommunityIcons
                         key={`heart-${i}`}
@@ -3132,7 +3275,7 @@ function DigitalDefenders() {
                         color={i < pcHealth ? "#e74c3c" : "#666"}
                     />
                 ))}
-              </View>
+              </Animatable.View>
               <Text style={[styles.actionsText, isCompactGameplayLayout && styles.actionsTextCompact]}>
                 Actions: {actionsLeft}/2
               </Text>
@@ -3197,46 +3340,50 @@ function DigitalDefenders() {
           {/* Question Card Area */}
           <Animatable.View ref={containerRef} style={[styles.questionArea, isCompactGameplayLayout && styles.questionAreaCompact]}>
             {currentQuestion && (
-                <View style={[styles.questionCard, isCompactGameplayLayout && styles.questionCardCompact]}>
-                  <View style={styles.questionHeaderRow}>
-                    <Animatable.Image
-                        ref={enemyRef}
-                        source={enemySprite}
-                        style={styles.enemySprite}
-                        resizeMode="contain"
-                        animation="roam"
-                        iterationCount={"infinite"}
-                        duration={3000}
-                    />
+                <>
+                  <Animatable.Image
+                      ref={enemyRef}
+                      source={enemySprite}
+                      style={[styles.enemySpriteLarge, isCompactGameplayLayout && styles.enemySpriteLargeCompact]}
+                      resizeMode="contain"
+                      animation="roam"
+                      iterationCount={"infinite"}
+                      duration={3000}
+                  />
+                  <ImageBackground
+                      source={QUESTION_BOX}
+                      style={[styles.questionCard, isCompactGameplayLayout && styles.questionCardCompact]}
+                      imageStyle={styles.questionCardImage}
+                  >
                     <Text style={[styles.questionText, isCompactGameplayLayout && styles.questionTextCompact]}>
                       {currentQuestion.text}
                     </Text>
-                  </View>
-                  {selectedCard && (
-                      <View style={styles.instructionIndicator}>
-                        <MaterialCommunityIcons
-                            name="gesture-tap"
-                            size={24}
-                            color="#2ecc71"
-                        />
-                        <Text style={styles.instructionText}>
-                          Tap selected card again to activate
-                        </Text>
-                      </View>
-                  )}
-                  {playerHand.length === 0 && deck.length === 0 && (
-                      <View style={styles.noCardsWarning}>
-                        <MaterialCommunityIcons
-                            name="alert-circle"
-                            size={24}
-                            color="#e74c3c"
-                        />
-                        <Text style={styles.noCardsText}>
-                          No cards remaining - can only skip turns
-                        </Text>
-                      </View>
-                  )}
-                </View>
+                    {selectedCard && (
+                        <View style={styles.instructionIndicator}>
+                          <MaterialCommunityIcons
+                              name="gesture-tap"
+                              size={24}
+                              color="#2ecc71"
+                          />
+                          <Text style={styles.instructionText}>
+                            Tap selected card again to activate
+                          </Text>
+                        </View>
+                    )}
+                    {playerHand.length === 0 && deck.length === 0 && (
+                        <View style={styles.noCardsWarning}>
+                          <MaterialCommunityIcons
+                              name="alert-circle"
+                              size={24}
+                              color="#e74c3c"
+                          />
+                          <Text style={styles.noCardsText}>
+                            No cards remaining - can only skip turns
+                          </Text>
+                        </View>
+                    )}
+                  </ImageBackground>
+                </>
             )}
           </Animatable.View>
 
@@ -3302,8 +3449,9 @@ function DigitalDefenders() {
                     const isDisabled = roomData && !isMyTurn;
 
                     return (
-                        <TouchableOpacity
+                        <ImageBackground
                             key={`hand-${card.id}-${index}`}
+                            source={CARD_CONTAINER}
                             style={[
                               styles.card,
                               isCompactGameplayLayout && styles.cardCompact,
@@ -3311,69 +3459,93 @@ function DigitalDefenders() {
                               isSelected && styles.cardSelected, // Green highlight when selected
                               isDisabled && styles.cardDisabled, // Disabled when not player's turn
                             ]}
-                            onPress={() => handleCardTap(card)}
-                            activeOpacity={isDisabled ? 0.3 : 0.8}
-                            disabled={isDisabled}
+                            imageStyle={styles.cardBackgroundImage}
                         >
-                          <Animatable.View
-                              ref={(ref) => (cardRefs.current[card.id] = ref)}
-                              style={{ width: "100%" }}
+                          <TouchableOpacity
+                              style={styles.cardTouchable}
+                              onPress={() => handleCardTap(card)}
+                              activeOpacity={isDisabled ? 0.3 : 0.8}
+                              disabled={isDisabled}
                           >
-                            <LinearGradient
-                                colors={
-                                  card.type === "tool"
-                                      ? ["rgba(139, 92, 246, 0.7)", "rgba(79, 32, 166, 0.8)"]
-                                      : ["rgba(253, 241, 187, 1)", "rgba(248, 212, 158, 0.9)"]
-                                }
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.cardGradient}
+                            <Animatable.View
+                                ref={(ref) => (cardRefs.current[card.id] = ref)}
+                                animation={isSelected ? CARD_FLOAT_ANIMATION : undefined}
+                                iterationCount={isSelected ? "infinite" : undefined}
+                                duration={1600}
+                                easing="ease-in-out"
+                                style={{ width: "100%", flex: 1 }}
                             >
-                            {card.type === "tool" ? (
-                                // Tool cards keep their header and description
-                                <>
-                                  <View style={styles.cardHeader}>
-                                    <MaterialCommunityIcons
-                                        name={card.icon}
-                                        size={16}
-                                        color="#2acde6"
-                                    />
-                                    <Text style={styles.cardName}>
-                                      {card.name || card.text}
-                                    </Text>
-                                  </View>
-                                  <Text
-                                      style={[
-                                        styles.cardDescription,
-                                        isSelected && styles.cardDescriptionOnDark,
-                                      ]}
-                                  >
-                                    {card.description || card.text}
-                                  </Text>
-                                  <View style={styles.toolIndicator}>
-                                    <Text style={styles.toolText}>TOOL</Text>
-                                  </View>
-                                </>
-                            ) : (
-                                // Answer cards only show the answer text, no header
-                                <View style={styles.answerCardContent}>
-                                  <Text style={styles.answerCardText}>
-                                    {card.text || card.name}
-                                  </Text>
-                                </View>
-                            )}
-                            {isSelected && (
-                                <View style={styles.selectedIndicator}>
-                                  <MaterialCommunityIcons
-                                      name="check-circle"
-                                      size={20}
-                                      color="#2ecc71"
-                                  />
-                                </View>
-                            )}
-                            </LinearGradient>
-                          </Animatable.View>
-                        </TouchableOpacity>
+                              <View style={styles.cardContent}>
+                                {card.type === "tool" ? (
+                                    // Tool cards are rendered as image-backed cards
+                                    <>
+                                      {card.image ? (
+                                        <ImageBackground
+                                            source={card.image}
+                                            style={styles.toolCardImageCard}
+                                            imageStyle={styles.toolCardImageCardBackground}
+                                        >
+                                          <View style={styles.toolCardImageOverlay}>
+                                            <Text style={styles.toolCardImageTitle}>
+                                              {card.name || card.text}
+                                            </Text>
+                                            <Text
+                                                style={styles.toolCardImageDescription}
+                                            >
+                                              {card.description || card.text}
+                                            </Text>
+                                            <View style={styles.toolIndicator}>
+                                              <Text style={styles.toolText}>TOOL</Text>
+                                            </View>
+                                          </View>
+                                        </ImageBackground>
+                                      ) : (
+                                        <>
+                                          <View style={styles.cardHeader}>
+                                            <MaterialCommunityIcons
+                                                name={card.icon}
+                                                size={16}
+                                                color="#2acde6"
+                                            />
+                                            <Text style={styles.cardName}>
+                                              {card.name || card.text}
+                                            </Text>
+                                          </View>
+                                          <Text
+                                              style={[
+                                                styles.cardDescription,
+                                                isSelected && styles.cardDescriptionOnDark,
+                                              ]}
+                                          >
+                                            {card.description || card.text}
+                                          </Text>
+                                          <View style={styles.toolIndicator}>
+                                            <Text style={styles.toolText}>TOOL</Text>
+                                          </View>
+                                        </>
+                                      )}
+                                    </>
+                                ) : (
+                                    // Answer cards only show the answer text, no header
+                                    <View style={styles.answerCardContent}>
+                                      <Text style={styles.answerCardText}>
+                                        {card.text || card.name}
+                                      </Text>
+                                    </View>
+                                )}
+                                {isSelected && (
+                                    <View style={styles.selectedIndicator}>
+                                      <MaterialCommunityIcons
+                                          name="check-circle"
+                                          size={20}
+                                          color="#2ecc71"
+                                      />
+                                    </View>
+                                )}
+                              </View>
+                            </Animatable.View>
+                          </TouchableOpacity>
+                        </ImageBackground>
                     );
                   })
               )}
@@ -3801,11 +3973,13 @@ function DigitalDefenders() {
                     style={[styles.editorCard, styles.editorCardDisabled]}
                 >
                   <View style={styles.toolCardHeader}>
-                    <MaterialCommunityIcons
-                        name={card.icon}
-                        size={20}
-                        color="#666"
-                    />
+                    <ImageBackground
+                        source={card.image}
+                        style={styles.toolCardEditorImageCard}
+                        imageStyle={styles.toolCardEditorImageCardBackground}
+                    >
+                      <View style={styles.toolCardEditorImageOverlay} />
+                    </ImageBackground>
                     <Text
                         style={[
                           styles.editorCardTitle,
@@ -4016,15 +4190,10 @@ function DigitalDefenders() {
       <Modal visible={showFeedback} transparent animationType="fade">
         <View style={styles.feedbackOverlay}>
           <View style={styles.feedbackContainer}>
-            <MaterialCommunityIcons
-                name={feedbackData.isCorrect ? "check-circle" : "close-circle"}
-                size={60}
-                color={feedbackData.isCorrect ? "#4CAF50" : "#FF6B6B"}
-            />
             <Text
                 style={[
                   styles.feedbackTitle,
-                  { color: feedbackData.isCorrect ? "#4CAF50" : "#FF6B6B" },
+                  { color: feedbackData.isError ? "#FF6B6B" : "#0f172a" },
                 ]}
             >
               {feedbackData.title}
@@ -4034,7 +4203,7 @@ function DigitalDefenders() {
                 style={[
                   styles.feedbackButton,
                   {
-                    backgroundColor: feedbackData.isCorrect ? "#4CAF50" : "#FF6B6B",
+                    backgroundColor: feedbackData.isError ? "#FF6B6B" : "#4CAF50",
                   },
                 ]}
                 onPress={() => setShowFeedback(false)}
@@ -4813,6 +4982,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginBottom: 5,
   },
+  healthContainerDefault: {
+    shadowColor: "transparent",
+  },
+  healthContainerDamaged: {
+    shadowColor: "#e74c3c",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 12,
+  },
   actionsText: {
     fontSize: 14,
     color: "#dbeafe",
@@ -4909,10 +5088,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   questionCard: {
-    backgroundColor: PREMIUM_SURFACE,
     borderRadius: 20,
     padding: 25,
-    minHeight: 150,
+    minHeight: 220,
     width: Platform.OS === "web" ? "100%" : screenWidth - 60,
     maxWidth: IS_WEB_MOBILE ? "100%" : 700,
     justifyContent: "center",
@@ -4924,11 +5102,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 16,
     elevation: 4,
+    overflow: "hidden",
+  },
+  questionCardImage: {
+    resizeMode: "stretch",
+    width: "100%",
+    height: "100%",
+  },
+  cardBackgroundImage: {
+    resizeMode: "contain",
+    borderRadius: 12,
   },
   questionCardCompact: {
     width: "100%",
     maxWidth: 520,
-    minHeight: 120,
+    minHeight: 180,
     padding: 16,
   },
   questionHeaderRow: {
@@ -4937,15 +5125,18 @@ const styles = StyleSheet.create({
     gap: 12,
     width: "100%",
   },
-  enemySprite: {
-    width: 64,
-    height: 64,
-    flexShrink: 0,
+  enemySpriteLarge: {
+    width: 240,
+    height: 240,
+    marginBottom: 14,
+  },
+  enemySpriteLargeCompact: {
+    width: 180,
+    height: 180,
   },
   questionText: {
-    flex: 1,
     fontSize: 18,
-    color: PREMIUM_TEXT,
+    color: "#ffffff",
     textAlign: "center",
     fontWeight: "700",
   },
@@ -5103,53 +5294,51 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   card: {
-    backgroundColor: "rgba(255, 253, 197, 1)",
     borderRadius: 12,
-    padding: 15,
     marginRight: 10,
     width: IS_WEB_NARROW ? 116 : 140,
-    minHeight: IS_WEB_NARROW ? 150 : 180, // Increased height for vertical rectangle
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 1)",
-    position: "relative", // Enable z-index layering
-    opacity: 1, // Ensure full opacity
+    height: IS_WEB_NARROW ? 150 : 180,
+    position: "relative",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.23,
     shadowRadius: 2.62,
     elevation: 4,
   },
-  cardCompact: {
-    width: 120,
-    minHeight: 150,
-    padding: 10,
-    marginRight: 8,
-  },
-  cardGradient: {
+  cardTouchable: {
     flex: 1,
-    borderRadius: 11, // Slightly smaller than card to prevent edge artifacts
-    padding: 10,
+    width: "100%",
+    height: "100%",
+    borderRadius: 12,
+    backgroundColor: "transparent",
+  },
+  cardContent: {
+    flex: 1,
+    padding: 12,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
     height: "100%",
   },
+  cardCompact: {
+    width: 120,
+    height: 150,
+    marginRight: 8,
+  },
   toolCard: {
     borderColor: "#2acde6",
-    backgroundColor: "rgba(139, 92, 246, 0.1)",
   },
   cardSelected: {
-    borderColor: "#2ecc71",
-    backgroundColor: "rgba(46, 204, 113, 0.7)",
-    shadowColor: "#2ecc71",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 5,
+    borderWidth: 2,
+    borderColor: "#7df7ff",
+    shadowColor: "#7df7ff",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.85,
+    shadowRadius: 20,
+    elevation: 8,
   },
   cardDisabled: {
     opacity: 0.4,
-    backgroundColor: "rgba(128, 128, 128, 0.1)",
   },
   cardHeader: {
     flexDirection: "row",
@@ -5163,6 +5352,40 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
     flex: 1,
     textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  toolCardImageCard: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "flex-end",
+    borderRadius: 18,
+    overflow: "hidden",
+  },
+  toolCardImageCardBackground: {
+    resizeMode: "cover",
+    borderRadius: 18,
+  },
+  toolCardImageOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: 14,
+    backgroundColor: "rgba(15, 23, 42, 0.22)",
+  },
+  toolCardImageTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#ffffff",
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  toolCardImageDescription: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    color: "rgba(255,255,255,0.92)",
+    textShadowColor: "rgba(0,0,0,0.4)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
@@ -5189,7 +5412,7 @@ const styles = StyleSheet.create({
   answerCardText: {
     fontSize: 14,
     fontWeight: "600",
-    color: COLORS.textPrimary,
+    color: "#ffffff",
     textAlign: "center",
     lineHeight: 18,
   },
@@ -5204,7 +5427,7 @@ const styles = StyleSheet.create({
   },
   toolText: {
     fontSize: 8,
-    color: COLORS.textPrimary,
+    color: "#ffffff",
     fontWeight: "bold",
   },
   selectedIndicator: {
@@ -5657,6 +5880,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     marginBottom: 8,
+  },
+  toolCardEditorImageCard: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    overflow: "hidden",
+    marginRight: 2,
+  },
+  toolCardEditorImageCardBackground: {
+    resizeMode: "cover",
+    borderRadius: 12,
+  },
+  toolCardEditorImageOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.12)",
   },
   editCardButton: {
     flexDirection: "row",

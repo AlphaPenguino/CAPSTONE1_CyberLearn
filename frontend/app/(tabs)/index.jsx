@@ -19,6 +19,7 @@ import {
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useSettings } from "../../contexts/SettingsContext";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { API_URL, constructProfileImageUrl } from "../../constants/api";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -142,6 +143,7 @@ export default function Home() {
     : routeParams?.focusModuleId;
   const { user, token, checkAuth, logout } = useAuthStore();
   const { colors, isDarkMode } = useTheme();
+  const { settings } = useSettings();
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const isinstructor =
     user?.privilege === "instructor" || user?.privilege === "admin";
@@ -239,6 +241,11 @@ const [importing, setImporting] = React.useState(false);
       };
 
       const startHomeMusic = async () => {
+        // Skip music if disabled in settings
+        if (!settings.music) {
+          return;
+        }
+
         if (homeAudioSourceRef.current || homeAudioContextRef.current) return;
 
         try {

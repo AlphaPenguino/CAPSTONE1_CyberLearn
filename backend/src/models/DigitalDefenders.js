@@ -212,6 +212,8 @@ class DigitalDefendersGame {
     this.currentQuestionIndex = 0;
     this.freezeCountdown = 0;
 
+    this.countdownInterval = null; // Server-side countdown timer
+
     // Players management
     this.players = new Map(); // socketId -> player object
     this.playerOrder = []; // Array of socketIds for turn order
@@ -1057,10 +1059,9 @@ class DigitalDefendersGame {
       );
 
       if (nextWaveQuestions.length > 0) {
-        // Advance to next wave
+        // Advance to next wave without resetting the countdown
         this.currentWave = nextWave;
         this.currentQuestionIndex = 0;
-        this.countdown = Math.max(20, 30 - this.currentWave); // Decrease countdown for higher waves
 
         // Refresh deck to ensure answer cards for the new wave are available
         this.refreshDeckForNewWave(nextWave);
@@ -1148,10 +1149,9 @@ class DigitalDefendersGame {
       this.currentQuestion.correctAnswer.toLowerCase().trim();
 
     if (answerMatches) {
-      // Correct answer - move to next question
+      // Correct answer - move to next question without resetting the timer
       this.currentQuestionIndex++;
       const questionResult = this.setCurrentQuestion();
-      this.countdown = Math.max(20, 30 - this.currentWave); // Reset countdown
 
       return {
         success: true,
@@ -1225,7 +1225,6 @@ class DigitalDefendersGame {
       case "pass_question":
         this.currentQuestionIndex++;
         this.setCurrentQuestion();
-        this.countdown = Math.max(20, 30 - this.currentWave);
         return {
           success: true,
           message: "Question skipped!",
@@ -1619,6 +1618,68 @@ class DigitalDefendersGame {
     }
 
     return { gameOver: false };
+  }
+
+  // Server-side countdown timer management
+  startCountdownTimer(io) {
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+    }
+
+    this.countdownInterval = setInterval(() => {
+      if (this.gameState === "playing" && this.countdown > 0 && this.freezeCountdown === 0) {
+        this.countdown--;
+
+        // Broadcast countdown update to all players in the room
+        io.to(this.roomId).emit("countdown-updated", {
+          countdown: this.countdown,
+          gameState: this.getPublicGameState(),
+        });
+
+        // Check if countdown reached 0
+        if (this.countdown === 0) {
+          this.handleCountdownExpired(io);
+        }
+      } else if (this.freezeCountdown > 0) {
+        this.freezeCountdown--;
+      }
+    }, 1000);
+  }
+
+  stopCountdownTimer() {
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = null;
+    }
+  }
+
+  handleCountdownExpired(io) {
+    // Reduce PC health
+    this.pcHealth--;
+
+    if (this.pcHealth <= 0) {
+      this.gameState = "gameOver";
+      io.to(this.roomId).emit("game-over", {
+        reason: "health_depleted",
+        message: "Game Over! PC Health reached 0 due to timeout.",
+        finalWave: this.currentWave,
+        finalHealth: this.pcHealth,
+        gameState: this.getPublicGameState(),
+      });
+    } else {
+      // Advance to next question
+      this.setCurrentQuestion();
+      this.countdown = Math.max(20, 30 - this.currentWave);
+
+      // Broadcast question change and health reduction
+      io.to(this.roomId).emit("question-changed", {
+        currentQuestion: this.currentQuestion,
+        pcHealth: this.pcHealth,
+        countdown: this.countdown,
+        gameState: this.getPublicGameState(),
+        reason: "timeout",
+      });
+    }
   }
 
   getPublicGameState() {

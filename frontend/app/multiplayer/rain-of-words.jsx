@@ -192,6 +192,7 @@ export default function RainOfWords() {
   const missedRoundTimeoutRef = useRef(null);
   const nextQuestionTimeoutRef = useRef(null);
   const rotateAnim = useRef(new Animated.Value(0));
+  const rotateAnimLoopRef = useRef(null);
   const backgroundVideoRef = useRef(/** @type {VideoRef | null} */ (null));
   const bgMusicContextRef = useRef(null);
   const bgMusicSourceRef = useRef(null);
@@ -311,7 +312,7 @@ export default function RainOfWords() {
       }
     };
 
-    if (gameState === "playing") {
+if (gameState === "playing" || gameState === "lobby") {
       startBgMusic();
     } else {
       stopBgMusic();
@@ -742,27 +743,34 @@ export default function RainOfWords() {
   // Animate rotation for waiting icon and pulse the waiting text
   useEffect(() => {
     const rotateValue = rotateAnim.current;
-    let animationLoop;
 
     if (gameState === "waiting") {
-      rotateValue.setValue(0);
-      animationLoop = Animated.loop(
-        Animated.timing(rotateValue, {
-          toValue: 1,
-          duration: 1200,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      );
-      animationLoop.start();
+      // Only start if not already running
+      if (!rotateAnimLoopRef.current) {
+        rotateValue.setValue(0);
+        rotateAnimLoopRef.current = Animated.loop(
+          Animated.timing(rotateValue, {
+            toValue: 1,
+            duration: 1200,
+            easing: Easing.linear,
+            useNativeDriver: false,
+          })
+        );
+        rotateAnimLoopRef.current.start();
+      }
     } else {
       // Stop animation when leaving waiting state
+      if (rotateAnimLoopRef.current) {
+        rotateAnimLoopRef.current.stop();
+        rotateAnimLoopRef.current = null;
+      }
       rotateValue.setValue(0);
     }
 
     return () => {
-      if (animationLoop) {
-        animationLoop.stop();
+      if (gameState !== "waiting" && rotateAnimLoopRef.current) {
+        rotateAnimLoopRef.current.stop();
+        rotateAnimLoopRef.current = null;
       }
     };
   }, [gameState]);
@@ -880,7 +888,23 @@ export default function RainOfWords() {
     } catch (error) {
       console.error("Error leaving room:", error);
     }
-    router.back();
+
+    setGameState("lobby");
+    setGameMode("play");
+    setRoomCode("");
+    setOpponent(null);
+    setCurrentQuestion(null);
+    setFallingWords([]);
+    setPlayerScore(0);
+    setOpponentScore(0);
+    setTextInput("");
+    setFeedback("");
+    setFeedbackKind("neutral");
+    setFeedbackTick((prev) => prev + 1);
+    setQuestionsAnswered(0);
+    setGameOver(false);
+    setWinner(null);
+    setIsSpectator(false);
   };
 
   const handleRematch = () => {
@@ -901,8 +925,10 @@ export default function RainOfWords() {
 
   // Render falling word
   const renderFallingWord = (word, index) => {
-    // Use Animatable component for underwater swaying + falling
-    const wordColor = "#00d4ff"; // unified color for all words
+    const wordColor = word.tokenColor || "#00d4ff";
+    const inputLetters = textInput.toLowerCase().split('');
+    const wordLetters = word.text.toLowerCase().split('');
+    const allLettersMatched = wordLetters.length > 0 && wordLetters.every(letter => inputLetters.includes(letter));
 
     return (
       <AnimatedView
@@ -917,27 +943,74 @@ export default function RainOfWords() {
           styles.fallingWord,
           {
             left: `${(index * 100) / (fallingWords.length || 1)}%`,
-            borderColor: word.tokenColor || wordColor,
-            shadowColor: word.tokenColor || wordColor,
+          },
+          allLettersMatched && {
+            shadowColor: wordColor,
+            shadowOpacity: 1,
+            shadowRadius: 20,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 25,
           },
         ]}
       >
-        <AnimatedLinearGradient
-          colors={[
-            "rgba(255,255,255,0.22)",
-            "rgba(255,255,255,0.08)",
+        {/* Outer glow effect */}
+        <View
+          pointerEvents="none"
+          style={[
+            styles.wordTokenOuterGlow,
+            {
+              borderColor: wordColor,
+              shadowColor: wordColor,
+            },
+            allLettersMatched && styles.wordTokenOuterGlowActive,
           ]}
-          style={styles.wordTokenGlow}
+        />
+        
+        {/* Main token container */}
+        <AnimatedLinearGradient
+          colors={
+            allLettersMatched
+              ? [wordColor + "66", wordColor + "33"]
+              : [wordColor + "33", wordColor + "0a"]
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            styles.wordTokenGlow,
+            { borderColor: wordColor },
+            allLettersMatched && [styles.wordTokenGlowActive, { borderColor: "#72ff96" }],
+          ]}
         >
+          {/* Top accent bar */}
+          <View style={[styles.wordTokenAccent, { backgroundColor: allLettersMatched ? "#72ff96" : wordColor }]} />
+          
           <View style={styles.wordTokenTopRow}>
-            <View style={[styles.wordTokenDot, { backgroundColor: word.tokenColor || wordColor }]} />
-            
-            <MaterialCommunityIcons name="flash" size={12} color={word.tokenColor || wordColor} />
+            <View style={[styles.wordTokenDot, { backgroundColor: allLettersMatched ? "#72ff96" : wordColor, shadowColor: wordColor }]} />
+            <MaterialCommunityIcons name="flash" size={14} color={allLettersMatched ? "#72ff96" : wordColor} />
           </View>
-          <AnimatedText style={[styles.wordText, { color: wordColor }]}>
-            {word.text}
-          </AnimatedText>
-          <View style={[styles.wordTokenBase, { backgroundColor: word.tokenColor || wordColor }]} />
+          
+          {/* Character-by-character rendering with highlighting */}
+          <View style={styles.wordCharacterContainer}>
+            {word.text.split('').map((char, charIndex) => {
+              const isMatched = inputLetters.includes(char.toLowerCase());
+              return (
+                <Text
+                  key={charIndex}
+                  style={[
+                    styles.wordCharacter,
+                    { color: wordColor },
+                    isMatched && [styles.wordCharacterHighlighted, { shadowColor: wordColor }],
+                  ]}
+                >
+                  {char}
+                </Text>
+              );
+            })}
+          </View>
+          
+          <View style={[styles.wordTokenBase, { backgroundColor: allLettersMatched ? "#72ff96" : wordColor }]} />
+          {/* Bottom accent bar */}
+          <View style={[styles.wordTokenAccent, { backgroundColor: allLettersMatched ? "#72ff96" : wordColor, marginTop: 6 }]} />
         </AnimatedLinearGradient>
       </AnimatedView>
     );
@@ -1272,42 +1345,44 @@ export default function RainOfWords() {
             <View style={[styles.gameArea, IS_COMPACT_LAYOUT && styles.gameAreaCompact]}>
               <View pointerEvents="none" style={styles.gameAreaGrid} />
               {fallingWords.map((word, index) => renderFallingWord(word, index))}
-            </View>
 
-            {/* Feedback */}
-            {feedback && (
-              <AnimatedView
-                key={`${feedbackKind}-${feedbackTick}`}
-                animation={feedbackKind === "success" ? "bounceIn" : feedbackKind === "error" ? "shake" : "pulse"}
-                duration={700}
-                style={[
-                  styles.feedbackBox,
-                  feedbackKind === "success" && styles.feedbackBoxSuccess,
-                  feedbackKind === "error" && styles.feedbackBoxError,
-                  feedbackKind === "warning" && styles.feedbackBoxWarning,
-                  IS_COMPACT_LAYOUT && styles.feedbackBoxCompact,
-                ]}
-              >
-                <View style={styles.feedbackHeaderRow}>
-                  <MaterialCommunityIcons
-                    name={feedbackKind === "success" ? "check-decagram" : feedbackKind === "error" ? "close-octagon" : "alert-decagram"}
-                    size={20}
-                    color={feedbackKind === "success" ? "#72ff96" : feedbackKind === "error" ? "#ff6b6b" : "#ffd166"}
-                  />
-                  <Text
+              {/* Feedback Overlay */}
+              {feedback && (
+                <View style={styles.feedbackOverlay}>
+                  <AnimatedView
+                    key={`${feedbackKind}-${feedbackTick}`}
+                    animation="shake"
+                    duration={600}
                     style={[
-                      styles.feedbackLabel,
-                      feedbackKind === "success" && styles.feedbackLabelSuccess,
-                      feedbackKind === "error" && styles.feedbackLabelError,
-                      feedbackKind === "warning" && styles.feedbackLabelWarning,
+                      styles.feedbackBox,
+                      feedbackKind === "success" && styles.feedbackBoxSuccess,
+                      feedbackKind === "error" && styles.feedbackBoxError,
+                      feedbackKind === "warning" && styles.feedbackBoxWarning,
+                      IS_COMPACT_LAYOUT && styles.feedbackBoxCompact,
                     ]}
                   >
-                    {feedbackKind === "success" ? "Combo Up" : feedbackKind === "error" ? "Retry" : "Watch Out"}
-                  </Text>
+                    <View style={styles.feedbackHeaderRow}>
+                      <MaterialCommunityIcons
+                        name={feedbackKind === "success" ? "check-decagram" : feedbackKind === "error" ? "close-octagon" : "alert-decagram"}
+                        size={28}
+                        color={feedbackKind === "success" ? "#72ff96" : feedbackKind === "error" ? "#ff6b6b" : "#ffd166"}
+                      />
+                      <Text
+                        style={[
+                          styles.feedbackLabel,
+                          feedbackKind === "success" && styles.feedbackLabelSuccess,
+                          feedbackKind === "error" && styles.feedbackLabelError,
+                          feedbackKind === "warning" && styles.feedbackLabelWarning,
+                        ]}
+                      >
+                        {feedbackKind === "success" ? "Combo Up" : feedbackKind === "error" ? "Retry" : "Watch Out"}
+                      </Text>
+                    </View>
+                    <Text style={styles.feedbackText}>{feedback}</Text>
+                  </AnimatedView>
                 </View>
-                <Text style={styles.feedbackText}>{feedback}</Text>
-              </AnimatedView>
-            )}
+              )}
+            </View>
 
             {/* Input Section */}
               <View style={[styles.inputSection, IS_COMPACT_LAYOUT && styles.inputSectionCompact]}>
@@ -1844,31 +1919,70 @@ const styles = StyleSheet.create({
   },
   fallingWord: {
     position: "absolute",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 2,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    minWidth: 80,
+    paddingVertical: 14,
+    paddingHorizontal: 22,
+    borderRadius: 10,
+    minWidth: 90,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  wordTokenOuterGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 10,
+    borderWidth: 3,
+    opacity: 0.4,
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 15,
+  },
+  wordTokenOuterGlowActive: {
+    opacity: 1,
+    shadowOpacity: 1,
+    shadowRadius: 25,
+    borderWidth: 4,
+    elevation: 30,
   },
   wordTokenGlow: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 8,
     minWidth: 80,
     alignItems: "center",
+    borderWidth: 2,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 8,
+  },
+  wordTokenGlowActive: {
+    backgroundColor: "rgba(114, 255, 150, 0.15)",
+    shadowOpacity: 0.9,
+    shadowRadius: 20,
+    elevation: 16,
+  },
+  wordTokenAccent: {
+    height: 2,
+    width: "100%",
+    borderRadius: 1,
+    opacity: 0.7,
   },
   wordTokenTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
+    gap: 7,
+    marginBottom: 8,
+    marginTop: 4,
   },
   wordTokenDot: {
-    width: 7,
-    height: 7,
+    width: 10,
+    height: 10,
     borderRadius: 99,
+    shadowOpacity: 0.7,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 5,
   },
   wordTokenLabel: {
     color: "#fff",
@@ -1878,24 +1992,59 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   wordTokenBase: {
-    width: 30,
-    height: 3,
+    width: 35,
+    height: 4,
     borderRadius: 99,
-    marginTop: 7,
-    opacity: 0.9,
+    marginTop: 8,
+    opacity: 0.95,
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 4,
   },
   wordText: {
-    fontSize: 16,
+    fontSize: 17,
     fontFamily: GAME_FONT_DISPLAY,
-    letterSpacing: 0.8,
-    fontWeight: "600",
+    letterSpacing: 0.9,
+    fontWeight: "700",
     textAlign: "center",
+    marginVertical: 2,
+    textShadowColor: "rgba(0, 0, 0, 0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  wordCharacterContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginVertical: 2,
+  },
+  wordCharacter: {
+    fontSize: 17,
+    fontFamily: GAME_FONT_DISPLAY,
+    letterSpacing: 0.9,
+    fontWeight: "700",
+    textShadowColor: "rgba(0, 0, 0, 0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  wordCharacterHighlighted: {
+    fontWeight: "800",
+    color: "#72ff96",
+    textShadowRadius: 8,
+    shadowOpacity: 0.8,
+  },
+  feedbackOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
   },
   feedbackBox: {
     backgroundColor: "rgba(0, 212, 255, 0.2)",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 15,
+    borderRadius: 12,
+    padding: 20,
     borderLeftWidth: 4,
     borderLeftColor: "#00d4ff",
     shadowColor: "#00d4ff",
@@ -1920,8 +2069,7 @@ const styles = StyleSheet.create({
     shadowColor: "#ffd166",
   },
   feedbackBoxCompact: {
-    padding: 10,
-    marginBottom: 10,
+    padding: 16,
   },
   feedbackHeaderRow: {
     flexDirection: "row",
@@ -1931,7 +2079,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   feedbackLabel: {
-    fontSize: 11,
+    fontSize: 14,
     fontFamily: GAME_FONT_DISPLAY,
     fontWeight: "800",
     letterSpacing: 1.1,
@@ -1949,7 +2097,7 @@ const styles = StyleSheet.create({
   },
   feedbackText: {
     color: "#00d4ff",
-    fontSize: 16,
+    fontSize: 20,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 0.7,
     fontWeight: "600",
@@ -1959,13 +2107,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginBottom: 20,
+    maxWidth: 400,
+    alignSelf: "center",
   },
   inputSectionCompact: {
     gap: 8,
     marginBottom: 12,
+    maxWidth: 320,
+    alignSelf: "center",
   },
   gameInput: {
-    flex: 1,
+    width: 250,
     backgroundColor: "#16213e",
     borderWidth: 2,
     borderColor: "#00d4ff",
@@ -1975,6 +2127,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   gameInputCompact: {
+    width: 200,
     paddingVertical: 10,
     fontSize: 14,
   },

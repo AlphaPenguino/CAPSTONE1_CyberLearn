@@ -33,6 +33,7 @@ export const SettingsProvider = ({ children }) => {
   const [settings, setSettings] = useState({
     notifications: true,
     darkMode: false,
+    music: true,
     soundEffects: true,
     hapticFeedback: true,
   });

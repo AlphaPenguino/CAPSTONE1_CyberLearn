@@ -886,6 +886,22 @@ export default function Settings() {
           icon="notifications-outline"
         />
       )}
+
+      <SettingItem
+        title="Background Music"
+        subtitle="Play background music throughout the app"
+        value={settings.music}
+        onToggle={(value) => handleSettingToggle("music", value)}
+        icon="musical-notes-outline"
+      />
+
+      <SettingItem
+        title="Sound Effects"
+        subtitle="Play sound effects for interactions"
+        value={settings.soundEffects}
+        onToggle={(value) => handleSettingToggle("soundEffects", value)}
+        icon="volume-high-outline"
+      />
     </View>
   );
 
