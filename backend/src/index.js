@@ -1,44 +1,101 @@
-import express from "express";
-import cors from "cors";
-import "dotenv/config";
-import { createServer } from "http";
-import { Server } from "socket.io";
-import job from "./lib/cron.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import { createServer } from "http";
 
-// API routes
-import authRoutes from "./routes/authRoutes.js";
-import quizRoutes from "./routes/quizRoutes.js";
-import moduleRoutes from "./routes/moduleRoutes.js";
-import progressRoutes from "./routes/progressRoutes.js";
-import sectionsRoutes from "./routes/sectionsRoutes.js";
-import subjectsRoutes from "./routes/subjectsRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
-import adminRoutes from "./routes/adminRoutes.js";
-import cyberQuestRoutes from "./routes/cyberQuestRoutes.js";
-import debugRoutes from "./routes/debugRoutes.js";
-import knowledgeRelayRoutes from "./routes/knowledgeRelayRoutes.js";
-import quizShowdownRoutes from "./routes/quizShowdownRoutes.js";
-import digitalDefendersRoutes from "./routes/digitalDefendersRoutes.js";
-import instructorRoutes from "./routes/instructorRoutes.js";
-import quickplayRoutes from "./routes/quickplayRoutes.js";
-import rpsRoutes from "./routes/rpsRoutes.js";
-import rainOfWordsRoutes from "./routes/rainOfWordsRoutes.js";
-import { connectDB } from "./lib/db.js";
-import { trackUserActivity } from "./middleware/analytics.middleware.js";
-import { KnowledgeRelayQuestion } from "./models/KnowledgeRelayQuestion.js";
-import { setGlobalKnowledgeRelayQuestions } from "./controllers/knowledgeRelayController.js";
-import { initializeGameSocket } from "./controllers/gameController.js";
-import { initializeKnowledgeRelaySocket } from "./controllers/knowledgeRelayController.js";
-import { initializeQuizShowdownSocket } from "./controllers/quizShowdownController.js";
-import { initializeDigitalDefendersSocket } from "./controllers/digitalDefendersController.js";
-import { initializeRpsSocket } from "./controllers/rpsController.js";
-import { initializeRainOfWordsSocket } from "./controllers/rainOfWordsController.js";
+function ensureIconvLiteHelper() {
+  const helperPath = path.join(
+    process.cwd(),
+    "node_modules",
+    "iconv-lite",
+    "lib",
+    "helpers",
+    "merge-exports.js"
+  );
 
-// Game initialization functions
-import { DigitalDefendersQuestion } from "./models/DigitalDefenders.js";
+  if (fs.existsSync(helperPath)) {
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(helperPath), { recursive: true });
+  fs.writeFileSync(
+    helperPath,
+    '"use strict"\n\nvar hasOwn = typeof Object.hasOwn === "undefined" ? Function.call.bind(Object.prototype.hasOwnProperty) : Object.hasOwn\n\nfunction mergeModules (target, module) {\n  for (var key in module) {\n    if (hasOwn(module, key)) {\n      target[key] = module[key]\n    }\n  }\n}\n\nmodule.exports = mergeModules\n',
+    "utf8"
+  );
+}
+
+ensureIconvLiteHelper();
+
+await import("dotenv/config");
+
+const [
+  { default: express },
+  { default: cors },
+  { Server },
+  { default: job },
+  { default: authRoutes },
+  { default: quizRoutes },
+  { default: moduleRoutes },
+  { default: progressRoutes },
+  { default: sectionsRoutes },
+  { default: subjectsRoutes },
+  { default: userRoutes },
+  { default: adminRoutes },
+  { default: cyberQuestRoutes },
+  { default: debugRoutes },
+  { default: knowledgeRelayRoutes },
+  { default: quizShowdownRoutes },
+  { default: digitalDefendersRoutes },
+  { default: instructorRoutes },
+  { default: quickplayRoutes },
+  { default: rpsRoutes },
+  { default: rainOfWordsRoutes },
+  { connectDB },
+  { trackUserActivity },
+  { KnowledgeRelayQuestion },
+  { setGlobalKnowledgeRelayQuestions },
+  { initializeGameSocket },
+  { initializeKnowledgeRelaySocket },
+  { initializeQuizShowdownSocket },
+  { initializeDigitalDefendersSocket },
+  { initializeRpsSocket },
+  { initializeRainOfWordsSocket },
+  { DigitalDefendersQuestion },
+] = await Promise.all([
+  import("express"),
+  import("cors"),
+  import("socket.io"),
+  import("./lib/cron.js"),
+  import("./routes/authRoutes.js"),
+  import("./routes/quizRoutes.js"),
+  import("./routes/moduleRoutes.js"),
+  import("./routes/progressRoutes.js"),
+  import("./routes/sectionsRoutes.js"),
+  import("./routes/subjectsRoutes.js"),
+  import("./routes/userRoutes.js"),
+  import("./routes/adminRoutes.js"),
+  import("./routes/cyberQuestRoutes.js"),
+  import("./routes/debugRoutes.js"),
+  import("./routes/knowledgeRelayRoutes.js"),
+  import("./routes/quizShowdownRoutes.js"),
+  import("./routes/digitalDefendersRoutes.js"),
+  import("./routes/instructorRoutes.js"),
+  import("./routes/quickplayRoutes.js"),
+  import("./routes/rpsRoutes.js"),
+  import("./routes/rainOfWordsRoutes.js"),
+  import("./lib/db.js"),
+  import("./middleware/analytics.middleware.js"),
+  import("./models/KnowledgeRelayQuestion.js"),
+  import("./controllers/knowledgeRelayController.js"),
+  import("./controllers/gameController.js"),
+  import("./controllers/knowledgeRelayController.js"),
+  import("./controllers/quizShowdownController.js"),
+  import("./controllers/digitalDefendersController.js"),
+  import("./controllers/rpsController.js"),
+  import("./controllers/rainOfWordsController.js"),
+  import("./models/DigitalDefenders.js"),
+]);
 
 // Global initialization function
 async function initializeGlobalData() {
