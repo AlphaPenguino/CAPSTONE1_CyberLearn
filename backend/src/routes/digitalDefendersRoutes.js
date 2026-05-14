@@ -11,6 +11,12 @@ import {
 } from "../controllers/digitalDefendersController.js";
 import { protectRoute, authorizeRole } from "../middleware/auth.middleware.js";
 import { trackGameCompletion } from "../middleware/analytics.middleware.js";
+import {
+  logActivity,
+  AUDIT_ACTIONS,
+  AUDIT_RESOURCES,
+  extractRequestInfo,
+} from "../lib/auditLogger.js";
 import Section from "../models/Section.js";
 import mongoose from "mongoose";
 
@@ -61,6 +67,95 @@ router.get("/debug/rooms", (req, res) => {
     });
   }
 });
+
+/**
+ * @route   POST /api/digital-defenders/game/complete
+ * @desc    Track Digital Defenders game completion for analytics/monitoring
+ * @access  Private
+ */
+router.post(
+  "/game/complete",
+  protectRoute,
+  trackGameCompletion("digitalDefenders"),
+  async (req, res) => {
+    try {
+      const {
+        roomCode = null,
+        score = null,
+        gameWon = false,
+        wavesCompleted = null,
+        reason = "completed",
+        playerStats = [],
+        details = {},
+      } = req.body || {};
+
+      const normalizedScore =
+        typeof score === "number"
+          ? score
+          : typeof wavesCompleted === "number"
+            ? wavesCompleted
+            : null;
+
+      res.locals.gameMeta = {
+        ...(res.locals.gameMeta || {}),
+        score: normalizedScore,
+        wavesCompleted,
+        result: {
+          score: normalizedScore,
+          gameWon: Boolean(gameWon),
+          wavesCompleted,
+          reason,
+        },
+        stats: {
+          score: normalizedScore,
+          wavesCompleted,
+        },
+      };
+
+      const requestInfo = extractRequestInfo(req);
+      await logActivity({
+        userId: req.user?.id || null,
+        username: req.user?.username || req.user?.fullName || "Unknown Player",
+        userRole: req.user?.privilege || "student",
+        action: AUDIT_ACTIONS.GAME_END,
+        resource: AUDIT_RESOURCES.DIGITAL_DEFENDERS,
+        resourceId: roomCode || undefined,
+        details: {
+          gameType: "digital_defenders",
+          event: "game_completed",
+          roomCode,
+          score: normalizedScore,
+          gameWon: Boolean(gameWon),
+          wavesCompleted,
+          reason,
+          playerStats,
+          ...details,
+        },
+        ...requestInfo,
+      });
+
+      res.json({
+        success: true,
+        message: "Digital Defenders completion tracked",
+        data: {
+          roomCode,
+          score: normalizedScore,
+          gameWon: Boolean(gameWon),
+          wavesCompleted,
+          reason,
+          trackedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error("Error tracking Digital Defenders completion:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to track game completion",
+        error: error.message,
+      });
+    }
+  }
+);
 
 /**
  * @route   GET /api/digital-defenders/questions/global
@@ -1005,7 +1100,33 @@ router.post(
         cardsPlayed,
         correctAnswers,
         completionTime,
+        score,
       } = req.body;
+
+      const normalizedScore =
+        typeof score === "number"
+          ? score
+          : typeof wavesCompleted === "number"
+            ? wavesCompleted
+            : null;
+
+      res.locals.gameMeta = {
+        ...(res.locals.gameMeta || {}),
+        score: normalizedScore,
+        wavesCompleted,
+        stats: {
+          score: normalizedScore,
+          wavesCompleted,
+          cardsPlayed,
+          correctAnswers,
+          completionTime,
+        },
+        result: {
+          score: normalizedScore,
+          gameWon,
+          wavesCompleted,
+        },
+      };
 
       if (!mongoose.Types.ObjectId.isValid(sectionId)) {
         return res.status(400).json({
@@ -1045,6 +1166,28 @@ router.post(
       stats.lastPlayed = new Date();
 
       await stats.save();
+
+      const requestInfo = extractRequestInfo(req);
+      await logActivity({
+        userId: req.user?.id || null,
+        username: req.user?.username || req.user?.fullName || "Unknown Player",
+        userRole: req.user?.privilege || "student",
+        action: AUDIT_ACTIONS.GAME_END,
+        resource: AUDIT_RESOURCES.DIGITAL_DEFENDERS,
+        resourceId: sectionId,
+        details: {
+          gameType: "digital_defenders",
+          event: "stats_updated",
+          sectionId,
+          score: normalizedScore,
+          gameWon: Boolean(gameWon),
+          wavesCompleted,
+          cardsPlayed,
+          correctAnswers,
+          completionTime,
+        },
+        ...requestInfo,
+      });
 
       res.json({
         success: true,

@@ -139,6 +139,13 @@ class DigitalDefendersAPI {
     });
   }
 
+  async trackGameCompletion(gameData) {
+    return this.makeRequest("/game/complete", {
+      method: "POST",
+      body: JSON.stringify(gameData || {}),
+    });
+  }
+
   // Leaderboard
   async getLeaderboard(sectionId, sortBy = "gamesWon") {
     return this.makeRequest(`/leaderboard/${sectionId}?sortBy=${sortBy}`);

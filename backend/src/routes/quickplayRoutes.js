@@ -281,6 +281,12 @@ router.post("/events", protectRoute, async (req, res) => {
     const eventName = typeof event === "string" ? event.trim().toLowerCase() : "event";
     const action = QUICKPLAY_EVENT_TO_ACTION[eventName] || AUDIT_ACTIONS.STUDENT_GAME_ACCESS;
     const requestInfo = extractRequestInfo(req);
+    const normalizedScore =
+      typeof score === "number"
+        ? score
+        : typeof details?.score === "number"
+          ? details.score
+          : null;
 
     await logActivity({
       userId: req.user?.id || null,
@@ -293,8 +299,8 @@ router.post("/events", protectRoute, async (req, res) => {
         gameType: "quickplay",
         event: eventName,
         quizCode,
-        score,
         ...details,
+        score: normalizedScore,
       },
       ...requestInfo,
     });
@@ -310,6 +316,21 @@ router.post("/complete", protectRoute, trackGameCompletion("quickplay"), async (
   try {
     const { quizCode = null, score = null, result = {}, details = {} } = req.body || {};
     const requestInfo = extractRequestInfo(req);
+    const normalizedScore =
+      typeof score === "number"
+        ? score
+        : typeof result?.score === "number"
+          ? result.score
+          : null;
+
+    res.locals.gameMeta = {
+      ...(res.locals.gameMeta || {}),
+      score: normalizedScore,
+      result: {
+        ...(result || {}),
+        score: normalizedScore,
+      },
+    };
 
     await logActivity({
       userId: req.user?.id || null,
@@ -322,7 +343,7 @@ router.post("/complete", protectRoute, trackGameCompletion("quickplay"), async (
         gameType: "quickplay",
         event: "game_completed",
         quizCode,
-        score,
+        score: normalizedScore,
         result,
         ...details,
       },
@@ -334,7 +355,7 @@ router.post("/complete", protectRoute, trackGameCompletion("quickplay"), async (
       message: "Quick Play completion tracked",
       data: {
         quizCode,
-        score,
+        score: normalizedScore,
         result,
         completedAt: new Date().toISOString(),
       },

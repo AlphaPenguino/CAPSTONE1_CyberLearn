@@ -672,7 +672,14 @@ export default function InstructorDashboard() {
             )}
             {liveRainOfWordsRooms.filter(r => isActiveGame(r.gameState)).map((room) => {
               const playerNames = Array.isArray(room.players)
-                  ? room.players.map((player) => player.name).filter(Boolean)
+                  ? room.players
+                      .map((player) => {
+                        const name = player?.name || "Player";
+                        const score =
+                            typeof player?.score === "number" ? player.score : null;
+                        return score !== null ? `${name} (${score})` : name;
+                      })
+                      .filter(Boolean)
                   : [];
               const elapsedTime = calculateElapsedTime(room.createdAt);
 

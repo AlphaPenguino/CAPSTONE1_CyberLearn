@@ -25,6 +25,7 @@ import { AudioContext } from "react-native-audio-api";
 import Video, { VideoRef } from "react-native-video";
 import { useAuthStore } from "@/store/authStore";
 import RainOfWordsSocket from "@/services/rainOfWordsSocket";
+import RainOfWordsApi from "@/services/rainOfWordsApi";
 
 const WEB_VIEWPORT_HEIGHT =
   Platform.OS === "web" ? Dimensions.get("window").height : 800;
@@ -198,6 +199,7 @@ export default function RainOfWords() {
   const bgMusicSourceRef = useRef(null);
   const sfxAudioBufferCacheRef = useRef({});
   const sfxContextRef = useRef(null);
+  const completionTrackedRef = useRef(false);
   const backgroundVideoSource =
     Platform.OS === "web"
       ? { uri: Asset.fromModule(TYPER_BACKGROUND_VIDEO).uri }
@@ -623,6 +625,53 @@ if (gameState === "playing" || gameState === "lobby") {
     playSfx("gameover", { volume: 0.7 });
   }, [playSfx]);
 
+  useEffect(() => {
+    if (gameState === "playing") {
+      completionTrackedRef.current = false;
+    }
+  }, [gameState, roomCode]);
+
+  useEffect(() => {
+    if (!gameOver || isSpectator || completionTrackedRef.current) {
+      return;
+    }
+
+    completionTrackedRef.current = true;
+
+    const score = typeof playerScore === "number" ? playerScore : 0;
+    void RainOfWordsApi.trackGameCompletion({
+      gameResult: {
+        winner,
+        gameOver: true,
+      },
+      score,
+      finalScore: {
+        playerScore: score,
+        opponentScore: typeof opponentScore === "number" ? opponentScore : 0,
+      },
+      playersData: [
+        { name: playerName, score },
+        { name: opponent || "Opponent", score: typeof opponentScore === "number" ? opponentScore : 0 },
+      ],
+      details: {
+        roomCode,
+        winner,
+        maxQuestions: MAX_QUESTIONS_PER_GAME,
+        questionsAnswered,
+      },
+    });
+  }, [
+    gameOver,
+    isSpectator,
+    opponent,
+    opponentScore,
+    playerName,
+    playerScore,
+    questionsAnswered,
+    roomCode,
+    winner,
+  ]);
+
   // Initialize socket
   useEffect(() => {
     const socket = RainOfWordsSocket.connect();
@@ -905,6 +954,8 @@ if (gameState === "playing" || gameState === "lobby") {
     setGameOver(false);
     setWinner(null);
     setIsSpectator(false);
+
+    router.replace("/(tabs)/game");
   };
 
   const handleRematch = () => {

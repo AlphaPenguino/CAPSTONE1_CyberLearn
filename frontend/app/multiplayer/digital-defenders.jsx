@@ -450,6 +450,7 @@ function DigitalDefenders() {
   const enemyRef = useRef(null);
   const cardRefs = useRef({});
   const healthBarRef = useRef(null);
+  const completionTrackedRef = useRef(false);
 
   useEffect(() => {
     // register a simple roaming animation for enemy sprite
@@ -1008,6 +1009,62 @@ function DigitalDefenders() {
       console.log("Token exists:", !!token);
     }
   }, [loadGameData, user, token]);
+
+  useEffect(() => {
+    if (gameState === "playing" || gameState === "lobby" || gameState === "waiting") {
+      completionTrackedRef.current = false;
+    }
+  }, [gameState, roomId]);
+
+  useEffect(() => {
+    if (
+      isSpectator ||
+      completionTrackedRef.current ||
+      (gameState !== "gameOver" && gameState !== "victory")
+    ) {
+      return;
+    }
+
+    completionTrackedRef.current = true;
+
+    const selfStats = Array.isArray(gameEndData?.playerStats)
+      ? gameEndData.playerStats.find((entry) => entry.playerId === playerId)
+      : null;
+
+    const normalizedScore =
+      typeof selfStats?.score === "number"
+        ? selfStats.score
+        : typeof currentWave === "number"
+          ? currentWave
+          : 0;
+
+    const gameWon =
+      gameState === "victory" ||
+      (gameEndData?.winner?.playerId && gameEndData.winner.playerId === playerId);
+
+    void digitalDefendersAPI.trackGameCompletion({
+      roomCode: roomId || null,
+      score: normalizedScore,
+      gameWon: Boolean(gameWon),
+      wavesCompleted: currentWave,
+      reason: gameOverReason || (gameState === "victory" ? "victory" : "game_over"),
+      playerStats: Array.isArray(gameEndData?.playerStats) ? gameEndData.playerStats : [],
+      details: {
+        finalHealth: pcHealth,
+      },
+    }).catch((error) => {
+      console.warn("Failed to track Digital Defenders completion:", error);
+    });
+  }, [
+    currentWave,
+    gameEndData,
+    gameOverReason,
+    gameState,
+    isSpectator,
+    pcHealth,
+    playerId,
+    roomId,
+  ]);
 
   // Define callback functions first
   const nextQuestion = useCallback((skipCountdownReset = false) => {

@@ -51,6 +51,7 @@ const [
   { default: quickplayRoutes },
   { default: rpsRoutes },
   { default: rainOfWordsRoutes },
+  { default: leaderboardRoutes },
   { connectDB },
   { trackUserActivity },
   { KnowledgeRelayQuestion },
@@ -84,6 +85,7 @@ const [
   import("./routes/quickplayRoutes.js"),
   import("./routes/rpsRoutes.js"),
   import("./routes/rainOfWordsRoutes.js"),
+  import("./routes/leaderboardRoutes.js"),
   import("./lib/db.js"),
   import("./middleware/analytics.middleware.js"),
   import("./models/KnowledgeRelayQuestion.js"),
@@ -224,6 +226,7 @@ app.use("/api/instructor", trackUserActivity, instructorRoutes);
 app.use("/api/quickplay", trackUserActivity, quickplayRoutes);
 app.use("/api/rps", trackUserActivity, rpsRoutes);
 app.use("/api/rain-of-words", trackUserActivity, rainOfWordsRoutes);
+app.use("/api/leaderboard", trackUserActivity, leaderboardRoutes);
 
 // Initialize Socket.IO game handlers
 initializeGameSocket(io);

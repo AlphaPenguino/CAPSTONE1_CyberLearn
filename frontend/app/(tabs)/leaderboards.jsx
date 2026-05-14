@@ -40,6 +40,24 @@ export default function Leaderboards() {
   const [profileDataCache, setProfileDataCache] = useState({});
   const [sectionsCatalog, setSectionsCatalog] = useState(null);
   const staleRefreshTimerRef = useRef(null);
+  const [otherGamesTop, setOtherGamesTop] = useState({});
+  const [loadingOtherGames, setLoadingOtherGames] = useState(true);
+  const [otherGamesError, setOtherGamesError] = useState(null);
+  const [selectedGameFilter, setSelectedGameFilter] = useState("all");
+
+  const OTHER_GAME_LABELS = {
+    quickplay: "Quick Play",
+    digitalDefenders: "Digital Defenders",
+    rainOfWords: "Rain of Words",
+  };
+
+  const GAME_FILTER_OPTIONS = [
+    { key: "all", label: "All" },
+    { key: "cyberquest", label: "CyberQuest" },
+    { key: "quickplay", label: "Quick Play" },
+    { key: "rainOfWords", label: "Rain of Words" },
+    { key: "digitalDefenders", label: "Digital Defenders" },
+  ];
 
   // Role helpers
   const isInstructorOrAdmin =
@@ -265,16 +283,28 @@ export default function Leaderboards() {
     }, [fetchLeaderboards])
   );
 
-  const handleRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchLeaderboards();
-  }, [fetchLeaderboards]);
-
   const getNormalizedRole = (account) =>
     (account?.privilege || account?.role || "student").toLowerCase();
 
   const getSubjectCode = (subject) =>
     subject?.subjectCode || subject?.sectionCode || "N/A";
+
+  const normalizeGameFilter = (gameType) => {
+    if (!gameType) return "all";
+    return String(gameType)
+      .replace(/[-_\s]/g, "")
+      .toLowerCase();
+  };
+
+  const isGameVisible = (gameType) => {
+    if (selectedGameFilter === "all") return true;
+    if (selectedGameFilter === "cyberquest") return gameType === "cyberquest";
+    return normalizeGameFilter(gameType) === normalizeGameFilter(selectedGameFilter);
+  };
+
+  const visibleOtherGameGroups = Object.entries(OTHER_GAME_LABELS).filter(
+    ([gameType]) => isGameVisible(gameType)
+  );
 
   const fetchSectionsCatalog = useCallback(async () => {
     if (Array.isArray(sectionsCatalog)) {
@@ -304,6 +334,40 @@ export default function Leaderboards() {
       return [];
     }
   }, [sectionsCatalog, token]);
+
+  // Fetch top scores for other games (Quick Play, Digital Defenders, Rain of Words)
+  const fetchOtherGamesTop = useCallback(async () => {
+    try {
+      if (!token) return;
+      setLoadingOtherGames(true);
+      setOtherGamesError(null);
+
+      const resp = await fetch(`${API_URL}/leaderboard/other-games/top?limit=5`, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+
+      if (!resp.ok) throw new Error(`Failed to fetch other games leaderboard (${resp.status})`);
+      const payload = await resp.json();
+      if (!payload.success) throw new Error(payload.message || "Failed to load other games leaderboard");
+      setOtherGamesTop(payload.data && typeof payload.data === "object" ? payload.data : {});
+    } catch (err) {
+      console.error("Other games leaderboard fetch error:", err);
+      setOtherGamesTop({});
+      setOtherGamesError(err.message || "Failed to load other games leaderboard");
+    } finally {
+      setLoadingOtherGames(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchOtherGamesTop();
+  }, [fetchOtherGamesTop]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchLeaderboards();
+    fetchOtherGamesTop();
+  }, [fetchLeaderboards, fetchOtherGamesTop]);
 
   const openUserProfileModal = useCallback(
     async (userItem) => {
@@ -531,8 +595,41 @@ export default function Leaderboards() {
           </TouchableOpacity>
         </View>
 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.gameFilterRow}
+        >
+          {GAME_FILTER_OPTIONS.map((option) => {
+            const isActive = selectedGameFilter === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                onPress={() => setSelectedGameFilter(option.key)}
+                activeOpacity={0.86}
+                style={[
+                  styles.gameFilterChip,
+                  {
+                    backgroundColor: isActive ? colors.primary : colors.card,
+                    borderColor: isActive ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.gameFilterChipText,
+                    { color: isActive ? "#fff" : colors.text },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         {/* Subject filter by role */}
-        {availableSections.length > 0 && (
+        {selectedGameFilter === "cyberquest" && availableSections.length > 0 && (
           <View
             style={[styles.filterContainer, { backgroundColor: colors.card }]}
           >
@@ -577,7 +674,7 @@ export default function Leaderboards() {
         }
       >
         {/* Current User Rank Card - Only for Students */}
-        {currentUserRank && !isInstructorOrAdmin && (
+        {(selectedGameFilter === "all" || selectedGameFilter === "cyberquest") && currentUserRank && !isInstructorOrAdmin && (
           <TouchableOpacity
             style={[
               styles.userRankCard,
@@ -638,7 +735,7 @@ export default function Leaderboards() {
         )}
 
         {/* Error State */}
-        {error && (
+        {(selectedGameFilter === "all" || selectedGameFilter === "cyberquest") && error && (
           <View
             style={[styles.errorContainer, { backgroundColor: colors.card }]}
           >
@@ -661,7 +758,7 @@ export default function Leaderboards() {
         )}
 
         {/* Empty State */}
-        {!error && leaders.length === 0 && (
+        {(selectedGameFilter === "all" || selectedGameFilter === "cyberquest") && !error && leaders.length === 0 && (
           <View
             style={[styles.emptyContainer, { backgroundColor: colors.card }]}
           >
@@ -689,7 +786,7 @@ export default function Leaderboards() {
         )}
 
         {/* Leaderboard List */}
-        {!error && leaders.length > 0 && (
+        {(selectedGameFilter === "all" || selectedGameFilter === "cyberquest") && !error && leaders.length > 0 && (
           <View style={styles.leaderboardList}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Top Performers
@@ -798,6 +895,124 @@ export default function Leaderboards() {
               </TouchableOpacity>
             ))}
           </View>
+        )}
+
+        {/* Other Games Top Scores */}
+        {(selectedGameFilter === "all" || isGameVisible("quickplay") || isGameVisible("rainOfWords") || isGameVisible("digitalDefenders")) && (
+        <View style={[styles.leaderboardList, { marginTop: 6 }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Other Games Leaderboards</Text>
+
+          {loadingOtherGames ? (
+            <View style={[styles.emptyContainer, { backgroundColor: colors.card }]}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Loading top scores...</Text>
+            </View>
+          ) : otherGamesError ? (
+            <View style={[styles.errorContainer, { backgroundColor: colors.card }]}>
+              <MaterialCommunityIcons name="alert-circle" size={36} color={colors.error} />
+              <Text style={[styles.errorText, { color: colors.error }]}>{otherGamesError}</Text>
+              <TouchableOpacity
+                style={[styles.retryButton, { backgroundColor: colors.primary }]}
+                onPress={fetchOtherGamesTop}
+              >
+                <MaterialCommunityIcons name="refresh" size={18} color="#fff" />
+                <Text style={styles.retryButtonText}>Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : visibleOtherGameGroups.length === 0 || visibleOtherGameGroups.every(([gameType]) => {
+              const entries = Array.isArray(otherGamesTop[gameType]) ? otherGamesTop[gameType] : [];
+              return entries.length === 0;
+            }) ? (
+            <View style={[styles.emptyContainer, { backgroundColor: colors.card }]}>
+              <MaterialCommunityIcons name="trophy-off" size={48} color={colors.textSecondary} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No recorded scores yet</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Play Quick Play, Digital Defenders or Rain of Words to record top scores.</Text>
+            </View>
+          ) : (
+            visibleOtherGameGroups.map(([gameType, label]) => {
+              const entries = Array.isArray(otherGamesTop[gameType]) ? otherGamesTop[gameType] : [];
+
+              return (
+                <View key={gameType} style={{ marginBottom: 18 }}>
+                  <Text style={[styles.sectionSubtitle, { color: colors.textSecondary, marginBottom: 10, textAlign: "center" }]}>
+                    {label}
+                  </Text>
+
+                  {entries.length === 0 ? (
+                    <View style={[styles.emptyContainer, { backgroundColor: colors.card, marginBottom: 0 }]}>
+                      <MaterialCommunityIcons name="trophy-outline" size={40} color={colors.textSecondary} />
+                      <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No scores recorded yet.</Text>
+                    </View>
+                  ) : (
+                    entries.map((row, index) => (
+                      <TouchableOpacity
+                        key={`${gameType}-${row.userId}-${index}`}
+                        style={[styles.leaderCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                        onPress={() => {
+                          if (row.userId) {
+                            openUserProfileModal({
+                              _id: row.userId,
+                              username: row.username,
+                              fullName: row.fullName,
+                              profileImage: row.profileImage,
+                            });
+                          }
+                        }}
+                        activeOpacity={0.86}
+                      >
+                        <View
+                          style={[
+                            styles.rankBadge,
+                            { backgroundColor: getRankBadgeColor(index) },
+                          ]}
+                        >
+                          <Text style={styles.rankBadgeText}>#{index + 1}</Text>
+                        </View>
+
+                        <Image
+                          source={
+                            row.profileImage
+                              ? { uri: getImageUrl(row.profileImage) }
+                              : require("../../assets/images/character1.png")
+                          }
+                          style={styles.avatar}
+                        />
+
+                        <View style={styles.userDetails}>
+                          <Text style={[styles.leaderUsername, { color: colors.text }]}>
+                            {row.username || row.fullName || "Unknown"}
+                          </Text>
+                          <View style={styles.statsContainer}>
+                            <View style={styles.statItem}>
+                              <MaterialCommunityIcons
+                                name="star"
+                                size={16}
+                                color={COLORS.gold}
+                              />
+                              <Text style={[styles.statText, { color: colors.textSecondary }]}>
+                                {`${row.score || 0} pts`}
+                              </Text>
+                            </View>
+                            <View style={styles.statItem}>
+                              <MaterialCommunityIcons
+                                name="calendar"
+                                size={14}
+                                color={colors.textSecondary}
+                              />
+                              <Text style={[styles.statText, { color: colors.textSecondary }]}>
+                                {row.completedAt ? new Date(row.completedAt).toLocaleString() : ""}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              );
+            })
+          )}
+        </View>
         )}
       </ScrollView>
 
@@ -1073,6 +1288,27 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 0,
     padding: 4,
+  },
+  gameFilterRow: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    gap: 10,
+    ...(Platform.OS === "web" && {
+      alignSelf: "center",
+      width: "100%",
+      maxWidth: 800,
+    }),
+  },
+  gameFilterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  gameFilterChipText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
   filterContainer: {
     flexDirection: "row",

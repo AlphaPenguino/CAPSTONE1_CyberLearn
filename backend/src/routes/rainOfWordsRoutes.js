@@ -2,6 +2,12 @@ import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
 import { trackGameCompletion } from "../middleware/analytics.middleware.js";
 import { rainOfWordsGames, rainOfWordsPlayers } from "../controllers/rainOfWordsController.js";
+import {
+  logActivity,
+  AUDIT_ACTIONS,
+  AUDIT_RESOURCES,
+  extractRequestInfo,
+} from "../lib/auditLogger.js";
 
 const router = express.Router();
 
@@ -556,13 +562,55 @@ router.post(
   trackGameCompletion("rainOfWords"),
   async (req, res) => {
     try {
-      const { gameResult, finalScore, playersData } = req.body;
+      const { gameResult, finalScore, playersData, score } = req.body;
+
+      const normalizedScore =
+        typeof score === "number"
+          ? score
+          : typeof finalScore === "number"
+            ? finalScore
+            : Array.isArray(finalScore) && typeof finalScore[0] === "number"
+              ? finalScore[0]
+              : typeof finalScore?.playerScore === "number"
+                ? finalScore.playerScore
+                : Array.isArray(playersData)
+                  ? (playersData.find((player) => typeof player?.score === "number")?.score ?? null)
+                  : null;
+
+      res.locals.gameMeta = {
+        ...(res.locals.gameMeta || {}),
+        score: normalizedScore,
+        finalScore,
+        result: {
+          ...(gameResult || {}),
+          score: normalizedScore,
+        },
+      };
+
+      const requestInfo = extractRequestInfo(req);
+      await logActivity({
+        userId: req.user?.id || null,
+        username: req.user?.username || req.user?.fullName || "Unknown Player",
+        userRole: req.user?.privilege || "student",
+        action: AUDIT_ACTIONS.GAME_END,
+        resource: AUDIT_RESOURCES.GAME,
+        details: {
+          gameType: "rain_of_words",
+          event: "game_completed",
+          score: normalizedScore,
+          gameResult,
+          finalScore,
+          playersData,
+        },
+        ...requestInfo,
+      });
 
       res.json({
         success: true,
         message: "Rain of Words game completion tracked",
         data: {
           gameResult,
+          score: normalizedScore,
           finalScore,
           playersData,
           timestamp: new Date(),
@@ -594,6 +642,7 @@ router.get("/debug/rooms", (req, res) => {
         createdAt: game.createdAt,
         players: Array.from(game.players.values()).map((p) => ({
           name: p.name,
+          score: p.score,
         })),
       })
     );
