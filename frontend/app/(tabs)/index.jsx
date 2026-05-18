@@ -36,7 +36,7 @@ import Svg, {
   LinearGradient,
   Stop,
 } from "react-native-svg";
-import { AudioContext } from "react-native-audio-api";
+import { AudioContext } from "@/utils/safe-audio";
 
 const PlayerCharacter = React.memo(
   function PlayerCharacter({

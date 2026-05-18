@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform, Vibration } from "react-native";
-import { AudioContext } from "react-native-audio-api";
+import { AudioContext } from "@/utils/safe-audio";
 import { useNotifications } from "./NotificationContext";
 import { GameNotificationService } from "@/services/gameNotificationService";
 

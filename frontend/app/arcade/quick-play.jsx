@@ -17,7 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Animatable from "react-native-animatable";
-import { AudioContext } from "react-native-audio-api";
+import { AudioContext } from "@/utils/safe-audio";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 
@@ -412,6 +412,8 @@ export default function QuickPlay() {
   const [gameResult, setGameResult] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
   const [boardSeed, setBoardSeed] = useState(0);
+  const [longPressReveal, setLongPressReveal] = useState({ visible: false, tile: null });
+  const longPressTimeoutRef = useRef(null);
   const [editingCodePill, setEditingCodePill] = useState(false);
   const [codeInputValue, setCodeInputValue] = useState("");
   const [instructorConfig, setInstructorConfig] = useState(() => ({
@@ -927,6 +929,10 @@ export default function QuickPlay() {
       clearResolutionTimer();
       stopAllAudio();
       hasEndedRef.current = true;
+      if (longPressTimeoutRef.current) {
+        clearTimeout(longPressTimeoutRef.current);
+        longPressTimeoutRef.current = null;
+      }
     };
   }, [clearResolutionTimer, stopAllAudio]);
 
@@ -1053,9 +1059,15 @@ export default function QuickPlay() {
     () => new Map(selectedTileIds.map((tileId, index) => [tileId, index])),
     [selectedTileIds]
   );
+  const suppressNextTilePressRef = useRef(false);
 
   const handleTilePress = useCallback(
     (tileId) => {
+      if (suppressNextTilePressRef.current) {
+        suppressNextTilePressRef.current = false;
+        return;
+      }
+
       if (phase !== "playing" || isResolving || hasEndedRef.current) return;
       if (matchedPairSet.has(tileMap.get(tileId)?.pairId)) return;
       if (selectedTileIds.includes(tileId)) {
@@ -1123,6 +1135,60 @@ export default function QuickPlay() {
     ]
   );
 
+  const showLongPressGamified = useCallback(
+    (tile) => {
+      if (!tile) return;
+      setLongPressReveal({ visible: true, tile });
+      try {
+        void playSfx("correct");
+      } catch {
+        // ignore
+      }
+
+      if (longPressTimeoutRef.current) {
+        clearTimeout(longPressTimeoutRef.current);
+      }
+
+      longPressTimeoutRef.current = setTimeout(() => {
+        setLongPressReveal({ visible: false, tile: null });
+        longPressTimeoutRef.current = null;
+      }, 1400);
+    },
+    [playSfx]
+  );
+
+  const hideLongPressGamified = useCallback(() => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+    setLongPressReveal({ visible: false, tile: null });
+  }, []);
+
+  const handleTileLongPress = useCallback(
+    (tile, isFaceUp) => {
+      if (!isFaceUp) return;
+
+      suppressNextTilePressRef.current = true;
+
+      if (Platform.OS === "android") {
+        showLongPressGamified(tile);
+        return;
+      }
+
+      const title = tile.side === "definition" ? "Definition" : "Answer";
+      const message =
+        tile.content.type === "image"
+          ? "Image tile"
+          : tile.content.text || "No text available";
+
+      Alert.alert(title, message, [{ text: "Close", style: "default" }], {
+        cancelable: true,
+      });
+    },
+    [showLongPressGamified]
+  );
+
   const handleExitPress = useCallback(() => {
     if (phase === "playing") {
       clearResolutionTimer();
@@ -1170,7 +1236,7 @@ export default function QuickPlay() {
     [matchedPairSet, selectedOrderMap]
   );
 
-  const renderTileFace = (content, isFaceUp) => {
+  const renderTileFace = (content, isFaceUp, fontSizeOverride) => {
     if (!isFaceUp) {
       return (
         <View style={styles.tileBackContent}>
@@ -1191,7 +1257,14 @@ export default function QuickPlay() {
     }
 
     return (
-      <Text style={styles.tileFrontText}>
+      <Text
+        style={[
+          styles.tileFrontText,
+          fontSizeOverride ? { fontSize: fontSizeOverride, lineHeight: Math.round(fontSizeOverride * 1.25) } : {},
+        ]}
+        numberOfLines={Platform.OS === "android" ? 3 : undefined}
+        ellipsizeMode="tail"
+      >
         {content.text}
       </Text>
     );
@@ -1201,13 +1274,17 @@ export default function QuickPlay() {
     <View style={styles.screenWrap}>
       <AnimatableView animation="fadeInUp" duration={500} style={styles.menuCard}>
         <View style={styles.menuHeaderRow}>
-          <View>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.menuEyebrow}>QUICK PLAY</Text>
-            <Text style={styles.menuTitle}>{roundDefinition?.title || roundParams.title}</Text>
-            <Text style={styles.menuSubtitle}>{roundDefinition?.description || roundParams.description}</Text>
+            <Text style={styles.menuTitle} numberOfLines={1} ellipsizeMode="tail">
+              {roundDefinition?.title || roundParams.title}
+            </Text>
+            <Text style={styles.menuSubtitle} numberOfLines={2} ellipsizeMode="tail">
+              {roundDefinition?.description || roundParams.description}
+            </Text>
           </View>
           <TouchableOpacity
-            style={styles.codePill}
+            style={[styles.codePill, { alignSelf: "flex-start" }]}
             onPress={() => {
               setEditingCodePill(true);
               setCodeInputValue(roundDefinition?.quizCode || roundParams.quizCode || "");
@@ -1321,7 +1398,9 @@ export default function QuickPlay() {
             paddingBottom: webScale(24) + insets.bottom,
           },
         ]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={Platform.OS === "android"}
+        persistentScrollbar={Platform.OS === "android"}
+        scrollIndicatorInsets={Platform.OS === "android" ? { right: webScale(4) } : undefined}
       >
         <View style={styles.editorCard}>
           <Text style={styles.editorTitle}>Instructor Tile Editor</Text>
@@ -1518,8 +1597,19 @@ export default function QuickPlay() {
   const renderGameplayScreen = () => {
     const pairCount = roundDefinition?.pairs?.length || 0;
     const matchedCount = matchedPairIds.length;
-    const tileColumns = pairCount <= 4 ? 2 : pairCount <= 6 ? 3 : 4;
+    const tileColumns = Platform.OS === "android" ? 4 : pairCount <= 4 ? 2 : pairCount <= 6 ? 3 : 4;
     const tileWidth = `${100 / tileColumns - 1.25}%`;
+    // Calculate pixel-perfect tile width for Android to ensure square tiles fit the viewport
+    // Account for playContent padding (outer), boardShell padding (inner), and safe area insets
+    const playContentPadding = webScale(14);
+    const boardShellPadding = webScale(14);
+    const totalHorizontalPadding = playContentPadding * 2 + boardShellPadding * 2 + insets.left + insets.right;
+    const tileGapPx = webScale(10);
+    const availableWidth = Math.max(0, viewportWidth - totalHorizontalPadding);
+    const tileWidthPx = Math.max(
+      webScale(64),
+      Math.floor((availableWidth - tileGapPx * (tileColumns - 1)) / tileColumns)
+    );
     const timerPulse = timer <= 10 && phase === "playing";
 
     return (
@@ -1532,23 +1622,29 @@ export default function QuickPlay() {
             paddingBottom: webScale(24) + insets.bottom,
           },
         ]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={Platform.OS === "android"}
+        persistentScrollbar={Platform.OS === "android"}
+        scrollIndicatorInsets={Platform.OS === "android" ? { right: webScale(4) } : undefined}
       >
         <View style={styles.hudBar}>
           <View style={styles.hudItem}>
             <Ionicons name="time-outline" size={webScale(18)} color="#FF7070" />
+            <Text style={styles.hudLabel}>Time</Text>
             <Text style={[styles.hudValue, timerPulse && styles.hudValueUrgent]}>{formatClock(timer)}</Text>
           </View>
           <View style={styles.hudItem}>
             <Ionicons name="layers-outline" size={webScale(18)} color="#60A5FA" />
+            <Text style={styles.hudLabel}>Paired Tiles</Text>
             <Text style={styles.hudValue}>{matchedCount}/{pairCount}</Text>
           </View>
           <View style={styles.hudItem}>
             <Ionicons name="alert-circle-outline" size={webScale(18)} color="#F59E0B" />
+            <Text style={styles.hudLabel}>Mistakes</Text>
             <Text style={styles.hudValue}>{mistakes}</Text>
           </View>
           <View style={styles.hudItem}>
             <Ionicons name="repeat-outline" size={webScale(18)} color="#34D399" />
+            <Text style={styles.hudLabel}>Repeat</Text>
             <Text style={styles.hudValue}>{moves}</Text>
           </View>
         </View>
@@ -1593,19 +1689,34 @@ export default function QuickPlay() {
                   ? styles.tileSecond
                   : styles.tileHidden;
 
+              // Use explicit margins for spacing (more reliable than gap on Android)
+              const isEndOfRow = (index + 1) % tileColumns === 0;
+              const marginRight = Platform.OS === "android" ? (isEndOfRow ? 0 : tileGapPx) : 0;
+              const marginBottom = Platform.OS === "android" ? tileGapPx : 0;
+
+              const tileFontSize = Platform.OS === "android" ? clamp(Math.floor(tileWidthPx / 7), webScale(10), webScale(14)) : undefined;
+
               return (
                 <AnimatableTile
                   key={`${tile.id}-${tileState}-${index}`}
                   animation={animation}
                   duration={380}
                   useNativeDriver
-                  style={[styles.tileWrapper, { width: tileWidth }]}
+                  style={[
+                    styles.tileWrapper,
+                    Platform.OS === "android"
+                      ? { width: tileWidthPx, marginRight, marginBottom }
+                      : { width: tileWidth },
+                  ]}
+                  onLongPress={() => handleTileLongPress(tile, isFaceUp)}
+                  delayLongPress={350}
                   onPress={() => handleTilePress(tile.id)}
+                  hitSlop={Platform.OS === "android" ? { top: 8, left: 8, right: 8, bottom: 8 } : undefined}
                   activeOpacity={0.92}
                   disabled={phase !== "playing" || isResolving || tileState === "matched"}
                 >
                   <View style={[styles.tileCard, tileTone]}>
-                    <View style={styles.tileFace}>{renderTileFace(tile.content, isFaceUp)}</View>
+                    <View style={styles.tileFace}>{renderTileFace(tile.content, isFaceUp, tileFontSize)}</View>
                   </View>
                 </AnimatableTile>
               );
@@ -1698,7 +1809,7 @@ export default function QuickPlay() {
 
   return (
     <LinearGradient colors={screenGradient} style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { paddingBottom: Platform.OS === "android" ? insets.bottom : 0 }]}>
         <View
           style={[
             styles.header,
@@ -1726,6 +1837,18 @@ export default function QuickPlay() {
         {phase === "instructor" && renderInstructorScreen()}
         {phase === "playing" && renderGameplayScreen()}
         {phase === "results" && renderResultsScreen()}
+        {longPressReveal.visible ? (
+          <AnimatableView animation="zoomIn" duration={420} style={styles.longPressOverlay}>
+            <TouchableOpacity activeOpacity={0.92} style={styles.longPressCard} onPress={hideLongPressGamified}>
+              <Text style={styles.longPressLabel}>{
+                longPressReveal.tile?.content?.type === "image"
+                  ? "Image"
+                  : longPressReveal.tile?.content?.text || "Tile"
+              }</Text>
+              <Text style={styles.longPressHint}>Hold released</Text>
+            </TouchableOpacity>
+          </AnimatableView>
+        ) : null}
       </SafeAreaView>
     </LinearGradient>
   );
@@ -1795,12 +1918,13 @@ const styles = StyleSheet.create({
   },
   scrollArea: {
     flex: 1,
+    backgroundColor: Platform.OS === "android" ? "transparent" : undefined,
   },
   playContent: {
     width: "100%",
     maxWidth: Platform.OS === "web" ? webScale(1040) : "100%",
     alignSelf: "center",
-    paddingHorizontal: webScale(14),
+    paddingHorizontal: Platform.OS === "android" ? webScale(12) : webScale(14),
   },
   menuCard: {
     width: "100%",
@@ -1844,14 +1968,15 @@ const styles = StyleSheet.create({
     maxWidth: webScale(540),
   },
   codePill: {
-    minWidth: webScale(110),
+    maxWidth: webScale(140),
     alignItems: "center",
-    paddingHorizontal: webScale(12),
+    paddingHorizontal: webScale(10),
     paddingVertical: webScale(10),
     borderRadius: webScale(16),
     backgroundColor: "rgba(15, 23, 42, 0.78)",
     borderWidth: 1,
     borderColor: "rgba(96, 165, 250, 0.26)",
+    flexShrink: 1,
   },
   codePillLabel: {
     color: "#94A3B8",
@@ -1937,6 +2062,44 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textTransform: "uppercase",
     letterSpacing: 0.6,
+  },
+  longPressOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(6,8,16,0.45)",
+    zIndex: 2000,
+  },
+  longPressCard: {
+    minWidth: webScale(220),
+    maxWidth: "86%",
+    padding: webScale(18),
+    borderRadius: webScale(18),
+    backgroundColor: "rgba(12,18,36,0.96)",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(253,230,138,0.12)",
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 16,
+  },
+  longPressLabel: {
+    color: "#F8FAFC",
+    fontSize: webScale(16),
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  longPressHint: {
+    marginTop: webScale(6),
+    color: "#94A3B8",
+    fontSize: webScale(11),
+    letterSpacing: 0.8,
+    textAlign: "center",
   },
   menuStatLabel: {
     marginTop: webScale(5),
@@ -2211,19 +2374,19 @@ const styles = StyleSheet.create({
   hudBar: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: webScale(10),
+    gap: Platform.OS === "android" ? webScale(8) : webScale(10),
     justifyContent: "space-between",
     marginBottom: webScale(14),
   },
   hudItem: {
-    minWidth: webScale(86),
+    minWidth: Platform.OS === "android" ? webScale(78) : webScale(86),
     flex: 1,
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    gap: webScale(8),
-    paddingVertical: webScale(11),
-    paddingHorizontal: webScale(12),
+    gap: webScale(2),
+    paddingVertical: Platform.OS === "android" ? webScale(9) : webScale(11),
+    paddingHorizontal: webScale(10),
     borderRadius: webScale(16),
     backgroundColor: "rgba(15, 23, 42, 0.8)",
     borderWidth: 1,
@@ -2231,9 +2394,17 @@ const styles = StyleSheet.create({
   },
   hudValue: {
     color: "#F8FAFC",
-    fontSize: webScale(14),
+    fontSize: Platform.OS === "android" ? webScale(12) : webScale(14),
     fontWeight: "800",
     letterSpacing: 0.5,
+  },
+  hudLabel: {
+    color: "#94A3B8",
+    fontSize: webScale(8),
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    textAlign: "center",
   },
   hudValueUrgent: {
     color: "#FB7185",
@@ -2262,7 +2433,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#34D399",
   },
   boardShell: {
-    padding: webScale(14),
+    padding: Platform.OS === "android" ? webScale(12) : webScale(14),
     borderRadius: webScale(24),
     backgroundColor: PANEL_BACKGROUND,
     borderWidth: 1,
@@ -2271,7 +2442,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.32,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    elevation: Platform.OS === "android" ? 8 : 6,
+    marginHorizontal: Platform.OS === "android" ? 0 : undefined,
   },
   boardHeader: {
     marginBottom: webScale(12),
@@ -2292,11 +2464,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: webScale(10),
-    justifyContent: "space-between",
+    justifyContent: Platform.OS === "android" ? "flex-start" : "space-between",
+    paddingRight: Platform.OS === "android" ? 0 : undefined,
   },
   tileWrapper: {
     minWidth: webScale(74),
     aspectRatio: 1,
+    flexGrow: 0,
   },
   tileCard: {
     flex: 1,

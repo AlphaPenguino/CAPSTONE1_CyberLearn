@@ -15,7 +15,7 @@ import { useRouter } from "expo-router";
 import styles from "../../assets/styles/login.styles.js";
 import { useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { AudioContext } from "react-native-audio-api";
+import { AudioContext } from "@/utils/safe-audio";
 import * as Animatable from "react-native-animatable";
 import COLORS from "../../constants/custom-colors.js";
 import { useTheme } from "../../contexts/ThemeContext";

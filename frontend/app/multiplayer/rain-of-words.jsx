@@ -21,8 +21,8 @@ import * as Animatable from "react-native-animatable";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Asset } from "expo-asset";
-import { AudioContext } from "react-native-audio-api";
-import Video, { VideoRef } from "react-native-video";
+import { AudioContext } from "@/utils/safe-audio";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useAuthStore } from "@/store/authStore";
 import RainOfWordsSocket from "@/services/rainOfWordsSocket";
 import RainOfWordsApi from "@/services/rainOfWordsApi";
@@ -31,6 +31,7 @@ const WEB_VIEWPORT_HEIGHT =
   Platform.OS === "web" ? Dimensions.get("window").height : 800;
 const WEB_VIEWPORT_WIDTH =
   Platform.OS === "web" ? Dimensions.get("window").width : 390;
+const IS_ANDROID = Platform.OS === "android";
 const IS_COMPACT_LAYOUT = WEB_VIEWPORT_WIDTH < 768;
 
 const AnimatedView = Animatable.createAnimatableComponent(View);
@@ -61,7 +62,6 @@ const SFX_ASSETS = {
   correctFall: require("../../assets/sounds/typer/typer_correct_ans_fell.wav"),
   gameover: require("../../assets/sounds/typer/typer_gameover.wav"),
 };
-void VideoRef;
 
 const WORD_TOKEN_COLORS = ["#00d4ff", "#4CAF50", "#9c27b0", "#FFB74D"];
 const BACKDROP_ORBS = [
@@ -161,7 +161,7 @@ export default function RainOfWords() {
     typeof roomCodeParam === "string" ? roomCodeParam.trim().toUpperCase() : "";
   const user = useAuthStore((state) => state.user);
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
-  const videoResizeMode = Platform.OS === "web" ? "stretch" : "cover";
+  // Note: videoResizeMode is no longer used; expo-video uses contentFit instead
 
   // Game state
   const [gameState, setGameState] = useState("lobby"); // lobby, waiting, playing, finished
@@ -194,16 +194,39 @@ export default function RainOfWords() {
   const nextQuestionTimeoutRef = useRef(null);
   const rotateAnim = useRef(new Animated.Value(0));
   const rotateAnimLoopRef = useRef(null);
-  const backgroundVideoRef = useRef(/** @type {VideoRef | null} */ (null));
+  const completionTrackedRef = useRef(false);
   const bgMusicContextRef = useRef(null);
   const bgMusicSourceRef = useRef(null);
   const sfxAudioBufferCacheRef = useRef({});
   const sfxContextRef = useRef(null);
-  const completionTrackedRef = useRef(false);
+  
   const backgroundVideoSource =
     Platform.OS === "web"
-      ? { uri: Asset.fromModule(TYPER_BACKGROUND_VIDEO).uri }
-      : TYPER_BACKGROUND_VIDEO;
+      ? require("../../assets/video/typer_bg_vid.mp4")
+      : Asset.fromModule(TYPER_BACKGROUND_VIDEO).uri;
+
+  const videoPlayer = useVideoPlayer(backgroundVideoSource, (player) => {
+    player.loop = true;
+    player.muted = true;
+  });
+
+  // Auto-play video when component mounts or when player is ready
+  useEffect(() => {
+    if (videoPlayer && Platform.OS === "web") {
+      // On web, we need to explicitly call play after a short delay
+      const timer = setTimeout(() => {
+        try {
+          const playResult = videoPlayer.play();
+          if (playResult && typeof playResult.catch === "function") {
+            playResult.catch((err) => console.error("Video play error:", err));
+          }
+        } catch (err) {
+          console.error("Video play error:", err);
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [videoPlayer]);
 
   const renderBackgroundVideoLayer = () => (
     <View
@@ -213,22 +236,17 @@ export default function RainOfWords() {
         { width: viewportWidth, height: viewportHeight },
       ]}
     >
-      <Video
-        ref={backgroundVideoRef}
-        source={backgroundVideoSource}
+      <VideoView
+        player={videoPlayer}
         style={[
           styles.backgroundVideoLayer,
           { width: viewportWidth, height: viewportHeight },
           Platform.OS === "web" && styles.backgroundVideoLayerPortraitWeb,
         ]}
-        paused={false}
-        muted
-        volume={0}
-        repeat
-        resizeMode={videoResizeMode}
-        playInBackground={false}
-        playWhenInactive={false}
-        controls={false}
+        contentFit="cover"
+        nativeControls={false}
+        allowsFullscreen={false}
+        playsInline={true}
         onError={(error) => {
           console.error("Background video failed:", error);
         }}
@@ -1164,18 +1182,20 @@ if (gameState === "playing" || gameState === "lobby") {
                 <Text style={styles.modeButtonText}>Play</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.modeButton, gameMode === "instructor" && styles.modeButtonActive]}
-                onPress={() => {
-                  if (isSpectator) return;
-                  setGameMode("instructor");
-                  router.push("/multiplayer/rain-of-words-instructor");
-                }}
-                disabled={isSpectator}
-              >
-                <MaterialCommunityIcons name="pencil" size={24} color="#fff" />
-                <Text style={styles.modeButtonText}>Instructor</Text>
-              </TouchableOpacity>
+              {user?.privilege !== 'student' && (
+                <TouchableOpacity
+                  style={[styles.modeButton, gameMode === "instructor" && styles.modeButtonActive]}
+                  onPress={() => {
+                    if (isSpectator) return;
+                    setGameMode("instructor");
+                    router.push("/multiplayer/rain-of-words-instructor");
+                  }}
+                  disabled={isSpectator}
+                >
+                  <MaterialCommunityIcons name="pencil" size={24} color="#fff" />
+                  <Text style={styles.modeButtonText}>Instructor</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {gameMode === "play" && (
@@ -1569,7 +1589,8 @@ const styles = StyleSheet.create({
   },
   backgroundVideoLayerPortraitWeb: {
     alignSelf: "center",
-    objectFit: "fill",
+    width: "100%",
+    height: "100%",
   },
   safeArea: {
     flex: 1,
@@ -1593,7 +1614,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
   },
   title: {
-    fontSize: 48,
+    fontSize: IS_ANDROID ? 34 : 48,
     fontWeight: "bold",
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1.6,
@@ -1605,11 +1626,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   titleCompact: {
-    fontSize: 34,
+    fontSize: IS_ANDROID ? 28 : 34,
     marginBottom: 6,
   },
   subtitle: {
-    fontSize: 18,
+    fontSize: IS_ANDROID ? 14 : 18,
     fontFamily: GAME_FONT_BODY,
     letterSpacing: 0.8,
     color: "#aaa",
@@ -1617,7 +1638,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   subtitleCompact: {
-    fontSize: 14,
+    fontSize: IS_ANDROID ? 12 : 14,
     marginBottom: 18,
   },
   connectionStatus: {
@@ -1636,7 +1657,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   statusText: {
-    fontSize: 14,
+    fontSize: IS_ANDROID ? 12 : 14,
     fontFamily: GAME_FONT_BODY,
     letterSpacing: 0.7,
     color: "#aaa",
@@ -1668,7 +1689,7 @@ const styles = StyleSheet.create({
   },
   modeButtonText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: IS_ANDROID ? 12 : 14,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1,
     textTransform: "uppercase",
@@ -1692,12 +1713,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     color: "#fff",
-    fontSize: 16,
+    fontSize: IS_ANDROID ? 14 : 16,
   },
   inputCompact: {
     paddingVertical: 10,
     paddingHorizontal: 10,
-    fontSize: 14,
+    fontSize: IS_ANDROID ? 13 : 14,
   },
   primaryButton: {
     borderRadius: 8,
@@ -1712,7 +1733,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: IS_ANDROID ? 14 : 16,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1.2,
     textTransform: "uppercase",
@@ -1738,7 +1759,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: "#00d4ff",
-    fontSize: 16,
+    fontSize: IS_ANDROID ? 14 : 16,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1,
     fontWeight: "600",
@@ -1756,7 +1777,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
   },
   roomCodeDisplay: {
-    fontSize: 14,
+    fontSize: IS_ANDROID ? 12 : 14,
     fontFamily: GAME_FONT_BODY,
     letterSpacing: 1,
     color: "#888",
@@ -1766,7 +1787,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   playerName: {
-    fontSize: 24,
+    fontSize: IS_ANDROID ? 18 : 24,
     fontWeight: "bold",
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1.2,
@@ -1777,7 +1798,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   playerNameCompact: {
-    fontSize: 20,
+    fontSize: IS_ANDROID ? 16 : 20,
     marginBottom: 24,
   },
   opponentSection: {
@@ -1786,7 +1807,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   opponentText: {
-    fontSize: 18,
+    fontSize: IS_ANDROID ? 15 : 18,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1,
     color: "#4CAF50",
@@ -1806,7 +1827,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   waitingText: {
-    fontSize: 16,
+    fontSize: IS_ANDROID ? 13 : 16,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1,
     textTransform: "uppercase",
@@ -1861,7 +1882,7 @@ const styles = StyleSheet.create({
   },
   scoreName: {
     color: "#aaa",
-    fontSize: 12,
+    fontSize: IS_ANDROID ? 10 : 12,
     fontFamily: GAME_FONT_BODY,
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -1869,7 +1890,7 @@ const styles = StyleSheet.create({
   },
   score: {
     color: "#00d4ff",
-    fontSize: 32,
+    fontSize: IS_ANDROID ? 26 : 32,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1,
     textShadowColor: "rgba(0, 212, 255, 0.6)",
@@ -1925,20 +1946,20 @@ const styles = StyleSheet.create({
   },
   questionBadgeText: {
     color: "#00d4ff",
-    fontSize: 11,
+    fontSize: IS_ANDROID ? 9 : 11,
     fontWeight: "700",
     letterSpacing: 0.8,
   },
   questionStep: {
     color: "#aaa",
-    fontSize: 12,
+    fontSize: IS_ANDROID ? 10 : 12,
     fontFamily: GAME_FONT_BODY,
     letterSpacing: 0.7,
     fontWeight: "600",
   },
   questionText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: IS_ANDROID ? 15 : 18,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 0.9,
     textShadowColor: "rgba(0, 0, 0, 0.55)",
@@ -1948,8 +1969,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   questionTextCompact: {
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: IS_ANDROID ? 13 : 16,
+    lineHeight: IS_ANDROID ? 18 : 22,
   },
   gameArea: {
     flex: 1,
@@ -1970,17 +1991,17 @@ const styles = StyleSheet.create({
   },
   fallingWord: {
     position: "absolute",
-    paddingVertical: 14,
-    paddingHorizontal: 22,
+    paddingVertical: IS_ANDROID ? 9 : 14,
+    paddingHorizontal: IS_ANDROID ? 12 : 22,
     borderRadius: 10,
-    minWidth: 90,
+    minWidth: IS_ANDROID ? 64 : 90,
     alignItems: "center",
     justifyContent: "center",
   },
   wordTokenOuterGlow: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 10,
-    borderWidth: 3,
+    borderWidth: IS_ANDROID ? 2 : 3,
     opacity: 0.4,
     shadowOpacity: 0.8,
     shadowRadius: 12,
@@ -1990,17 +2011,17 @@ const styles = StyleSheet.create({
   wordTokenOuterGlowActive: {
     opacity: 1,
     shadowOpacity: 1,
-    shadowRadius: 25,
-    borderWidth: 4,
+    shadowRadius: IS_ANDROID ? 18 : 25,
+    borderWidth: IS_ANDROID ? 3 : 4,
     elevation: 30,
   },
   wordTokenGlow: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingVertical: IS_ANDROID ? 7 : 10,
+    paddingHorizontal: IS_ANDROID ? 10 : 14,
     borderRadius: 8,
-    minWidth: 80,
+    minWidth: IS_ANDROID ? 56 : 80,
     alignItems: "center",
-    borderWidth: 2,
+    borderWidth: IS_ANDROID ? 1.5 : 2,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
     shadowOpacity: 0.6,
     shadowRadius: 10,
@@ -2010,8 +2031,8 @@ const styles = StyleSheet.create({
   wordTokenGlowActive: {
     backgroundColor: "rgba(114, 255, 150, 0.15)",
     shadowOpacity: 0.9,
-    shadowRadius: 20,
-    elevation: 16,
+    shadowRadius: IS_ANDROID ? 14 : 20,
+    elevation: IS_ANDROID ? 12 : 16,
   },
   wordTokenAccent: {
     height: 2,
@@ -2022,13 +2043,13 @@ const styles = StyleSheet.create({
   wordTokenTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    marginBottom: 8,
-    marginTop: 4,
+    gap: IS_ANDROID ? 5 : 7,
+    marginBottom: IS_ANDROID ? 6 : 8,
+    marginTop: IS_ANDROID ? 2 : 4,
   },
   wordTokenDot: {
-    width: 10,
-    height: 10,
+    width: IS_ANDROID ? 7 : 10,
+    height: IS_ANDROID ? 7 : 10,
     borderRadius: 99,
     shadowOpacity: 0.7,
     shadowRadius: 6,
@@ -2043,10 +2064,10 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   wordTokenBase: {
-    width: 35,
-    height: 4,
+    width: IS_ANDROID ? 24 : 35,
+    height: IS_ANDROID ? 3 : 4,
     borderRadius: 99,
-    marginTop: 8,
+    marginTop: IS_ANDROID ? 6 : 8,
     opacity: 0.95,
     shadowOpacity: 0.6,
     shadowRadius: 4,
@@ -2054,7 +2075,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   wordText: {
-    fontSize: 17,
+    fontSize: IS_ANDROID ? 13 : 17,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 0.9,
     fontWeight: "700",
@@ -2072,7 +2093,7 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   wordCharacter: {
-    fontSize: 17,
+    fontSize: IS_ANDROID ? 13 : 17,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 0.9,
     fontWeight: "700",
@@ -2148,7 +2169,7 @@ const styles = StyleSheet.create({
   },
   feedbackText: {
     color: "#00d4ff",
-    fontSize: 20,
+    fontSize: IS_ANDROID ? 16 : 20,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 0.7,
     fontWeight: "600",
@@ -2164,33 +2185,33 @@ const styles = StyleSheet.create({
   inputSectionCompact: {
     gap: 8,
     marginBottom: 12,
-    maxWidth: 320,
+    maxWidth: IS_ANDROID ? 290 : 320,
     alignSelf: "center",
   },
   gameInput: {
-    width: 250,
+    width: IS_ANDROID ? 210 : 250,
     backgroundColor: "#16213e",
     borderWidth: 2,
     borderColor: "#00d4ff",
     borderRadius: 8,
     padding: 12,
     color: "#fff",
-    fontSize: 16,
+    fontSize: IS_ANDROID ? 14 : 16,
   },
   gameInputCompact: {
-    width: 200,
+    width: IS_ANDROID ? 180 : 200,
     paddingVertical: 10,
-    fontSize: 14,
+    fontSize: IS_ANDROID ? 13 : 14,
   },
   submitButton: {
     backgroundColor: "#9c27b0",
     borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: IS_ANDROID ? 12 : 16,
   },
   submitButtonCompact: {
-    paddingHorizontal: 14,
+    paddingHorizontal: IS_ANDROID ? 10 : 14,
   },
   // Finished Styles
   finishedContainer: {
@@ -2204,7 +2225,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   finishedTitle: {
-    fontSize: 42,
+    fontSize: IS_ANDROID ? 30 : 42,
     fontWeight: "bold",
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1.5,
@@ -2216,7 +2237,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   finishedTitleCompact: {
-    fontSize: 32,
+    fontSize: IS_ANDROID ? 24 : 32,
     marginBottom: 24,
   },
   finalScores: {
@@ -2243,7 +2264,7 @@ const styles = StyleSheet.create({
   },
   finalScoreName: {
     color: "#aaa",
-    fontSize: 14,
+    fontSize: IS_ANDROID ? 12 : 14,
     fontFamily: GAME_FONT_BODY,
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -2251,7 +2272,7 @@ const styles = StyleSheet.create({
   },
   finalScore: {
     color: "#00d4ff",
-    fontSize: 48,
+    fontSize: IS_ANDROID ? 36 : 48,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1.3,
     textShadowColor: "rgba(0, 212, 255, 0.6)",
@@ -2260,17 +2281,17 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   finalScoreCompact: {
-    fontSize: 36,
+    fontSize: IS_ANDROID ? 28 : 36,
   },
   vsText: {
     color: "#666",
-    fontSize: 16,
+    fontSize: IS_ANDROID ? 14 : 16,
     fontFamily: GAME_FONT_DISPLAY,
     letterSpacing: 1,
     fontWeight: "bold",
   },
   vsTextCompact: {
-    fontSize: 14,
+    fontSize: IS_ANDROID ? 12 : 14,
   },
   secondaryButton: {
     paddingVertical: 12,

@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { usePathname, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { AudioContext } from "react-native-audio-api";
+import { AudioContext } from "@/utils/safe-audio";
 import COLORS from "@/constants/custom-colors";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useSettings } from "../../contexts/SettingsContext";

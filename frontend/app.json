@@ -58,7 +58,8 @@
           "color": "#001F3F",
           "defaultChannel": "game-completion"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

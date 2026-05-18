@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo, useRef } from "react";
+import React, { useState, useEffect, useCallback, memo, useRef, useMemo } from "react";
 import * as Animatable from "react-native-animatable";
 import {
   View,
@@ -19,7 +19,7 @@ import {
 } from "react-native";
 // Removed unused AsyncStorage import
 // import AsyncStorage from "@react-native-async-storage/async-storage";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -28,7 +28,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { AudioContext } from 'react-native-audio-api';
+import { AudioContext } from '@/utils/safe-audio';
 import COLORS from "@/constants/custom-colors";
 import digitalDefendersSocket from "@/services/digitalDefendersSocket";
 import digitalDefendersAPI from "@/services/digitalDefendersAPI";
@@ -451,6 +451,63 @@ function DigitalDefenders() {
   const cardRefs = useRef({});
   const healthBarRef = useRef(null);
   const completionTrackedRef = useRef(false);
+  const insets = useSafeAreaInsets();
+  const gamifiedBoxRef = useRef(null);
+
+  // Gamified popup state with event support
+  const [gamifiedPopup, setGamifiedPopup] = useState({
+    visible: false,
+    title: "",
+    icon: "",
+    color: "",
+    animation: "bounce",
+    duration: 2000,
+  });
+
+  // Map event types to their configurations (memoized to avoid dependency issues)
+  const popupConfigs = useMemo(() => ({
+    correct: {
+      title: "Correct!",
+      icon: "check-circle",
+      color: "#10b981",
+      animation: "bounce",
+      duration: 2200,
+    },
+    wrong: {
+      title: "Wrong Answer!",
+      icon: "close-circle",
+      color: "#ef4444",
+      animation: "shake",
+      duration: 2200,
+    },
+    turnEnded: {
+      title: "Turn Ended",
+      icon: "skip-next",
+      color: "#8b5cf6",
+      animation: "pulse",
+      duration: 1800,
+    },
+    cardReshuffled: {
+      title: "Card Reshuffled",
+      icon: "shuffle",
+      color: "#06b6d4",
+      animation: "roam",
+      duration: 2000,
+    },
+  }), []);
+
+  // Show gamified popup with specific event type and auto-dismiss
+  const showGameifiedPopup = useCallback((eventType = "correct") => {
+    const config = popupConfigs[eventType] || popupConfigs.correct;
+    setGamifiedPopup({ visible: true, ...config });
+    
+    // Auto-dismiss after duration
+    const dismissTimeout = setTimeout(() => {
+      setGamifiedPopup(prev => ({ ...prev, visible: false }));
+    }, config.duration);
+    
+    return () => clearTimeout(dismissTimeout);
+  }, [popupConfigs]);
 
   useEffect(() => {
     // register a simple roaming animation for enemy sprite
@@ -1505,12 +1562,11 @@ function DigitalDefenders() {
 
       // Show feedback for card effects
       if (data.effect && data.effect.message) {
-        const alertTitle = data.effect.questionSolved
-            ? "Correct!"
-            : data.effect.healthLost
-                ? "Wrong Answer!"
-                : "Card Effect";
-        showAlert(alertTitle, data.effect.message);
+        if (data.effect.questionSolved) {
+          showGameifiedPopup("correct");
+        } else if (data.effect.healthLost) {
+          showGameifiedPopup("wrong");
+        }
       }
 
       // Visual feedback: screen shake / enemy attack / enemy damage
@@ -1530,20 +1586,8 @@ function DigitalDefenders() {
 
     const handleCardReshuffled = (data) => {
       console.log("Card reshuffled:", data);
-
-      // Show special message if answer card was guaranteed
-      if (data.guaranteedAnswer) {
-        showAlert(
-            "Cards Reshuffled! 🎯",
-            `${data.playerName} reshuffled their cards`
-        );
-      } else {
-        showAlert(
-            "Cards Reshuffled",
-            `${data.playerName} reshuffled their cards`
-        );
-      }
-
+      showGameifiedPopup("cardReshuffled");
+      
       if (data.gameState) {
         setServerGameState(data.gameState);
         syncWithServerState(data.gameState);
@@ -1575,7 +1619,7 @@ function DigitalDefenders() {
         // Show turn change notification after state update
         setTimeout(() => {
           if (data.gameState.isPlayerTurn && !wasMyTurn) {
-            showAlert("Your Turn!", "It's your turn to play!");
+            showGameifiedPopup("turnEnded");
           } else if (!data.gameState.isPlayerTurn && wasMyTurn) {
             const nextPlayerName = data.gameState.playerOrder
                 ? data.gameState.playerOrder[
@@ -1939,6 +1983,7 @@ function DigitalDefenders() {
     showNotification,
     showAlert,
     playSound,
+    showGameifiedPopup,
   ]);
 
   // Check for automatic loss condition when deck is empty
@@ -3395,13 +3440,31 @@ function DigitalDefenders() {
           </View>
 
           {/* Question Card Area */}
-          <Animatable.View ref={containerRef} style={[styles.questionArea, isCompactGameplayLayout && styles.questionAreaCompact]}>
+          <Animatable.View
+              ref={containerRef}
+              style={[
+                styles.questionArea,
+                isCompactGameplayLayout && styles.questionAreaCompact,
+                Platform.OS === "android" ? { paddingTop: Math.max(insets.top + 90, 120) } : {},
+              ]}
+          >
             {currentQuestion && (
                 <>
                   <Animatable.Image
                       ref={enemyRef}
                       source={enemySprite}
-                      style={[styles.enemySpriteLarge, isCompactGameplayLayout && styles.enemySpriteLargeCompact]}
+                      style={[
+                        styles.enemySpriteLarge,
+                        isCompactGameplayLayout && styles.enemySpriteLargeCompact,
+                        Platform.OS === "android"
+                          ? {
+                              position: 'absolute',
+                              top: Math.max(insets.top + 1, 0),
+                              zIndex: 20,
+                              alignSelf: 'center',
+                            }
+                          : { alignSelf: 'center' },
+                      ]}
                       resizeMode="contain"
                       animation="roam"
                       iterationCount={"infinite"}
@@ -3412,7 +3475,11 @@ function DigitalDefenders() {
                       style={[styles.questionCard, isCompactGameplayLayout && styles.questionCardCompact]}
                       imageStyle={styles.questionCardImage}
                   >
-                    <Text style={[styles.questionText, isCompactGameplayLayout && styles.questionTextCompact]}>
+                    <Text
+                      style={[styles.questionText, isCompactGameplayLayout && styles.questionTextCompact]}
+                      numberOfLines={Platform.OS === "android" ? 5 : 6}
+                      ellipsizeMode="tail"
+                    >
                       {currentQuestion.text}
                     </Text>
                     {selectedCard && (
@@ -3564,7 +3631,11 @@ function DigitalDefenders() {
                                                 size={16}
                                                 color="#2acde6"
                                             />
-                                            <Text style={styles.cardName}>
+                                            <Text
+                                              style={styles.cardName}
+                                              numberOfLines={2}
+                                              ellipsizeMode="tail"
+                                            >
                                               {card.name || card.text}
                                             </Text>
                                           </View>
@@ -3573,6 +3644,8 @@ function DigitalDefenders() {
                                                 styles.cardDescription,
                                                 isSelected && styles.cardDescriptionOnDark,
                                               ]}
+                                              numberOfLines={2}
+                                              ellipsizeMode="tail"
                                           >
                                             {card.description || card.text}
                                           </Text>
@@ -3585,7 +3658,11 @@ function DigitalDefenders() {
                                 ) : (
                                     // Answer cards only show the answer text, no header
                                     <View style={styles.answerCardContent}>
-                                      <Text style={styles.answerCardText}>
+                                      <Text
+                                        style={styles.answerCardText}
+                                        numberOfLines={3}
+                                        ellipsizeMode="tail"
+                                      >
                                         {card.text || card.name}
                                       </Text>
                                     </View>
@@ -4530,6 +4607,32 @@ function DigitalDefenders() {
             {renderUploadModal()}
             {renderUploadSuccessModal()}
             {renderUploadFailureModal()}
+
+            {/* Gamified Event Popups - Auto-dismiss, No Background Darkening */}
+            {gamifiedPopup.visible && (
+                <View style={styles.gamifiedPopupOverlay} pointerEvents="none">
+                  <Animatable.View
+                      ref={gamifiedBoxRef}
+                      style={[
+                        styles.gamifiedPopupBox,
+                        { borderColor: gamifiedPopup.color },
+                      ]}
+                      animation={gamifiedPopup.animation}
+                      iterationCount="infinite"
+                      duration={gamifiedPopup.animation === "roam" ? 2500 : 600}
+                  >
+                    <MaterialCommunityIcons
+                        name={gamifiedPopup.icon}
+                        size={52}
+                        color={gamifiedPopup.color}
+                        style={styles.gamifiedPopupIcon}
+                    />
+                    <Text style={[styles.gamifiedPopupTitle, { color: gamifiedPopup.color }]}>
+                      {gamifiedPopup.title}
+                    </Text>
+                  </Animatable.View>
+                </View>
+            )}
           </SafeAreaView>
         </LinearGradient>
       </ImageBackground>
@@ -5146,9 +5249,10 @@ const styles = StyleSheet.create({
   },
   questionCard: {
     borderRadius: 20,
-    padding: 25,
-    minHeight: 220,
-    width: Platform.OS === "web" ? "100%" : screenWidth - 60,
+    padding: Platform.OS === "android" ? 14 : 25,
+    
+    minHeight: Platform.OS === "android" ? 500 : 220,
+    width: Platform.OS === "web" ? "100%" : screenWidth - 32,
     maxWidth: IS_WEB_MOBILE ? "100%" : 700,
     justifyContent: "center",
     alignItems: "center",
@@ -5162,7 +5266,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   questionCardImage: {
-    resizeMode: "stretch",
+    resizeMode: Platform.OS === "android" ? "contain" : "stretch",
     width: "100%",
     height: "100%",
   },
@@ -5173,8 +5277,8 @@ const styles = StyleSheet.create({
   questionCardCompact: {
     width: "100%",
     maxWidth: 520,
-    minHeight: 180,
-    padding: 16,
+    minHeight: Platform.OS === "android" ? 200 : 180,
+    padding: Platform.OS === "android" ? 14 : 16,
   },
   questionHeaderRow: {
     flexDirection: "row",
@@ -5183,19 +5287,27 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   enemySpriteLarge: {
-    width: 240,
-    height: 240,
+    width: Platform.OS === "android" ? 140 : 240,
+    height: Platform.OS === "android" ? 140 : 240,
     marginBottom: 14,
+    alignSelf: "center",
   },
   enemySpriteLargeCompact: {
-    width: 180,
-    height: 180,
+    width: Platform.OS === "android" ? 100 : 180,
+    height: Platform.OS === "android" ? 100 : 180,
+    alignSelf: "center",
   },
   questionText: {
-    fontSize: 18,
+    fontSize: Platform.OS === "android" ? 14 : 18,
     color: "#ffffff",
     textAlign: "center",
     fontWeight: "700",
+    flexWrap: "wrap",
+    lineHeight: Platform.OS === "android" ? 20 : 22,
+    paddingHorizontal: Platform.OS === "android" ? 12 : 0,
+    flexShrink: 1,
+    maxHeight: Platform.OS === "android" ? 180 : undefined,
+    includeFontPadding: false,
   },
   questionTextCompact: {
     fontSize: 16,
@@ -5352,9 +5464,9 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 12,
-    marginRight: 10,
-    width: IS_WEB_NARROW ? 116 : 140,
-    height: IS_WEB_NARROW ? 150 : 180,
+    marginRight: Platform.OS === "android" ? 6 : 10,
+    width: Platform.OS === "android" ? 100 : IS_WEB_NARROW ? 116 : 140,
+    height: Platform.OS === "android" ? 130 : IS_WEB_NARROW ? 150 : 180,
     position: "relative",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -5378,9 +5490,9 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   cardCompact: {
-    width: 120,
-    height: 150,
-    marginRight: 8,
+    width: Platform.OS === "android" ? 95 : 120,
+    height: Platform.OS === "android" ? 125 : 150,
+    marginRight: Platform.OS === "android" ? 5 : 8,
   },
   toolCard: {
     borderColor: "#2acde6",
@@ -5404,13 +5516,14 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   cardName: {
-    fontSize: 14,
+    fontSize: Platform.OS === "android" ? 11 : 14,
     fontWeight: "bold",
     color: "#f8fafc",
     flex: 1,
     textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    flexWrap: "wrap",
   },
   toolCardImageCard: {
     width: "100%",
@@ -5447,12 +5560,13 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   cardDescription: {
-    fontSize: 12,
+    fontSize: Platform.OS === "android" ? 10 : 12,
     color: "#dbeafe",
-    lineHeight: 16,
+    lineHeight: Platform.OS === "android" ? 13 : 16,
     textShadowColor: "rgba(0,0,0,0.3)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    flexWrap: "wrap",
   },
   cardDescriptionOnDark: {
     color: "#e2e8f0",
@@ -5464,14 +5578,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: Platform.OS === "android" ? 6 : 10,
+    paddingHorizontal: Platform.OS === "android" ? 5 : 8,
   },
   answerCardText: {
-    fontSize: 14,
+    fontSize: Platform.OS === "android" ? 11 : 13,
     fontWeight: "600",
     color: "#ffffff",
     textAlign: "center",
-    lineHeight: 18,
+    lineHeight: Platform.OS === "android" ? 14 : 16,
+    flexWrap: "wrap",
   },
   toolIndicator: {
     position: "absolute",
@@ -7147,5 +7263,51 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
     paddingBottom: 12,
+  },
+
+  // Gamified Event Popup Styles
+  // Gamified Event Popup Styles
+  gamifiedPopupOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "transparent",
+    zIndex: 1000,
+    pointerEvents: "none",
+  },
+  gamifiedPopupBox: {
+    backgroundColor: "#0f172a",
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: "#10b981",
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 220,
+    maxWidth: 320,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+    // Web support for box-shadow
+    ...(Platform.OS === "web" && {
+      boxShadow: "0px 8px 12px rgba(0, 0, 0, 0.4)",
+    }),
+  },
+  gamifiedPopupIcon: {
+    marginBottom: 14,
+    textAlignVertical: "center",
+  },
+  gamifiedPopupTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+    letterSpacing: 0.3,
   },
 });

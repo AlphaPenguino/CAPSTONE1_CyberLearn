@@ -23,7 +23,7 @@ import COLORS from "@/constants/custom-colors";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AudioContext } from "react-native-audio-api";
+import { AudioContext } from "@/utils/safe-audio";
 import * as Animatable from "react-native-animatable";
 import CharacterSprite from "../../../components/CharacterSprite.jsx";
 import {
