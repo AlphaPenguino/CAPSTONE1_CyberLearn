@@ -300,6 +300,11 @@ const cyberQuestSchema = new mongoose.Schema(
       default: true,
     },
 
+    hidden: {
+      type: Boolean,
+      default: false,
+    },
+
     difficulty: {
       type: String,
       enum: ["easy", "medium", "hard"],

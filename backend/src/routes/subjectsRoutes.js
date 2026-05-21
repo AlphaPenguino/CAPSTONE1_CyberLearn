@@ -1105,7 +1105,13 @@ router.get("/:id/cyber-quests", protectRoute, async (req, res) => {
     }
 
     // Get cyber quests for this subject
-    const cyberQuests = await CyberQuest.findBySubject(id);
+    // Get cyber quests for this subject
+    let cyberQuests = await CyberQuest.findBySubject(id);
+
+    // Filter out hidden quests for non-instructors/admins
+    if (req.user.privilege !== "instructor" && req.user.privilege !== "admin") {
+      cyberQuests = cyberQuests.filter((q) => !q.hidden);
+    }
 
     return res.json({
       success: true,

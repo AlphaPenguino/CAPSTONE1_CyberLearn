@@ -362,6 +362,19 @@ router.get("/cyber-quests/:id", protectRoute, async (req, res) => {
       });
     }
 
+    // Check if quest is hidden and user doesn't have permission to access it
+    if (
+      cyberQuest.hidden &&
+      req.user.privilege !== "instructor" &&
+      req.user.privilege !== "admin" &&
+      cyberQuest.created_by.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied to this cyber quest",
+      });
+    }
+
     res.json({
       success: true,
       cyberQuest,
@@ -465,7 +478,12 @@ router.get("/sections/:id/cyber-quests", protectRoute, async (req, res) => {
     }
 
     // Get cyber quests for this section
-    const cyberQuests = await CyberQuest.findBySection(sectionId);
+    let cyberQuests = await CyberQuest.findBySection(sectionId);
+
+    // Filter out hidden quests for non-instructors
+    if (req.user.privilege !== "instructor" && req.user.privilege !== "admin") {
+      cyberQuests = cyberQuests.filter(quest => !quest.hidden);
+    }
 
     res.json({
       success: true,
@@ -986,6 +1004,7 @@ router.put(
         level,
         subject,
         availableAt,
+        hidden,
       } = req.body;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -1401,6 +1420,11 @@ router.put(
               : "Question validation failed",
           errors: validationErrors,
         });
+      }
+
+      // Update hidden status if provided
+      if (hidden !== undefined) {
+        cyberQuest.hidden = Boolean(hidden);
       }
 
       await cyberQuest.save();

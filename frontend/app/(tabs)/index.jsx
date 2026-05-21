@@ -854,6 +854,7 @@ const handleImportCyberQuestsWeb = () => {
                   bestScore: 0,
                   totalAttempts: 0,
                   section: quest.section,
+                  hidden: Boolean(quest.hidden),
                   isCurrent: false, // Instructors don't have a "current" quest
                 }));
               }
@@ -904,6 +905,7 @@ const handleImportCyberQuestsWeb = () => {
                       progress: questProgress,
                       bestScore: questProgress.bestScore || 0,
                       totalAttempts: questProgress.totalAttempts || 0,
+                      hidden: Boolean(quest.hidden),
                     };
 
                     console.log(`🎯 Quest ${quest.title} mapped:`, {
@@ -1356,6 +1358,75 @@ const handleImportCyberQuestsWeb = () => {
         alert("Failed to delete cyber quest: " + errorMessage);
       } else {
         Alert.alert("Error", "Failed to delete cyber quest: " + errorMessage);
+      }
+    }
+  };
+
+  const handleToggleHideModule = (moduleId, isCurrentlyHidden) => {
+    const action = isCurrentlyHidden ? "unhide" : "hide";
+    const message = isCurrentlyHidden
+      ? "Make this cyber quest visible to all students?"
+      : "Hide this cyber quest from students? Instructors will still see it.";
+
+    if (Platform.OS === "web") {
+      if (confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} Cyber Quest\n\n${message}`)) {
+        toggleHideModule(moduleId, !isCurrentlyHidden);
+      }
+    } else {
+      Alert.alert(
+        `${action.charAt(0).toUpperCase() + action.slice(1)} Cyber Quest`,
+        message,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: action.charAt(0).toUpperCase() + action.slice(1),
+            onPress: () => toggleHideModule(moduleId, !isCurrentlyHidden),
+            style: "default",
+          },
+        ]
+      );
+    }
+  };
+
+  const toggleHideModule = async (moduleId, hidden) => {
+    try {
+      const response = await fetch(`${API_URL}/cyber-quests/${moduleId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ hidden }),
+      });
+
+      if (response.ok) {
+        // Update the modules state to reflect the hidden status
+        setModules(
+          modules.map((m) =>
+            m._id === moduleId ? { ...m, hidden } : m
+          )
+        );
+
+        const action = hidden ? "hidden" : "unhidden";
+        const message = `Cyber Quest ${action} successfully!`;
+
+        if (Platform.OS === "web") {
+          alert(message);
+        } else {
+          Alert.alert("Success", message);
+        }
+      } else {
+        const data = await response.json();
+        throw new Error(data.message || `Failed to ${hidden ? "hide" : "unhide"} cyber quest`);
+      }
+    } catch (error) {
+      console.error("Error toggling cyber quest visibility:", error);
+      const errorMessage = error.message || `Failed to ${hidden ? "hide" : "unhide"} cyber quest`;
+
+      if (Platform.OS === "web") {
+        alert("Failed to update cyber quest: " + errorMessage);
+      } else {
+        Alert.alert("Error", "Failed to update cyber quest: " + errorMessage);
       }
     }
   };
@@ -3095,6 +3166,18 @@ const handleImportCyberQuestsWeb = () => {
                   </View>
                 )}
 
+                {/* Hidden badge for modules hidden by instructors */}
+                {module.hidden && (
+                  <View style={styles.hiddenBadge}>
+                    <Ionicons
+                      name="eye-off"
+                      size={12}
+                      color={COLORS.white}
+                    />
+                    <Text style={styles.hiddenBadgeText}>Hidden</Text>
+                  </View>
+                )}
+
                 {/* instructor Options Button */}
                 {isinstructor && (
                   <View style={styles.instructorOptionsContainer}>
@@ -3194,6 +3277,33 @@ const handleImportCyberQuestsWeb = () => {
                               ]}
                             >
                               Delete
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.optionItem,
+                              Platform.OS === "android" &&
+                                styles.optionItemAndroid,
+                            ]}
+                            onPress={() => {
+                              setMenuVisible(null);
+                              handleToggleHideModule(module._id, module.hidden);
+                            }}
+                          >
+                            <Ionicons
+                              name={module.hidden ? "eye-outline" : "eye-off-outline"}
+                              size={Platform.OS === "android" ? 24 : 16}
+                              color={COLORS.white}
+                            />
+                            <Text
+                              style={[
+                                styles.optionText,
+                                Platform.OS === "android" &&
+                                  styles.optionTextAndroid,
+                              ]}
+                            >
+                              {module.hidden ? "Show" : "Hide"}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -4895,6 +5005,26 @@ const styles = StyleSheet.create({
     color: '#222',
     fontSize: 10,
     fontWeight: '700',
+  },
+
+  hiddenBadge: {
+    position: 'absolute',
+    top: 20,
+    right: 6,
+    backgroundColor: 'rgba(255,87,51,0.95)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    zIndex: 5,
+  },
+
+  hiddenBadgeText: {
+    color: COLORS.white,
+    fontSize: 9,
+    fontWeight: '600',
   },
 
   availabilityBadge: {
