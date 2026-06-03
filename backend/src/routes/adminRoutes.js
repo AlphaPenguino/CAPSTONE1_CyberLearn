@@ -178,6 +178,20 @@ const buildCategoryFilter = (category) => {
   }
 };
 
+const parseAuditLogDateBoundary = (value, boundary = "start") => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return new Date(
+      `${trimmed}T${boundary === "end" ? "23:59:59.999" : "00:00:00.000"}Z`
+    );
+  }
+
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 /**
  * @route   GET /api/admin/dashboard/stats
  * @desc    Get comprehensive admin dashboard statistics
@@ -1772,8 +1786,10 @@ router.get(
       // Date range filter
       if (startDate || endDate) {
         filter.createdAt = {};
-        if (startDate) filter.createdAt.$gte = new Date(startDate);
-        if (endDate) filter.createdAt.$lte = new Date(endDate);
+        const normalizedStartDate = parseAuditLogDateBoundary(startDate, "start");
+        const normalizedEndDate = parseAuditLogDateBoundary(endDate, "end");
+        if (normalizedStartDate) filter.createdAt.$gte = normalizedStartDate;
+        if (normalizedEndDate) filter.createdAt.$lte = normalizedEndDate;
       }
 
       // Search filter for username only
@@ -1869,8 +1885,10 @@ router.get(
 
       if (startDate || endDate) {
         filter.createdAt = {};
-        if (startDate) filter.createdAt.$gte = new Date(startDate);
-        if (endDate) filter.createdAt.$lte = new Date(endDate);
+        const normalizedStartDate = parseAuditLogDateBoundary(startDate, "start");
+        const normalizedEndDate = parseAuditLogDateBoundary(endDate, "end");
+        if (normalizedStartDate) filter.createdAt.$gte = normalizedStartDate;
+        if (normalizedEndDate) filter.createdAt.$lte = normalizedEndDate;
       }
 
       if (userSearch) {
