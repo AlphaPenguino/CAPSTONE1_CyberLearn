@@ -352,6 +352,7 @@ export default function GameArcade() {
   const router = useRouter();
   const pathname = usePathname();
   const { width: viewportWidth } = useWindowDimensions();
+  const { settings } = useSettings();
   // Pull isDarkMode so we can adapt the points badge for proper contrast in light mode
   const { colors, isDarkMode } = useTheme();
   const highlightColor = isDarkMode ? colors.primary : colors.textPrimary;
@@ -400,7 +401,7 @@ export default function GameArcade() {
     };
 
     const syncArcadeBgm = async () => {
-      if (!isGameActive) {
+      if (!settings.music || !isGameActive) {
         await stopArcadeBgm();
         return;
       }
@@ -451,7 +452,7 @@ export default function GameArcade() {
       cancelled = true;
       void stopArcadeBgm();
     };
-  }, [pathname]);
+  }, [pathname, settings.music]);
 
   const multiplayerModes = [
     /*{

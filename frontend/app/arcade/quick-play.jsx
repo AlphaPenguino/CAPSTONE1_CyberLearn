@@ -25,6 +25,7 @@ import COLORS from "@/constants/custom-colors";
 import quickPlayApi from "@/services/quickPlayApi";
 import { useNavigationLock } from "@/contexts/NavigationLockContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useSettings } from "@/contexts/SettingsContext";
 import { useAuthStore } from "@/store/authStore";
 
 const WEB_UI_SCALE = 1.15;
@@ -344,6 +345,7 @@ export default function QuickPlay() {
   const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { colors, isDarkMode } = useTheme();
+  const { settings } = useSettings();
   const { setNavigationLocked } = useNavigationLock();
   const params = useLocalSearchParams();
   const { user } = useAuthStore();
@@ -902,7 +904,7 @@ export default function QuickPlay() {
   }, [clearResolutionTimer, logQuickPlayEvent, roundDefinition]);
 
   useEffect(() => {
-    const shouldPlayBackground = phase === "playing";
+    const shouldPlayBackground = settings.music && phase === "playing";
     const shouldPlayGameOver = phase === "results";
 
     const syncAudio = async () => {
@@ -922,7 +924,7 @@ export default function QuickPlay() {
     };
 
     syncAudio();
-  }, [phase, playLoopTrack, stopAllAudio, stopAudioChannel]);
+  }, [phase, playLoopTrack, settings.music, stopAllAudio, stopAudioChannel]);
 
   useEffect(() => {
     return () => {

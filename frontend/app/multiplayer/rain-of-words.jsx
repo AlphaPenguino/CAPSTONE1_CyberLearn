@@ -24,6 +24,7 @@ import { Asset } from "expo-asset";
 import { AudioContext } from "@/utils/safe-audio";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useAuthStore } from "@/store/authStore";
+import { useSettings } from "@/contexts/SettingsContext";
 import RainOfWordsSocket from "@/services/rainOfWordsSocket";
 import RainOfWordsApi from "@/services/rainOfWordsApi";
 
@@ -160,6 +161,7 @@ export default function RainOfWords() {
   const normalizedSpectateRoomCode =
     typeof roomCodeParam === "string" ? roomCodeParam.trim().toUpperCase() : "";
   const user = useAuthStore((state) => state.user);
+  const { settings } = useSettings();
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   // Note: videoResizeMode is no longer used; expo-video uses contentFit instead
 
@@ -332,7 +334,15 @@ export default function RainOfWords() {
       }
     };
 
-if (gameState === "playing" || gameState === "lobby") {
+    if (!settings.music) {
+      void stopBgMusic();
+      return () => {
+        cancelled = true;
+        void stopBgMusic();
+      };
+    }
+
+    if (gameState === "playing" || gameState === "lobby") {
       startBgMusic();
     } else {
       stopBgMusic();
@@ -342,7 +352,7 @@ if (gameState === "playing" || gameState === "lobby") {
       cancelled = true;
       stopBgMusic();
     };
-  }, [gameState]);
+  }, [gameState, settings.music]);
 
   // Cleanup SFX AudioContext on unmount
   useEffect(() => {

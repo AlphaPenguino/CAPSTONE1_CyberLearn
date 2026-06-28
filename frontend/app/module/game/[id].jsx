@@ -24,6 +24,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AudioContext } from "@/utils/safe-audio";
+import { useSettings } from "@/contexts/SettingsContext";
 import * as Animatable from "react-native-animatable";
 import CharacterSprite from "../../../components/CharacterSprite.jsx";
 import {
@@ -104,6 +105,7 @@ const USE_DUMMY_GAME_DATA = false;
 export default function ModuleGameQuest() {
   const { id, returnSubjectId, returnModuleId } = useLocalSearchParams(); // Module ID + map return context
   const { token, user } = useAuthStore();
+  const { settings } = useSettings();
   const router = useRouter();
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const isMobileWeb = Platform.OS === "web" && viewportWidth <= 768;
@@ -650,8 +652,10 @@ export default function ModuleGameQuest() {
 
   useEffect(() => {
     const shouldPlayIntroMusic =
+      settings.music &&
       !gameStarted && !loading && !error && !gameCompleted && !completionInProgress;
     const shouldPlayBattleMusic =
+      settings.music &&
       gameStarted &&
       !gameCompleted &&
       !completionInProgress &&
@@ -725,6 +729,7 @@ export default function ModuleGameQuest() {
     gameStarted,
     isLessonQuest,
     loading,
+    settings.music,
     showDeathAnimation,
     stopBackgroundMusic,
   ]);

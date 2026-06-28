@@ -286,7 +286,7 @@ const [importing, setImporting] = React.useState(false);
         isActive = false;
         stopHomeMusic();
       };
-    }, [])
+    }, [settings.music])
   );
 
 const downloadJsonWeb = (data, filename) => {

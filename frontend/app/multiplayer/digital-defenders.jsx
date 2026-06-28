@@ -866,6 +866,19 @@ function DigitalDefenders() {
   );
 
   useEffect(() => {
+    if (!settings.music) {
+      if (bgmSourceRef.current) {
+        try {
+          bgmSourceRef.current.stop();
+        } catch {}
+        try {
+          bgmSourceRef.current.disconnect();
+        } catch {}
+        bgmSourceRef.current = null;
+      }
+      return;
+    }
+
     if (gameState === "playing") {
       void playSound("bgm", {
         volume: DD_AUDIO_VOLUME.bgm,
@@ -884,7 +897,7 @@ function DigitalDefenders() {
       } catch {}
       bgmSourceRef.current = null;
     }
-  }, [gameState, playSound]);
+  }, [gameState, playSound, settings.music]);
 
   // Preload important SFX on game start to improve reliability
   useEffect(() => {
